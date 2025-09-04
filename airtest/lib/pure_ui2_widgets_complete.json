@@ -1,0 +1,3467 @@
+{
+  "total_count": 64,
+  "extraction_timestamp": "2025-07-25 17:43:51",
+  "extraction_method": "pure_uiautomator2",
+  "screen_size": [
+    1440,
+    2560
+  ],
+  "widgets": [
+    {
+      "path_string": "0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "android.widget.FrameLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.5
+        ],
+        "size": [
+          1.0,
+          1.0
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 0,
+          "global": 0
+        },
+        "boundsInParent": [
+          1.0,
+          1.0
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.49140625
+        ],
+        "size": [
+          1.0,
+          0.9828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.9828125
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "android.widget.FrameLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.49140625
+        ],
+        "size": [
+          1.0,
+          0.9828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          1.0,
+          0.9828125
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/action_bar_root",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/action_bar_root",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.49140625
+        ],
+        "size": [
+          1.0,
+          0.9828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.9828125
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "android:id/content",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "android:id/content",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.49140625
+        ],
+        "size": [
+          1.0,
+          0.9828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          1.0,
+          0.9828125
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "com.unitvnet.mobs:id/content",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/content",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.49140625
+        ],
+        "size": [
+          1.0,
+          0.9828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.9828125
+        ],
+        "children_count": 3
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "androidx.viewpager.widget.ViewPager",
+        "name": "com.unitvnet.mobs:id/mainViewPager",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mainViewPager",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": true,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.4619140625
+        ],
+        "size": [
+          1.0,
+          0.923828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.923828125
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "com.unitvnet.mobs:id/mLayoutVodRoot",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mLayoutVodRoot",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.4619140625
+        ],
+        "size": [
+          1.0,
+          0.923828125
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.923828125
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/mLayoutNavigator",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mLayoutNavigator",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.0939453125
+        ],
+        "size": [
+          1.0,
+          0.187890625
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.187890625
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          1.0,
+          0.187890625
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "com.unitvnet.mobs:id/mLayoutTitle",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mLayoutTitle",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.057421875
+        ],
+        "size": [
+          1.0,
+          0.11484375
+        ],
+        "bounds": [
+          0.0,
+          0.0,
+          1.0,
+          0.11484375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.11484375
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/mCinemaTitle",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mCinemaTitle",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.10694444444444444,
+          0.0818359375
+        ],
+        "size": [
+          0.13333333333333333,
+          0.066015625
+        ],
+        "bounds": [
+          0.04027777777777778,
+          0.048828125,
+          0.1736111111111111,
+          0.11484375
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.13333333333333333,
+          0.066015625
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/0/1",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5829861111111111,
+          0.0833984375
+        ],
+        "size": [
+          0.7534722222222222,
+          0.054296875
+        ],
+        "bounds": [
+          0.20625,
+          0.05625,
+          0.9597222222222223,
+          0.110546875
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.7534722222222222,
+          0.054296875
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/0/1/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/mVodSearch",
+        "text": "Search for content title",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mVodSearch",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5829861111111111,
+          0.0833984375
+        ],
+        "size": [
+          0.7534722222222222,
+          0.024609375
+        ],
+        "bounds": [
+          0.20625,
+          0.07109375,
+          0.9597222222222223,
+          0.095703125
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.7534722222222222,
+          0.024609375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/0/1/1",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/mVodImageSearch",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mVodImageSearch",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.2520833333333333,
+          0.083203125
+        ],
+        "size": [
+          0.04861111111111111,
+          0.02734375
+        ],
+        "bounds": [
+          0.22777777777777777,
+          0.06953125,
+          0.2763888888888889,
+          0.096875
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.04861111111111111,
+          0.02734375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1",
+      "payload_details": {
+        "type": "android.widget.HorizontalScrollView",
+        "name": "com.unitvnet.mobs:id/mRecommendTab",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mRecommendTab",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.1458984375
+        ],
+        "size": [
+          1.0,
+          0.046484375
+        ],
+        "bounds": [
+          0.0,
+          0.12265625,
+          1.0,
+          0.169140625
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 3,
+          "global": 3
+        },
+        "boundsInParent": [
+          1.0,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.1458984375
+        ],
+        "size": [
+          0.9805555555555555,
+          0.046484375
+        ],
+        "bounds": [
+          0.009722222222222222,
+          0.12265625,
+          0.9902777777777778,
+          0.169140625
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.9805555555555555,
+          0.046484375
+        ],
+        "children_count": 5
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.13541666666666666,
+          0.1458984375
+        ],
+        "size": [
+          0.2513888888888889,
+          0.046484375
+        ],
+        "bounds": [
+          0.009722222222222222,
+          0.12265625,
+          0.2611111111111111,
+          0.169140625
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.2513888888888889,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/0/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Recommended",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.13541666666666666,
+          0.1458984375
+        ],
+        "size": [
+          0.2513888888888889,
+          0.019921875
+        ],
+        "bounds": [
+          0.009722222222222222,
+          0.1359375,
+          0.2611111111111111,
+          0.155859375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.2513888888888889,
+          0.019921875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/1",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.3385416666666667,
+          0.1458984375
+        ],
+        "size": [
+          0.15486111111111112,
+          0.046484375
+        ],
+        "bounds": [
+          0.2611111111111111,
+          0.12265625,
+          0.41597222222222224,
+          0.169140625
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.15486111111111112,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/1/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Movies",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.3385416666666667,
+          0.1458984375
+        ],
+        "size": [
+          0.15486111111111112,
+          0.019921875
+        ],
+        "bounds": [
+          0.2611111111111111,
+          0.1359375,
+          0.41597222222222224,
+          0.155859375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.15486111111111112,
+          0.019921875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/2",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5052083333333334,
+          0.1458984375
+        ],
+        "size": [
+          0.17847222222222223,
+          0.046484375
+        ],
+        "bounds": [
+          0.41597222222222224,
+          0.12265625,
+          0.5944444444444444,
+          0.169140625
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 3,
+          "global": 3
+        },
+        "boundsInParent": [
+          0.17847222222222223,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/2/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "TV Show",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5052083333333334,
+          0.1458984375
+        ],
+        "size": [
+          0.17847222222222223,
+          0.019921875
+        ],
+        "bounds": [
+          0.41597222222222224,
+          0.1359375,
+          0.5944444444444444,
+          0.155859375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.17847222222222223,
+          0.019921875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/3",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.6836805555555555,
+          0.1458984375
+        ],
+        "size": [
+          0.17847222222222223,
+          0.046484375
+        ],
+        "bounds": [
+          0.5944444444444444,
+          0.12265625,
+          0.7729166666666667,
+          0.169140625
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 4,
+          "global": 4
+        },
+        "boundsInParent": [
+          0.17847222222222223,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/3/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Cartoons",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.6836805555555555,
+          0.1458984375
+        ],
+        "size": [
+          0.17847222222222223,
+          0.019921875
+        ],
+        "bounds": [
+          0.5944444444444444,
+          0.1359375,
+          0.7729166666666667,
+          0.155859375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.17847222222222223,
+          0.019921875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/4",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.846875,
+          0.1458984375
+        ],
+        "size": [
+          0.14791666666666667,
+          0.046484375
+        ],
+        "bounds": [
+          0.7729166666666667,
+          0.12265625,
+          0.9208333333333333,
+          0.169140625
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 5,
+          "global": 5
+        },
+        "boundsInParent": [
+          0.14791666666666667,
+          0.046484375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/0/1/0/4/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Anime",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.846875,
+          0.1458984375
+        ],
+        "size": [
+          0.14791666666666667,
+          0.019921875
+        ],
+        "bounds": [
+          0.7729166666666667,
+          0.1359375,
+          0.9208333333333333,
+          0.155859375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.14791666666666667,
+          0.019921875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1",
+      "payload_details": {
+        "type": "androidx.viewpager.widget.ViewPager",
+        "name": "com.unitvnet.mobs:id/mRecommendVp",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mRecommendVp",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": true,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.5591796875
+        ],
+        "size": [
+          1.0,
+          0.729296875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.729296875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.5591796875
+        ],
+        "size": [
+          1.0,
+          0.729296875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          1.0,
+          0.729296875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0",
+      "payload_details": {
+        "type": "android.view.ViewGroup",
+        "name": "com.unitvnet.mobs:id/mRefreshLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mRefreshLayout",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.5591796875
+        ],
+        "size": [
+          1.0,
+          0.729296875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.729296875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.5591796875
+        ],
+        "size": [
+          1.0,
+          0.729296875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.729296875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0",
+      "payload_details": {
+        "type": "androidx.recyclerview.widget.RecyclerView",
+        "name": "com.unitvnet.mobs:id/mRecommendRV",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mRecommendRV",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": true,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.553515625
+        ],
+        "size": [
+          1.0,
+          0.71796875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.9125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          1.0,
+          0.71796875
+        ],
+        "children_count": 3
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.3373046875
+        ],
+        "size": [
+          1.0,
+          0.285546875
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.480078125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.285546875
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "com.unitvnet.mobs:id/bannerView",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/bannerView",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.32578125
+        ],
+        "size": [
+          1.0,
+          0.2625
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.45703125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.2625
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "androidx.viewpager.widget.ViewPager",
+        "name": "com.unitvnet.mobs:id/vp_main",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/vp_main",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": true,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.32578125
+        ],
+        "size": [
+          1.0,
+          0.2625
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.45703125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.2625
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "androidx.recyclerview.widget.RecyclerView",
+        "name": "androidx.recyclerview.widget.RecyclerView",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.32578125
+        ],
+        "size": [
+          1.0,
+          0.2625
+        ],
+        "bounds": [
+          0.0,
+          0.19453125,
+          1.0,
+          0.45703125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.2625
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "android.widget.FrameLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.32578125
+        ],
+        "size": [
+          0.9611111111111111,
+          0.2625
+        ],
+        "bounds": [
+          0.019444444444444445,
+          0.19453125,
+          0.9805555555555555,
+          0.45703125
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.9611111111111111,
+          0.2625
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/image",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/image",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.32578125
+        ],
+        "size": [
+          0.9611111111111111,
+          0.2625
+        ],
+        "bounds": [
+          0.019444444444444445,
+          0.19453125,
+          0.9805555555555555,
+          0.45703125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.9611111111111111,
+          0.2625
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/0/1",
+      "payload_details": {
+        "type": "android.view.View",
+        "name": "com.unitvnet.mobs:id/indicator_view",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/indicator_view",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.476953125
+        ],
+        "size": [
+          0.034722222222222224,
+          0.00625
+        ],
+        "bounds": [
+          0.4826388888888889,
+          0.473828125,
+          0.5173611111111112,
+          0.480078125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.034722222222222224,
+          0.00625
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/1",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "com.unitvnet.mobs:id/llOpenFree",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/llOpenFree",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.6115234375
+        ],
+        "size": [
+          1.0,
+          0.262890625
+        ],
+        "bounds": [
+          0.0,
+          0.480078125,
+          1.0,
+          0.74296875
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 3,
+          "global": 3
+        },
+        "boundsInParent": [
+          1.0,
+          0.262890625
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/1/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "android.widget.ImageView",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.6228515625
+        ],
+        "size": [
+          1.0,
+          0.240234375
+        ],
+        "bounds": [
+          0.0,
+          0.502734375,
+          1.0,
+          0.74296875
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.240234375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.827734375
+        ],
+        "size": [
+          1.0,
+          0.16953125
+        ],
+        "bounds": [
+          0.0,
+          0.74296875,
+          1.0,
+          0.9125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 4,
+          "global": 4
+        },
+        "boundsInParent": [
+          1.0,
+          0.16953125
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.51875,
+          0.796484375
+        ],
+        "size": [
+          0.9625,
+          0.03203125
+        ],
+        "bounds": [
+          0.0375,
+          0.78046875,
+          1.0,
+          0.8125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.9625,
+          0.03203125
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/0/0",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/mColumnNameTv",
+        "text": "All",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mColumnNameTv",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.06770833333333333,
+          0.796484375
+        ],
+        "size": [
+          0.06041666666666667,
+          0.03203125
+        ],
+        "bounds": [
+          0.0375,
+          0.78046875,
+          0.09791666666666667,
+          0.8125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.06041666666666667,
+          0.03203125
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/0/1",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/mTvMore",
+        "text": "See all",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mTvMore",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.9243055555555556,
+          0.796484375
+        ],
+        "size": [
+          0.07083333333333333,
+          0.0171875
+        ],
+        "bounds": [
+          0.8888888888888888,
+          0.787890625,
+          0.9597222222222223,
+          0.805078125
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.07083333333333333,
+          0.0171875
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/1",
+      "payload_details": {
+        "type": "androidx.recyclerview.widget.RecyclerView",
+        "name": "com.unitvnet.mobs:id/mRecommendColumnRV",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mRecommendColumnRV",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5163194444444444,
+          0.8705078125
+        ],
+        "size": [
+          0.9673611111111111,
+          0.083984375
+        ],
+        "bounds": [
+          0.03263888888888889,
+          0.828515625,
+          1.0,
+          0.9125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.9673611111111111,
+          0.083984375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/1/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/mLinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mLinearLayout",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.21145833333333333,
+          0.8705078125
+        ],
+        "size": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "bounds": [
+          0.03263888888888889,
+          0.828515625,
+          0.3902777777777778,
+          0.9125
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/1/0/0",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "com.unitvnet.mobs:id/mLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mLayout",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.21145833333333333,
+          0.8705078125
+        ],
+        "size": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "bounds": [
+          0.03263888888888889,
+          0.828515625,
+          0.3902777777777778,
+          0.9125
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 3,
+          "global": 3
+        },
+        "boundsInParent": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/1/0/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/posterImageView",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/posterImageView",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.21145833333333333,
+          0.8705078125
+        ],
+        "size": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "bounds": [
+          0.03263888888888889,
+          0.828515625,
+          0.3902777777777778,
+          0.9125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.3576388888888889,
+          0.083984375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/0/0/1/0/0/0/0/2/1/0/0/1",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/mImageTs",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mImageTs",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.3659722222222222,
+          0.8443359375
+        ],
+        "size": [
+          0.04861111111111111,
+          0.031640625
+        ],
+        "bounds": [
+          0.3416666666666667,
+          0.828515625,
+          0.3902777777777778,
+          0.86015625
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.04861111111111111,
+          0.031640625
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/1",
+      "payload_details": {
+        "type": "android.view.View",
+        "name": "android.view.View",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.9234375
+        ],
+        "size": [
+          1.0,
+          0.00078125
+        ],
+        "bounds": [
+          0.0,
+          0.923046875,
+          1.0,
+          0.923828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 4,
+          "global": 4
+        },
+        "boundsInParent": [
+          1.0,
+          0.00078125
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2",
+      "payload_details": {
+        "type": "android.widget.FrameLayout",
+        "name": "com.unitvnet.mobs:id/mainAtyTab",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/mainAtyTab",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.9533203125
+        ],
+        "size": [
+          1.0,
+          0.058984375
+        ],
+        "bounds": [
+          0.0,
+          0.923828125,
+          1.0,
+          0.9828125
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 5,
+          "global": 5
+        },
+        "boundsInParent": [
+          1.0,
+          0.058984375
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "android.widget.LinearLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.9533203125
+        ],
+        "size": [
+          1.0,
+          0.048046875
+        ],
+        "bounds": [
+          0.0,
+          0.929296875,
+          1.0,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          1.0,
+          0.048046875
+        ],
+        "children_count": 3
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/0",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.16666666666666666,
+          0.9533203125
+        ],
+        "size": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "bounds": [
+          0.0,
+          0.929296875,
+          0.3333333333333333,
+          0.97734375
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/0/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/ll_tap",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/ll_tap",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.16666666666666666,
+          0.9533203125
+        ],
+        "size": [
+          0.07361111111111111,
+          0.048046875
+        ],
+        "bounds": [
+          0.12986111111111112,
+          0.929296875,
+          0.20347222222222222,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.07361111111111111,
+          0.048046875
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/0/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/iv_tab_icon",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/iv_tab_icon",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.16631944444444444,
+          0.9443359375
+        ],
+        "size": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "bounds": [
+          0.13958333333333334,
+          0.929296875,
+          0.19305555555555556,
+          0.959375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/0/0/1",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Home",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.16666666666666666,
+          0.9697265625
+        ],
+        "size": [
+          0.07361111111111111,
+          0.015234375
+        ],
+        "bounds": [
+          0.12986111111111112,
+          0.962109375,
+          0.20347222222222222,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.07361111111111111,
+          0.015234375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/1",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.5,
+          0.9533203125
+        ],
+        "size": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "bounds": [
+          0.3333333333333333,
+          0.929296875,
+          0.6666666666666666,
+          0.97734375
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/1/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/ll_tap",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/ll_tap",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.4996527777777778,
+          0.9533203125
+        ],
+        "size": [
+          0.05347222222222222,
+          0.048046875
+        ],
+        "bounds": [
+          0.47291666666666665,
+          0.929296875,
+          0.5263888888888889,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.05347222222222222,
+          0.048046875
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/1/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/iv_tab_icon",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/iv_tab_icon",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.4996527777777778,
+          0.9443359375
+        ],
+        "size": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "bounds": [
+          0.47291666666666665,
+          0.929296875,
+          0.5263888888888889,
+          0.959375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/1/0/1",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "TV",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.49930555555555556,
+          0.9697265625
+        ],
+        "size": [
+          0.034722222222222224,
+          0.015234375
+        ],
+        "bounds": [
+          0.48194444444444445,
+          0.962109375,
+          0.5166666666666667,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.034722222222222224,
+          0.015234375
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/2",
+      "payload_details": {
+        "type": "android.widget.RelativeLayout",
+        "name": "android.widget.RelativeLayout",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "",
+        "enabled": true,
+        "visible": true,
+        "clickable": true,
+        "focusable": true,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.8333333333333334,
+          0.9533203125
+        ],
+        "size": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "bounds": [
+          0.6666666666666666,
+          0.929296875,
+          1.0,
+          0.97734375
+        ],
+        "touchable": true,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 3,
+          "global": 3
+        },
+        "boundsInParent": [
+          0.3333333333333333,
+          0.048046875
+        ],
+        "children_count": 1
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/2/0",
+      "payload_details": {
+        "type": "android.widget.LinearLayout",
+        "name": "com.unitvnet.mobs:id/ll_tap",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/ll_tap",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.8329861111111111,
+          0.9533203125
+        ],
+        "size": [
+          0.08125,
+          0.048046875
+        ],
+        "bounds": [
+          0.7923611111111111,
+          0.929296875,
+          0.8736111111111111,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.08125,
+          0.048046875
+        ],
+        "children_count": 2
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/2/0/0",
+      "payload_details": {
+        "type": "android.widget.ImageView",
+        "name": "com.unitvnet.mobs:id/iv_tab_icon",
+        "text": "",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/iv_tab_icon",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.8329861111111111,
+          0.9443359375
+        ],
+        "size": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "bounds": [
+          0.80625,
+          0.929296875,
+          0.8597222222222223,
+          0.959375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 1,
+          "global": 1
+        },
+        "boundsInParent": [
+          0.05347222222222222,
+          0.030078125
+        ],
+        "children_count": 0
+      }
+    },
+    {
+      "path_string": "0/0/0/0/0/0/2/0/2/0/1",
+      "payload_details": {
+        "type": "android.widget.TextView",
+        "name": "com.unitvnet.mobs:id/tv_tab_title",
+        "text": "Profile",
+        "package": "com.unitvnet.mobs",
+        "resourceId": "com.unitvnet.mobs:id/tv_tab_title",
+        "enabled": true,
+        "visible": true,
+        "clickable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "pos": [
+          0.8329861111111111,
+          0.9697265625
+        ],
+        "size": [
+          0.08125,
+          0.015234375
+        ],
+        "bounds": [
+          0.7923611111111111,
+          0.962109375,
+          0.8736111111111111,
+          0.97734375
+        ],
+        "touchable": false,
+        "editable": false,
+        "dismissable": -9999,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "zOrders": {
+          "local": 2,
+          "global": 2
+        },
+        "boundsInParent": [
+          0.08125,
+          0.015234375
+        ],
+        "children_count": 0
+      }
+    }
+  ]
+}
