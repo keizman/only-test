@@ -1,0 +1,9 @@
+{
+  "claude.mcpServers": {
+    "phone-control": {
+      "command": "python",
+      "args": ["-m", "phone_mcp"],
+      "cwd": "/mnt/c/Download/git/uni/phone-use"
+    }
+  }
+}
