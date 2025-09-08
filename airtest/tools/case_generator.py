@@ -13,6 +13,12 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# 添加项目路径以导入库
+sys.path.append(str(Path(__file__).parent.parent))
+
+from lib.config_manager import ConfigManager
+from lib.llm_integration.llm_client import LLMClient
+
 
 class SmartTestCaseGenerator:
     """智能测试用例生成器"""
@@ -27,6 +33,10 @@ class SmartTestCaseGenerator:
         self.templates_dir = Path(templates_dir)
         self.output_dir = Path("../testcases/generated")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 初始化配置管理器和LLM客户端
+        self.config_manager = ConfigManager()
+        self.llm_client = LLMClient(self.config_manager)
         
     def list_templates(self) -> List[str]:
         """
@@ -109,7 +119,7 @@ class SmartTestCaseGenerator:
                                     app_package: str,
                                     device_type: str = "android_phone") -> Dict[str, Any]:
         """
-        基于自然语言描述生成测试用例（模拟LLM生成）
+        基于自然语言描述生成测试用例（使用真实LLM）
         
         Args:
             description: 自然语言描述
@@ -119,24 +129,45 @@ class SmartTestCaseGenerator:
         Returns:
             Dict: 生成的测试用例
         """
-        # 这里模拟 LLM 的处理过程
-        # 实际实现中会调用 LLM API
-        
-        print(f"🤖 模拟 LLM 处理描述: {description}")
+        print(f"🤖 使用 LLM 处理描述: {description}")
         print(f"📱 目标应用: {app_package}")
-        print(f"🔍 分析中...")
+        print(f"🔍 正在生成测试用例...")
         
+        # 检查LLM是否可用
+        if not self.llm_client.is_available():
+            print("⚠️ LLM服务不可用，回退到模板生成模式")
+            return self._fallback_generate_from_template(description, app_package, device_type)
+        
+        # 使用真实LLM生成测试用例
+        testcase = self.llm_client.generate_test_case(description, app_package, device_type)
+        
+        if testcase is None:
+            print("❌ LLM生成失败，回退到模板生成模式")
+            return self._fallback_generate_from_template(description, app_package, device_type)
+        
+        print("✅ LLM生成成功")
+        
+        # 添加生成标记
+        testcase["generation_method"] = "llm_generated"
+        testcase["original_description"] = description
+        testcase["timestamp"] = datetime.now().isoformat()
+        
+        return testcase
+    
+    def _fallback_generate_from_template(self, description: str, app_package: str, device_type: str) -> Dict[str, Any]:
+        """
+        回退到模板生成模式
+        """
         # 基于描述选择最适合的模板
         if "搜索" in description or "search" in description.lower():
             base_template = "smart_search_template"
             search_keyword = self._extract_search_keyword(description)
         else:
-            # 可以扩展更多模板选择逻辑
             base_template = "smart_search_template" 
             search_keyword = "默认搜索词"
         
-        print(f"✅ 选择模板: {base_template}")
-        print(f"🔑 提取关键词: {search_keyword}")
+        print(f"📄 使用模板: {base_template}")
+        print(f"🔑 关键词: {search_keyword}")
         
         # 基于模板生成
         testcase = self.generate_from_template(
@@ -146,15 +177,10 @@ class SmartTestCaseGenerator:
             device_type
         )
         
-        # 添加 LLM 生成的标记
-        testcase["generation_method"] = "llm_assisted"
+        # 添加生成标记
+        testcase["generation_method"] = "template_fallback"
         testcase["original_description"] = description
-        testcase["llm_analysis"] = {
-            "detected_intent": "搜索功能测试",
-            "key_actions": ["导航到搜索", "智能输入", "执行搜索", "验证结果"],
-            "conditional_logic": ["搜索框状态判断", "清空或直接输入"],
-            "confidence": 0.95
-        }
+        testcase["fallback_reason"] = "LLM服务不可用"
         
         return testcase
     

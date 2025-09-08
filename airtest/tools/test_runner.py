@@ -14,9 +14,11 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-# 导入执行引擎（实际使用时需要调整导入路径）
-sys.path.append('../lib')
-from execution_engine.smart_executor import SmartTestExecutor, TestCaseResult
+# 添加项目路径以导入库
+sys.path.append(str(Path(__file__).parent.parent))
+
+from lib.config_manager import ConfigManager  
+from lib.execution_engine.smart_executor import SmartTestExecutor, TestCaseResult
 
 
 class TestReportGenerator:
@@ -282,7 +284,8 @@ class SmartTestRunner:
             device_id: 设备ID
         """
         self.device_id = device_id
-        self.executor = SmartTestExecutor(device_id)
+        self.config_manager = ConfigManager()
+        self.executor = SmartTestExecutor(device_id, self.config_manager)
         self.report_generator = TestReportGenerator()
     
     def run_testcase_file(self, testcase_file: str) -> TestCaseResult:

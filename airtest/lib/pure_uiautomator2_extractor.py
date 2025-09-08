@@ -372,6 +372,41 @@ class EnhancedUIAutomator2Extractor:
         self._visual_elements_cache = None
         self._last_extraction_mode = None
         
+    async def stop_uiautomator_service(self):
+        """停止UIAutomator服务"""
+        try:
+            logger.info("正在停止UIAutomator服务...")
+            
+            # 使用ADB命令停止UIAutomator服务
+            cmd = "adb shell am force-stop com.github.uiautomator"
+            cmd2 = "adb shell am force-stop com.github.uiautomator.test"
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )         
+            proc2 = await asyncio.create_subprocess_shell(
+                cmd2,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            
+            if proc.returncode == 0:
+                logger.info("✅ UIAutomator服务已停止")
+                # 等待一段时间确保服务完全停止
+                await asyncio.sleep(2)
+                return True
+            else:
+                logger.warning(f"停止UIAutomator服务时出现警告: {stderr.decode().strip()}")
+                # 即使有警告，也认为执行成功，因为force-stop命令通常都会成功
+                await asyncio.sleep(2)
+                return True
+                
+        except Exception as e:
+            logger.error(f"停止UIAutomator服务失败: {e}")
+            return False
+
     def connect_device(self):
         """连接设备"""
         try:
@@ -758,6 +793,10 @@ class UIAutomationScheduler:
     
     async def initialize(self):
         """初始化调度器"""
+        # 首先停止UIAutomator服务
+        await self.extractor.stop_uiautomator_service()
+        
+        # 然后连接设备
         return self.extractor.connect_device()
     
     # 统一对外接口 - 对LLM透明
@@ -852,6 +891,10 @@ class UIAutomationScheduler:
             "screen_size": self.extractor.screen_size,
             "device_connected": self.extractor.device is not None
         }
+    
+    async def stop_uiautomator_service(self) -> bool:
+        """手动停止UIAutomator服务 - 对外接口"""
+        return await self.extractor.stop_uiautomator_service()
 
 
 # 兼容性函数 - 保持向后兼容
@@ -859,7 +902,11 @@ def extract_from_device(device_id=None, output_file="enhanced_ui_widgets.json"):
     """从设备提取widget信息的简单接口 - 兼容原有API"""
     async def _extract():
         scheduler = UIAutomationScheduler(device_id)
-        await scheduler.initialize()
+        
+        # 初始化时会自动停止UIAutomator服务
+        if not await scheduler.initialize():
+            logger.error("初始化失败")
+            return None
         
         data = await scheduler.get_screen_elements()
         
@@ -886,13 +933,17 @@ async def main():
     print("=" * 70)
     
     try:
+        
         # 创建调度器
         scheduler = UIAutomationScheduler()
         
-        # 初始化
+        # 初始化（包含停止UIAutomator服务）
+        print("正在初始化调度器（包含停止UIAutomator服务）...")
         if not await scheduler.initialize():
             print("❌ 初始化失败")
             return
+        
+        print("✅ 调度器初始化完成")
         
         # 获取模式信息
         mode_info = await scheduler.get_current_mode_info()

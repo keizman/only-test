@@ -16,6 +16,7 @@ from typing import List, Optional
 # 添加项目路径
 sys.path.append(str(Path(__file__).parent.parent))
 
+from lib.config_manager import ConfigManager
 from lib.code_generator.json_to_python import JSONToPythonConverter
 
 
@@ -39,7 +40,9 @@ class IntegratedTestExecutor:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         (self.reports_dir / "allure-results").mkdir(exist_ok=True)
         
-        self.converter = JSONToPythonConverter()
+        # 初始化配置管理器和转换器
+        self.config_manager = ConfigManager()
+        self.converter = JSONToPythonConverter(self.config_manager)
         
     def execute_workflow(self, 
                         json_files: List[str] = None,

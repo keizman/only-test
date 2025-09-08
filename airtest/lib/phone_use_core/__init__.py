@@ -6,15 +6,9 @@ Phone-Use 核心功能集成模块
 """
 
 from .screen_capture import ScreenCapture
-from .element_recognition import ElementRecognizer  
-from .device_control import DeviceController
-from .omniparser_client import OmniparserClient
 
 __all__ = [
-    'ScreenCapture',
-    'ElementRecognizer', 
-    'DeviceController',
-    'OmniparserClient'
+    'ScreenCapture'
 ]
 
 __version__ = '1.0.0'

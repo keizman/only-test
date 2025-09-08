@@ -8,7 +8,7 @@ poco.click(0.4996527777777778,0.8701171875)
 import pytest
 import allure
 
-connect_device("android://127.0.0.1:5037/192.168.100.114:5555?touch_method=ADBTOUCH&")
+connect_device("android://127.0.0.1:5037/192.168.100.112:5555?touch_method=ADBTOUCH&")
 
 # touch(Template(r"tpl1750822620009.png", record_pos=(-0.179, -0.669), resolution=(1440, 2560)))
 
