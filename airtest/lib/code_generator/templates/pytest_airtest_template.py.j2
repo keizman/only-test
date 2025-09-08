@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+自动生成的测试用例: {{ testcase_name }}
+测试ID: {{ testcase_id }}
+生成时间: {{ generation_info.generated_at }}
+原始模板: {{ generation_info.original_json }}
+
+描述: {{ description }}
+"""
+
+import pytest
+import allure
+from airtest.core.api import *
+from airtest.core.android.android import Android
+from airtest.core.cv import Template
+from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+
+# 测试元数据
+TESTCASE_METADATA = {{ metadata | tojson(indent=2) }}
+VARIABLES = {{ variables | tojson(indent=2) }}
+
+def find_element_by_priority_selectors(selectors):
+    """根据优先级选择器查找元素"""
+    poco = AndroidUiautomationPoco(use_airtest_input=True)
+    
+    for selector in selectors:
+        try:
+            if "resource_id" in selector:
+                element = poco(resourceId=selector["resource_id"])
+            elif "text" in selector:
+                element = poco(text=selector["text"])
+            elif "content_desc" in selector:
+                element = poco(desc=selector["content_desc"])
+            elif "class" in selector:
+                element = poco(type=selector["class"])
+            else:
+                continue
+                
+            if element.exists():
+                return element
+        except Exception:
+            continue
+    
+    return None
+
+def wait_for_element(selectors, timeout=10):
+    """等待元素出现"""
+    poco = AndroidUiautomationPoco(use_airtest_input=True)
+    
+    for selector in selectors:
+        try:
+            if "resource_id" in selector:
+                poco(resourceId=selector["resource_id"]).wait_for_appearance(timeout=timeout)
+                return True
+        except Exception:
+            continue
+    
+    return False
+
+@allure.feature("{{ metadata.category or '功能测试' }}")
+@allure.story("{{ testcase_name }}")
+@allure.title("{{ description }}")
+@allure.description("""
+目标应用: {{ target_app }}
+测试优先级: {{ metadata.priority or 'medium' }}
+预估时长: {{ metadata.estimated_duration or 30 }}秒
+
+业务描述: {{ description }}
+""")
+class Test{{ testcase_id.replace('-', '_').replace(' ', '_') }}:
+    
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_and_teardown(self):
+        """测试前后置处理"""
+        # 连接设备
+        auto_setup(__file__)
+        
+        # 启动应用
+        start_app("{{ target_app }}")
+        sleep(3)
+        
+        # 拍摄初始截图
+        allure.attach(screenshot(), name="测试开始截图", attachment_type=allure.attachment_type.PNG)
+        
+        yield
+        
+        # 清理工作
+        allure.attach(screenshot(), name="测试结束截图", attachment_type=allure.attachment_type.PNG)
+    
+    @allure.severity(allure.severity_level.{% if metadata.priority == 'high' %}CRITICAL{% elif metadata.priority == 'low' %}MINOR{% else %}NORMAL{% endif %})
+    def test_{{ testcase_id.lower().replace('-', '_').replace(' ', '_') }}_execution(self):
+        """执行智能测试用例"""
+        
+        with allure.step("测试用例基本信息"):
+            allure.attach(
+                f"测试ID: {{ testcase_id }}\n"
+                f"测试名称: {{ testcase_name }}\n"
+                f"目标应用: {{ target_app }}\n"
+                f"生成方式: {{ generation_info.conversion_method }}",
+                name="测试基本信息"
+            )
+
+        {% for step in execution_steps %}
+        {% if step.type == 'conditional' %}
+        with allure.step("Step {{ step.step_number }}: {{ step.description }}"):
+            allure.attach("{{ step.business_logic or '执行条件判断' }}", name="业务逻辑说明")
+            allure.attach("{{ step.ai_hint or '智能判断提示' }}", name="AI提示")
+            
+            # 执行条件检查{{ step.condition_code | indent(12, first=False) }}
+            
+            # 根据条件选择执行路径
+            if {{ step.condition_var }}:
+                with allure.step("条件分支: True时的处理"):{{ step.if_branch | indent(20, first=False) }}
+            else:
+                with allure.step("条件分支: False时的处理"):{{ step.else_branch | indent(20, first=False) }}
+
+        {% else %}
+        with allure.step("Step {{ step.step_number }}: {{ step.description }}"):
+            allure.attach("{{ step.success_criteria or '执行标准操作' }}", name="成功标准")
+            {{ step.code | indent(12, first=False) }}
+            sleep(1)  # 操作间隔
+
+        {% endif %}
+        {% endfor %}
+        
+        # 执行断言验证
+        {% for assertion in assertions %}
+        with allure.step("断言验证: {{ assertion.description }}"):{{ assertion.code | indent(12, first=False) }}
+        {% endfor %}
+        
+        allure.attach(screenshot(), name="测试执行完成截图", attachment_type=allure.attachment_type.PNG)
+
+if __name__ == "__main__":
+    pytest.main([__file__, "--alluredir=../../reports/allure-results", "-v"])

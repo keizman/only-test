@@ -1,0 +1,362 @@
+{
+  "testcase_id": "TC_DEMO_SMART_SEARCH_20241205",
+  "name": "演示智能搜索功能测试",
+  "version": "2.0.0",
+  "description": "演示Only-Test框架的智能条件判断功能，展示如何根据搜索框状态智能选择操作路径",
+  "generated_at": "2024-12-05T10:30:00Z",
+  "generated_from_template": "smart_search_template",
+  "target_app": "com.example.musicapp",
+  "generation_method": "llm_assisted",
+  "original_description": "在测试应用中搜索'周杰伦'，如果搜索框有内容先清空再输入",
+  "metadata": {
+    "tags": ["demo", "search", "smart_judgment", "conditional", "music"],
+    "priority": "high",
+    "estimated_duration": 45,
+    "device_types": ["android_phone"],
+    "app_versions": [">=1.0.0"],
+    "complexity": "conditional_logic",
+    "ai_friendly": true,
+    "author": "Only-Test Demo Generator",
+    "category": "functional_test"
+  },
+  "context_awareness": {
+    "current_app_state": "launched",
+    "expected_page": "search_page",
+    "user_session": "anonymous",
+    "network_status": "connected",
+    "target_app": "com.example.musicapp",
+    "prerequisites": [
+      "音乐应用已启动",
+      "网络连接正常",
+      "用户处于未登录状态"
+    ]
+  },
+  "variables": {
+    "search_keyword": "周杰伦",
+    "target_app_package": "com.example.musicapp",
+    "max_wait_time": 20,
+    "expected_results_count": ">= 3"
+  },
+  "execution_path": [
+    {
+      "step": 1,
+      "page": "home",
+      "action": "click",
+      "target": {
+        "priority_selectors": [
+          {"resource_id": "com.example.musicapp:id/search_btn"},
+          {"resource_id": "search_button"},
+          {"content_desc": "搜索音乐"},
+          {"text": "搜索"},
+          {"xpath": "//android.widget.ImageView[@content-desc='搜索']"},
+          {"visual_hint": "搜索图标或放大镜"}
+        ]
+      },
+      "description": "点击音乐应用首页搜索按钮",
+      "success_criteria": "成功进入搜索页面，显示搜索输入框",
+      "ai_hint": "在音乐应用主界面寻找搜索图标，通常是放大镜符号或'搜索'文字",
+      "timeout": 10,
+      "retry_count": 2,
+      "business_logic": "用户想要搜索音乐，首先需要进入搜索功能页面"
+    },
+    {
+      "step": 2,
+      "page": "search_page",
+      "action": "conditional_action",
+      "condition": {
+        "type": "element_content_check",
+        "target": {
+          "priority_selectors": [
+            {"resource_id": "com.example.musicapp:id/search_edit"},
+            {"resource_id": "search_input"},
+            {"class": "android.widget.EditText"},
+            {"xpath": "//android.widget.EditText[contains(@hint,'搜索')]"}
+          ]
+        },
+        "check": "has_text_content",
+        "params": {
+          "ignore_placeholder": true,
+          "ignore_hint": true,
+          "trim_whitespace": true
+        }
+      },
+      "conditional_paths": {
+        "if_has_content": {
+          "action": "click",
+          "target": {
+            "priority_selectors": [
+              {"resource_id": "com.example.musicapp:id/search_clear"},
+              {"resource_id": "clear_text"},
+              {"content_desc": "清除搜索"},
+              {"xpath": "//android.widget.ImageView[@content-desc='清除']"},
+              {"visual_hint": "×符号或清除按钮"}
+            ]
+          },
+          "reason": "搜索框已有历史搜索内容，需要先清空才能输入新的搜索词'周杰伦'",
+          "ai_hint": "寻找输入框右侧的清除按钮，通常是×符号或'清除'文字",
+          "success_criteria": "搜索框内容被完全清空",
+          "timeout": 5,
+          "fallback_action": {
+            "action": "long_press_and_clear",
+            "target": "search_input_box",
+            "description": "长按输入框全选后删除内容"
+          }
+        },
+        "if_empty": {
+          "action": "input",
+          "target": "search_input_box",
+          "data": "${search_keyword}",
+          "reason": "搜索框为空，可以直接输入搜索关键词'周杰伦'",
+          "ai_hint": "直接在空的搜索输入框中输入文本内容",
+          "success_criteria": "搜索关键词成功显示在输入框中"
+        }
+      },
+      "description": "🧠 智能判断搜索框状态并选择相应操作：有内容则清空，无内容则直接输入",
+      "business_logic": "确保搜索框处于正确状态，避免新旧搜索词混合导致搜索结果错误",
+      "ai_understanding": "这是核心的条件判断逻辑，AI需要先观察搜索框状态，然后选择合适的操作路径",
+      "demo_highlight": "这一步展示了Only-Test框架的核心特性：智能条件判断",
+      "expected_outcomes": {
+        "if_has_content": "清空操作成功，搜索框变为空白状态",
+        "if_empty": "搜索词输入成功，准备执行搜索"
+      }
+    },
+    {
+      "step": 3,
+      "page": "search_page",
+      "action": "conditional_action",
+      "condition": {
+        "type": "element_content_check",
+        "target": "search_input_box",
+        "check": "is_empty"
+      },
+      "conditional_paths": {
+        "if_true": {
+          "action": "input",
+          "target": {
+            "priority_selectors": [
+              {"resource_id": "com.example.musicapp:id/search_edit"},
+              {"resource_id": "search_input"},
+              {"class": "android.widget.EditText"}
+            ]
+          },
+          "data": "${search_keyword}",
+          "reason": "搜索框已清空，现在输入目标搜索词'周杰伦'"
+        },
+        "if_false": {
+          "action": "skip",
+          "reason": "搜索框已有正确内容，跳过重复输入"
+        }
+      },
+      "description": "确保搜索关键词正确输入到搜索框中",
+      "success_criteria": "搜索框显示'周杰伦'",
+      "ai_hint": "验证搜索框中的内容是否为目标搜索词"
+    },
+    {
+      "step": 4,
+      "page": "search_page",
+      "action": "click",
+      "target": {
+        "priority_selectors": [
+          {"resource_id": "com.example.musicapp:id/search_submit"},
+          {"resource_id": "search_button"},
+          {"content_desc": "开始搜索"},
+          {"text": "搜索"},
+          {"xpath": "//android.widget.Button[contains(@text,'搜索')]"},
+          {"visual_hint": "搜索按钮或确认图标"}
+        ]
+      },
+      "description": "点击搜索按钮执行搜索操作",
+      "precondition": "搜索框已输入'周杰伦'",
+      "ai_hint": "寻找搜索确认按钮，可能显示为'搜索'、'确认'或放大镜图标",
+      "success_criteria": "搜索请求成功发送，页面开始加载搜索结果",
+      "timeout": 15,
+      "business_logic": "执行实际的搜索操作，查找与'周杰伦'相关的音乐内容"
+    },
+    {
+      "step": 5,
+      "page": "search_results",
+      "action": "wait_for_elements",
+      "target": {
+        "selectors": [
+          {"resource_id": "com.example.musicapp:id/search_results"},
+          {"class": "androidx.recyclerview.widget.RecyclerView"},
+          {"xpath": "//android.widget.ListView"},
+          {"visual_hint": "搜索结果列表"}
+        ]
+      },
+      "description": "等待搜索结果加载完成",
+      "timeout": "${max_wait_time}",
+      "success_criteria": "搜索结果列表显示，包含周杰伦相关的音乐内容",
+      "ai_hint": "等待页面显示包含搜索结果的列表或网格布局"
+    },
+    {
+      "step": 6,
+      "page": "search_results", 
+      "action": "click",
+      "target": {
+        "selectors": [
+          {"xpath": "//android.widget.TextView[contains(@text,'周杰伦')][1]"},
+          {"resource_id": "com.example.musicapp:id/song_item"},
+          {"visual_hint": "第一个搜索结果项"}
+        ]
+      },
+      "description": "点击第一个周杰伦相关的搜索结果",
+      "success_criteria": "成功进入歌曲详情页或开始播放",
+      "timeout": 10,
+      "optional": true,
+      "business_logic": "验证搜索功能的完整性，确保搜索结果可以正常访问"
+    }
+  ],
+  "assertions": [
+    {
+      "step": 5,
+      "type": "check_search_results_exist",
+      "expected": true,
+      "timeout": 15,
+      "description": "验证搜索结果正常显示",
+      "ai_understanding": "确认搜索功能工作正常，用户能看到与'周杰伦'相关的搜索结果",
+      "error_handling": "如果无结果，检查网络连接和搜索关键词是否正确"
+    },
+    {
+      "step": 5,
+      "type": "check_results_count",
+      "expected": "${expected_results_count}",
+      "description": "验证搜索结果数量符合预期",
+      "tolerance": "至少显示3个相关结果",
+      "business_validation": "确保搜索算法能找到足够多的相关内容"
+    },
+    {
+      "step": 5,
+      "type": "check_content_relevance",
+      "expected": "周杰伦",
+      "description": "验证搜索结果与搜索关键词相关",
+      "validation_method": "检查结果标题或描述中包含搜索关键词"
+    }
+  ],
+  "ai_enhancement": {
+    "nlp_keywords": [
+      "音乐搜索", "周杰伦", "歌手", "歌曲", "专辑",
+      "搜索框", "输入", "清空", "确认", "结果"
+    ],
+    "visual_cues": [
+      "搜索图标", "放大镜", "输入框", "清除按钮", 
+      "×符号", "搜索按钮", "结果列表", "音乐封面"
+    ],
+    "user_intent": "用户想要在音乐应用中搜索周杰伦的歌曲",
+    "workflow_patterns": [
+      "进入搜索页面 → 检查搜索框状态 → 智能清空或直接输入 → 确认搜索 → 查看结果 → 选择内容"
+    ],
+    "decision_points": [
+      "搜索框是否已有内容？",
+      "清空操作是否成功？",
+      "搜索关键词是否正确输入？",
+      "搜索结果是否符合预期？"
+    ],
+    "demo_features": [
+      "条件分支逻辑演示",
+      "智能状态判断",
+      "多路径执行策略",
+      "AI友好的操作描述",
+      "业务逻辑清晰化"
+    ],
+    "learning_points": [
+      "如何设计条件判断逻辑",
+      "如何编写AI友好的测试用例",
+      "如何处理UI状态的不确定性",
+      "如何实现真正的智能化测试"
+    ]
+  },
+  "llm_analysis": {
+    "detected_intent": "音乐搜索功能测试",
+    "key_actions": ["导航到搜索", "智能状态判断", "条件输入", "执行搜索", "验证结果"],
+    "conditional_logic": [
+      "搜索框内容状态检查",
+      "基于状态的操作路径选择",
+      "输入确认和验证"
+    ],
+    "confidence": 0.95,
+    "complexity_analysis": {
+      "total_steps": 6,
+      "conditional_steps": 2,
+      "decision_points": 3,
+      "fallback_strategies": 2
+    },
+    "risk_assessment": {
+      "network_dependency": "medium",
+      "ui_stability": "high",
+      "cross_device_compatibility": "high"
+    }
+  },
+  "llm_generation_hints": {
+    "core_logic": "智能检测搜索框状态 → 选择清空或直接输入策略 → 输入搜索词 → 执行搜索 → 验证结果",
+    "decision_points": [
+      "搜索框内容状态检查",
+      "清空策略vs直接输入策略选择",
+      "搜索结果验证"
+    ],
+    "alternative_flows": [
+      "直接输入流程（搜索框为空）",
+      "清空后输入流程（搜索框有内容）",
+      "降级输入流程（清空失败时长按全选）"
+    ],
+    "success_indicators": [
+      "搜索页面成功进入",
+      "搜索框状态正确处理",
+      "搜索关键词成功输入",
+      "搜索结果正常显示",
+      "结果内容相关性验证"
+    ],
+    "context_dependencies": [
+      "音乐应用正常启动",
+      "网络连接稳定",
+      "搜索功能可用",
+      "用户界面响应正常"
+    ],
+    "demo_value": "完美展示Only-Test框架的智能条件判断能力和AI驱动的测试用例设计理念"
+  },
+  "recovery_actions": [
+    {
+      "exception": "element_content_unclear",
+      "action": "use_visual_recognition",
+      "reason": "XML无法准确获取搜索框内容时，启用Omniparser视觉识别",
+      "fallback": "force_clear_and_input"
+    },
+    {
+      "exception": "conditional_logic_failed",
+      "action": "fallback_to_clear_and_input",
+      "reason": "条件判断失败时，强制执行清空后输入的保守策略"
+    },
+    {
+      "exception": "search_timeout",
+      "action": "retry_search",
+      "params": {"max_retries": 2, "delay": 3},
+      "reason": "搜索超时可能是网络问题，尝试重新搜索"
+    },
+    {
+      "exception": "no_search_results",
+      "action": "verify_network_and_keyword",
+      "reason": "无搜索结果时验证网络连接和关键词正确性"
+    },
+    {
+      "exception": "app_crash_during_search",
+      "action": "restart_app_and_retry",
+      "reason": "应用崩溃时重启应用并重新执行搜索流程"
+    }
+  ],
+  "demo_notes": {
+    "purpose": "展示Only-Test框架的核心能力：基于AI的智能条件判断和自适应测试执行",
+    "highlights": [
+      "真实的条件分支逻辑",
+      "AI友好的元数据设计",
+      "多层次的异常恢复机制",
+      "详细的执行过程追踪"
+    ],
+    "usage_scenarios": [
+      "框架功能演示",
+      "新用户培训",
+      "技术方案验证",
+      "开发调试测试"
+    ],
+    "expected_outcome": "成功演示智能搜索流程，验证框架的条件判断和自适应能力"
+  }
+}

@@ -1,0 +1,306 @@
+# Only-Test Framework 核心配置
+# 智能化 APK 自动化测试框架配置文件
+
+framework:
+  name: "Only-Test"
+  version: "1.0.0"
+  description: "Write Once, Test Everywhere - 智能化 APK 自动化测试框架"
+  
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_output: true
+  file_path: "../logs/only_test.log"
+  console_output: true
+  max_file_size: "10MB"
+  backup_count: 5
+  assertion_file_path: "../logs/asssetion_images/"
+  
+# 执行引擎配置
+execution:
+  # 超时设置
+  timeouts:
+    default_step: 30        # 默认步骤超时时间（秒）
+    element_wait: 10        # 元素等待超时时间（秒）
+    page_load: 15          # 页面加载超时时间（秒）
+    assertion: 10          # 断言超时时间（秒）
+    recovery: 5            # 恢复操作超时时间（秒）
+  
+  # 重试机制
+  retry:
+    enabled: true
+    max_retries: 3         # 最大重试次数
+    retry_delay: 2         # 重试间隔（秒）
+    exponential_backoff: true  # 指数退避
+  
+  # 异常恢复
+  recovery:
+    enabled: true
+    auto_screenshot: true   # 失败时自动截图
+    recovery_strategies:
+      - "switch_recognition_mode"  # 切换识别模式
+      - "refresh_screen"          # 刷新屏幕
+      - "retry_operation"         # 重试操作
+      - "fallback_coordinates"    # 坐标降级
+  
+  # 并发执行
+  parallel:
+    enabled: false         # 是否启用并发执行
+    max_workers: 3         # 最大并发数量
+    queue_timeout: 300     # 队列超时时间（秒）
+
+# 元素识别配置
+recognition:
+  # 默认识别模式
+  default_mode: "hybrid"   # xml, visual, hybrid, sdk
+  
+  # 模式切换策略
+  mode_switching:
+    auto_switch: true      # 自动切换模式
+    fallback_enabled: true # 启用降级策略
+    switch_conditions:
+      - condition: "xml_dump_failed"
+        fallback: "visual"
+      - condition: "media_playing"
+        switch_to: "visual"
+      - condition: "element_not_found"
+        fallback: "visual"
+  
+  # XML识别配置
+  xml_recognition:
+    timeout: 10
+    dump_retries: 2
+    ignore_invisible: false
+    use_cache: false
+  
+  # 视觉识别配置
+  visual_recognition:
+    server_url: "http://100.122.57.128:9333"
+    timeout: 30
+    confidence_threshold: 0.8
+    use_paddleocr: true
+    ocr_languages: ["ch", "en"]
+    cache_enabled: true
+    cache_ttl: 300  # 缓存生存时间（秒）
+  
+  # 元素匹配策略
+  matching:
+    similarity_threshold: 0.8
+    priority_weights:
+      resource_id: 0.4     # ResourceID 权重
+      text: 0.3           # 文本权重
+      content_desc: 0.2   # 内容描述权重
+      position: 0.1       # 位置权重
+
+# 条件逻辑配置
+conditional_logic:
+  enabled: true
+  evaluation_timeout: 5    # 条件评估超时（秒）
+  
+  # 条件类型配置
+  conditions:
+    element_content_check:
+      timeout: 5
+      ignore_placeholder: true
+      trim_whitespace: true
+    
+    element_exists:
+      timeout: 10
+      check_visibility: true
+    
+    page_state:
+      detection_method: "activity_name"  # activity_name, window_info, custom
+    
+    app_state:
+      detection_methods: 
+        - "current_activity"
+        - "audio_manager"
+        - "media_session"
+
+# 设备管理配置
+device:
+  # 设备发现
+  discovery:
+    auto_discover: true
+    discovery_timeout: 30
+    supported_types:
+      - "android_phone"
+      - "android_tablet"
+      - "android_tv"
+      # - "emulator"
+  
+  # 设备池配置
+  pool:
+    max_devices: 5
+    health_check_interval: 60  # 健康检查间隔（秒）
+    idle_timeout: 300         # 空闲超时（秒）
+  
+  # 设备适配
+  adaptation:
+    coordinate_scaling: true   # 坐标缩放
+    resolution_adaptation: true # 分辨率适配
+    density_scaling: true      # 密度缩放
+    
+  # 连接配置
+  connection:
+    adb_timeout: 30
+    connection_retries: 3
+    heartbeat_interval: 30
+
+# LLM 集成配置
+llm_integration:
+  enabled: true
+  
+  # 支持的 LLM 提供商
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"  # 从环境变量读取
+      model: "gpt-4"
+      max_tokens: 2000
+      temperature: 0.3
+    
+    # claude:
+    #   api_key: "${CLAUDE_API_KEY}"
+    #   model: "claude-3-sonnet"
+    #   max_tokens: 2000
+    
+    # local:
+    #   endpoint: "http://localhost:11434"  # Ollama 本地端点
+    #   model: "llama3"
+  
+  # 用例生成配置
+  generation:
+    default_provider: "openai"
+    prompt_templates_dir: "../templates/prompts"
+    max_generation_time: 60    # 生成超时（秒）
+    confidence_threshold: 0.8  # 生成置信度阈值
+    
+  # 增强配置
+  enhancement:
+    auto_hint_generation: true    # 自动生成AI提示
+    business_logic_extraction: true  # 业务逻辑提取
+    error_pattern_learning: true  # 错误模式学习
+
+# 测试数据配置
+test_data:
+  # 变量替换
+  variables:
+    enabled: true
+    variable_pattern: "\\$\\{([^}]+)\\}"  # 变量匹配模式
+    
+    # 内置变量
+    builtin:
+      timestamp: "${current_timestamp}"
+      random_string: "${random_string_8}"
+      device_info: "${device_model}"
+  
+  # 数据源配置
+  sources:
+    json_files: true
+    yaml_files: true
+    csv_files: true
+    database: false
+
+# 报告生成配置
+reporting:
+  # 输出格式
+  formats:
+    - "json"
+    - "html"
+    - "xml"  # JUnit XML
+  
+  # 输出目录
+  output_dir: "../reports"
+  
+  # HTML报告配置
+  html:
+    template: "default"
+    include_screenshots: true
+    include_videos: false
+    theme: "modern"  # modern, classic, dark
+  
+  # JSON报告配置
+  json:
+    pretty_print: true
+    include_metadata: true
+    compression: false
+  
+  # 实时监控
+  real_time:
+    enabled: true
+    websocket_port: 8080
+    update_interval: 1  # 更新间隔（秒）
+
+# 性能配置
+performance:
+  # 截图优化
+  screenshot:
+    quality: 80          # 截图质量 (1-100)
+    format: "png"        # png, jpg, webp
+    max_size: "1920x1080" # 最大分辨率
+    compression: true
+  
+  # 内存管理
+  memory:
+    max_screenshot_cache: 50  # 最大截图缓存数量
+    cleanup_interval: 300     # 清理间隔（秒）
+    gc_threshold: 0.8        # GC触发阈值
+  
+  # 网络优化
+  network:
+    request_timeout: 30
+    max_retries: 3
+    connection_pool: 10
+
+# 安全配置
+security:
+  # API密钥管理
+  api_keys:
+    encryption: true
+    storage: "environment"  # environment, file, keyring
+  
+  # 敏感数据处理
+  sensitive_data:
+    mask_in_logs: true
+    mask_pattern: "\\b\\w*(?:password|token|key|secret)\\w*\\b"
+    replacement: "***MASKED***"
+
+# 调试配置
+debug:
+  enabled: false
+  
+  # 调试选项
+  options:
+    verbose_logging: false
+    save_all_screenshots: false
+    detailed_timing: false
+    step_by_step: false
+    
+  # 开发者选项
+  developer:
+    mock_device: false      # 使用模拟设备
+    skip_actual_actions: false  # 跳过实际操作
+    dry_run: false         # 干运行模式
+
+# 扩展配置
+extensions:
+  # 插件系统
+  plugins:
+    enabled: true
+    plugin_dir: "../plugins"
+    auto_load: true
+  
+  # 自定义识别器
+  custom_recognizers:
+    enabled: true
+    recognizer_dir: "../custom_recognizers"
+  
+  # 钩子系统
+  hooks:
+    enabled: true
+    hook_points:
+      - "before_test_execution"
+      - "after_test_execution"
+      - "on_step_failure"
+      - "on_recovery_attempt"

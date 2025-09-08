@@ -1,0 +1,306 @@
+# Only-Test 设备配置
+# 支持多种 Android 设备类型的配置
+
+# 设备类型定义
+device_types:
+  android_phone:
+    name: "Android 手机"
+    description: "标准 Android 手机设备"
+    touch_type: "finger"
+    interaction_delay: 0.5
+    screenshot_format: "png"
+    
+  android_tablet:
+    name: "Android 平板"
+    description: "Android 平板设备"
+    touch_type: "finger"
+    interaction_delay: 0.6
+    screenshot_format: "png"
+    
+  android_tv:
+    name: "Android TV"
+    description: "Android TV 或机顶盒设备"
+    touch_type: "remote"  # 遥控器控制
+    interaction_delay: 1.0
+    screenshot_format: "png"
+    special_features:
+      - "drm_protected_content"
+      - "remote_control_navigation"
+      - "voice_commands"
+    
+  emulator:
+    name: "Android 模拟器"
+    description: "Android 模拟器设备"
+    touch_type: "mouse"
+    interaction_delay: 0.3
+    screenshot_format: "png"
+
+# 分辨率适配配置
+resolution_adaptation:
+  # 基准分辨率（用于坐标计算）
+  reference_resolution: "1920x1080"
+  
+  # 支持的分辨率列表
+  supported_resolutions:
+    phone:
+      - "1080x1920"    # FHD
+      - "1440x2560"    # QHD
+      - "1080x2340"    # 21:9
+    tablet:
+      - "1600x2560"    # WQHD
+      - "1536x2048"    # iPad
+      - "1200x1920"    # WUXGA
+    tv:
+      - "1920x1080"    # FHD
+      - "3840x2160"    # 4K UHD
+      - "2560x1440"    # QHD
+  
+  # 缩放算法
+  scaling:
+    algorithm: "linear"  # linear, nearest, cubic
+    maintain_aspect_ratio: true
+    min_scale_factor: 0.5
+    max_scale_factor: 2.0
+
+# ADB 连接配置
+adb_connection:
+  # 连接设置
+  timeout: 30
+  retry_count: 3
+  retry_delay: 2
+  
+  # ADB 命令配置
+  commands:
+    screenshot: "screencap -p"
+    tap: "input tap {x} {y}"
+    swipe: "input swipe {x1} {y1} {x2} {y2} {duration}"
+    text_input: "input text '{text}'"
+    key_press: "input keyevent {keycode}"
+    current_activity: "dumpsys activity | grep 'mCurrentFocus'"
+    
+  # 设备信息获取
+  device_info_commands:
+    model: "getprop ro.product.model"
+    brand: "getprop ro.product.brand"
+    version: "getprop ro.build.version.release"
+    sdk_version: "getprop ro.build.version.sdk"
+    density: "wm density"
+    resolution: "wm size"
+
+# 设备特定配置
+device_specific:
+  # 华为设备
+  huawei:
+    special_handling:
+      - "harmony_os_adaptation"
+      - "emui_navigation"
+    ime_package: "com.huawei.android.inputmethod.pinyinime"
+    
+  # 小米设备  
+  xiaomi:
+    special_handling:
+      - "miui_permissions"
+      - "miui_navigation"
+    ime_package: "com.miui.inputmethod"
+    
+  # OPPO/OnePlus 设备
+  oppo:
+    special_handling:
+      - "coloros_adaptation"
+    ime_package: "com.oppo.inputmethod"
+    
+  # 三星设备
+  samsung:
+    special_handling:
+      - "oneui_navigation"
+      - "samsung_keyboard"
+    ime_package: "com.samsung.android.inputmethod"
+    
+  # Android TV 设备
+  android_tv:
+    special_handling:
+      - "remote_navigation"
+      - "drm_content_protection"
+      - "leanback_ui"
+    navigation_keys:
+      up: "KEYCODE_DPAD_UP"
+      down: "KEYCODE_DPAD_DOWN" 
+      left: "KEYCODE_DPAD_LEFT"
+      right: "KEYCODE_DPAD_RIGHT"
+      select: "KEYCODE_DPAD_CENTER"
+      back: "KEYCODE_BACK"
+      home: "KEYCODE_HOME"
+      menu: "KEYCODE_MENU"
+
+# 网络连接配置
+network_connection:
+  # Wi-Fi 连接检查
+  wifi_check:
+    enabled: true
+    timeout: 10
+    retry_count: 3
+    
+  # 移动数据检查
+  mobile_data_check:
+    enabled: true
+    timeout: 10
+    
+  # 网络状态检查命令
+  network_commands:
+    connectivity: "dumpsys connectivity"
+    wifi_info: "dumpsys wifi"
+    network_stats: "dumpsys netstats"
+
+# 应用管理配置
+app_management:
+  # 应用安装
+  installation:
+    timeout: 300  # 安装超时时间（秒）
+    replace_existing: true
+    grant_permissions: true
+    downgrade_allowed: false
+    
+  # 应用卸载
+  uninstallation:
+    timeout: 60
+    keep_data: false
+    
+  # 应用启动
+  app_launch:
+    timeout: 30
+    wait_for_launch: true
+    clear_data_on_launch: false
+    
+  # 权限管理
+  permissions:
+    auto_grant: true
+    dangerous_permissions:
+      - "android.permission.READ_EXTERNAL_STORAGE"
+      - "android.permission.WRITE_EXTERNAL_STORAGE"
+      - "android.permission.CAMERA"
+      - "android.permission.RECORD_AUDIO"
+      - "android.permission.ACCESS_FINE_LOCATION"
+
+# 输入法配置
+ime_configuration:
+  # 默认输入法设置
+  default_ime:
+    phone: "com.android.inputmethod.latin/.LatinIME"
+    tv: "com.android.tv.ime/.TvKeyboardService"
+    
+  # 输入法切换
+  ime_switching:
+    auto_switch: true
+    preferred_ime: "system_default"
+    fallback_ime: "com.android.inputmethod.latin/.LatinIME"
+    
+  # 文本输入优化
+  text_input:
+    input_method: "adb"  # adb, ime, clipboard
+    encoding: "utf-8"
+    chunk_size: 100  # 分块输入大小
+    input_delay: 0.1  # 输入间隔
+
+# 媒体处理配置
+media_handling:
+  # DRM 内容处理
+  drm_content:
+    detection_enabled: true
+    fallback_strategies:
+      - "audio_detection"
+      - "surface_analysis"
+      - "player_state_query"
+      
+  # 音频检测
+  audio_detection:
+    method: "audio_manager"  # audio_manager, dumpsys, custom
+    polling_interval: 1.0
+    detection_threshold: 0.1
+    
+  # 视频播放检测
+  video_detection:
+    methods:
+      - "surface_flinger"
+      - "media_session"
+      - "player_notification"
+    detection_interval: 2.0
+
+# 性能监控配置
+performance_monitoring:
+  # CPU 监控
+  cpu_monitoring:
+    enabled: true
+    sampling_interval: 5  # 采样间隔（秒）
+    threshold: 80  # CPU 使用率阈值（%）
+    
+  # 内存监控
+  memory_monitoring:
+    enabled: true
+    sampling_interval: 10
+    threshold: 85  # 内存使用率阈值（%）
+    
+  # 电池监控
+  battery_monitoring:
+    enabled: false  # 通常在长时间测试中启用
+    sampling_interval: 60
+    low_battery_threshold: 20
+
+# 设备健康检查
+health_check:
+  # 检查项目
+  check_items:
+    - "adb_connection"
+    - "screen_response"
+    - "storage_space"
+    - "network_connectivity"
+    - "system_services"
+    
+  # 检查频率
+  check_intervals:
+    routine_check: 300     # 常规检查间隔（秒）
+    health_check: 60       # 健康检查间隔（秒）
+    emergency_check: 10    # 紧急检查间隔（秒）
+    
+  # 修复策略
+  recovery_strategies:
+    adb_disconnected:
+      - "reconnect_adb"
+      - "restart_adb_server"
+      - "device_reboot"
+      
+    low_storage:
+      - "clear_cache"
+      - "remove_temp_files"
+      - "uninstall_test_apps"
+      - "do_nothing" 
+      
+    screen_unresponsive:
+      - "screen_wake"
+      - "home_button_press"
+      - "device_unlock"
+
+# 调试和诊断
+debugging:
+  # 日志收集
+  log_collection:
+    enabled: true
+    log_types:
+      - "logcat"
+      - "bugreport"
+      - "anr_traces"
+    retention_days: 7
+    
+  # 屏幕录制
+  screen_recording:
+    enabled: false  # 按需启用
+    format: "mp4"
+    bitrate: "4M"
+    resolution: "1280x720"
+    max_duration: 600  # 最大录制时长（秒）
+    
+  # 诊断工具, May causes performance issues
+  diagnostic_tools:
+    - "dumpsys"
+    - "top"
+    - "meminfo"
+    - "cpuinfo"
