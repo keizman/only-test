@@ -42,13 +42,13 @@ mcp_config:
 #### **1.2 接收测试需求**
 ```python
 # 用户输入（自然语言）
-test_requirement = "验证播放点播视频 '' "
+test_requirement = "验证播放点播视频 '西语手机端720资源02' 结尾断言是否成功播放 "
 
 # MCP工作流程启动
 workflow_config = {
     "workflow_id": "wf_20241208_153000_0",
     "test_requirement": test_requirement,
-    "target_app": "com.ss.android.ugc.aweme",
+    "target_app": "com.mobile.brasiltvmobile",
     "workflow_mode": "standard",  # quick/standard/comprehensive
     "max_iterations": 3
 }
@@ -149,7 +149,7 @@ screen_analysis = await mcp_server.call_tool("capture_and_analyze_screen", {
       "timestamp": "2024-12-08T15:30:07Z",
       "path": "assets/screenshots/wf_20241208_153000_0_initial.png",
       "analysis_result": {
-        "current_app": "com.ss.android.ugc.aweme",
+        "current_app": "com.mobile.brasiltvmobile",
         "ui_elements_count": 15,
         "interactive_elements": 8,
         "confidence": 0.92
@@ -179,7 +179,7 @@ ui_elements = await mcp_server.call_tool("get_current_ui_elements", {
       "class": "android.widget.EditText",
       "text": "",
       "hint": "搜索",
-      "resource_id": "com.ss.android.ugc.aweme:id/et_search_kw",
+      "resource_id": "com.mobile.brasiltvmobile:id/et_search_kw",
       "bounds": [100, 200, 980, 280],
       "clickable": true,
       "enabled": true
@@ -210,7 +210,7 @@ llm_context = await mcp_server.call_tool("get_comprehensive_device_info", {
   "device_context": {
     "device_model": "Pixel_6_Pro",
     "screen_size": "1080x2340",
-    "current_app": "com.ss.android.ugc.aweme",
+    "current_app": "com.mobile.brasiltvmobile",
     "available_elements": [
       {"type": "search_input", "text": "", "hint": "搜索", "bounds": [100,200,980,280]}
     ]
@@ -238,7 +238,7 @@ test_case_result = await mcp_server.call_tool("generate_case_with_llm_guidance",
 {
   "testcase_id": "tc_douyin_search_20241208_153010",
   "name": "抖音美食视频搜索测试",
-  "target_app": "com.ss.android.ugc.aweme",
+  "target_app": "com.mobile.brasiltvmobile",
   "device_requirements": {
     "min_resolution": "720x1280",
     "orientation": "portrait",
@@ -250,7 +250,7 @@ test_case_result = await mcp_server.call_tool("generate_case_with_llm_guidance",
       "action": "conditional_check",
       "description": "检查搜索框是否有内容",
       "target": {
-        "resource_id": "com.ss.android.ugc.aweme:id/et_search_kw",
+        "resource_id": "com.mobile.brasiltvmobile:id/et_search_kw",
         "class": "android.widget.EditText"
       },
       "condition": {
@@ -309,7 +309,7 @@ poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=Fa
 # Test execution
 def test_douyin_search():
     # Step 1: 检查搜索框是否有内容
-    search_input = poco("com.ss.android.ugc.aweme:id/et_search_kw")
+    search_input = poco("com.mobile.brasiltvmobile:id/et_search_kw")
     
     if search_input.get_text():
         # 有内容，先清空
@@ -330,7 +330,7 @@ def test_douyin_search():
   "test_case_id": "tc_douyin_search_20241208_153010",
   "execution_environment": {
     "device_id": "emulator-5554", 
-    "target_app": "com.ss.android.ugc.aweme",
+    "target_app": "com.mobile.brasiltvmobile",
     "screen_resolution": "1080x2340",
     "android_version": "13.0"
   },
@@ -618,7 +618,7 @@ devices:
 {
   "learning_database": {
     "app_patterns": {
-      "com.ss.android.ugc.aweme": {
+      "com.mobile.brasiltvmobile": {
         "search_input_selectors": [
           {"selector": "et_search_kw", "success_rate": 0.95},
           {"selector": "search_edittext", "success_rate": 0.88}

@@ -153,7 +153,7 @@ airtest/
 {
   "testcase_id": "TC_DOUYIN_SEARCH_20241205",
   "name": "抖音美食视频搜索测试",
-  "target_app": "com.ss.android.ugc.aweme",
+  "target_app": "com.mobile.brasiltvmobile",
   "execution_path": [
     {
       "step": 1,

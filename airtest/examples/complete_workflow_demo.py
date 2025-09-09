@@ -136,7 +136,7 @@ class CompleteWorkflowDemo:
         """模拟LLM生成JSON用例"""
         # 解析描述中的关键信息
         if "抖音" in description:
-            app_package = "com.ss.android.ugc.aweme"
+            app_package = "com.mobile.brasiltvmobile"
             app_name = "抖音"
         elif "淘宝" in description:
             app_package = "com.taobao.taobao" 

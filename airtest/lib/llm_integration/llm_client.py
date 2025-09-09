@@ -558,7 +558,7 @@ def main():
         print("\n🧪 测试用例生成...")
         test_case = llm_client.generate_test_case(
             "在抖音中搜索美食视频，如果搜索框有内容先清空",
-            "com.ss.android.ugc.aweme"
+            "com.mobile.brasiltvmobile"
         )
         
         if test_case:

@@ -91,7 +91,7 @@ class PlaybackDetector:
             "com.tencent.qqlive",
             "com.youku.phone",
             "tv.danmaku.bili",
-            "com.ss.android.ugc.aweme",  # TikTok
+            "com.mobile.brasiltvmobile",  # TikTok
             # 添加更多媒体应用包名...
         }
         

@@ -35,7 +35,7 @@ TESTCASE_METADATA = {
 VARIABLES = {
   "max_wait_time": 20,
   "search_keyword": "\u7f8e\u98df\u89c6\u9891",
-  "target_app_package": "com.ss.android.ugc.aweme"
+  "target_app_package": "com.mobile.brasiltvmobile"
 }
 
 def find_element_by_priority_selectors(selectors):
@@ -80,7 +80,7 @@ def wait_for_element(selectors, timeout=10):
 @allure.story("抖音智能搜索测试")
 @allure.title("基于用户需求生成的智能测试用例: 在抖音APP中搜索'美食视频'，如果搜索框有历史记录先清空")
 @allure.description("""
-目标应用: com.ss.android.ugc.aweme
+目标应用: com.mobile.brasiltvmobile
 测试优先级: high
 预估时长: 60秒
 
@@ -95,7 +95,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
         auto_setup(__file__)
         
         # 启动应用
-        start_app("com.ss.android.ugc.aweme")
+        start_app("com.mobile.brasiltvmobile")
         sleep(3)
         
         # 拍摄初始截图
@@ -114,7 +114,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
             allure.attach(
                 f"测试ID: TC_COM_SS_ANDROID_UGC_AWEME_20250905_184805\n"
                 f"测试名称: 抖音智能搜索测试\n"
-                f"目标应用: com.ss.android.ugc.aweme\n"
+                f"目标应用: com.mobile.brasiltvmobile\n"
                 f"生成方式: json_to_python_converter",
                 name="测试基本信息"
             )
@@ -123,7 +123,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
             allure.attach("成功进入搜索页面", name="成功标准")
             
                 # 执行点击操作
-                element = find_element_by_priority_selectors([{'resource_id': 'com.ss.android.ugc.aweme:id/search_btn'}, {'content_desc': '搜索'}, {'text': '搜索'}])
+                element = find_element_by_priority_selectors([{'resource_id': 'com.mobile.brasiltvmobile:id/search_btn'}, {'content_desc': '搜索'}, {'text': '搜索'}])
                 if element:
                     element.click()
                     allure.attach(screenshot(), name="点击后截图", attachment_type=allure.attachment_type.PNG)
@@ -138,7 +138,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
             
             # 执行条件检查
                 # 智能检查搜索框状态
-                element = find_element_by_priority_selectors([{'resource_id': 'com.ss.android.ugc.aweme:id/search_edit'}, {'class': 'android.widget.EditText'}])
+                element = find_element_by_priority_selectors([{'resource_id': 'com.mobile.brasiltvmobile:id/search_edit'}, {'class': 'android.widget.EditText'}])
                 has_content = bool(element and element.get_text() and len(element.get_text().strip()) > 0)
                 allure.attach(f"搜索框内容检查: {'has_content': has_content, 'element_found': bool(element)}", name="条件判断结果")
 
@@ -147,7 +147,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
             if has_content:
                 with allure.step("条件分支: True时的处理"):
                         # 搜索框有历史内容，需要先清空
-                        element = find_element_by_priority_selectors([{'resource_id': 'com.ss.android.ugc.aweme:id/search_clear'}, {'content_desc': '清除'}])
+                        element = find_element_by_priority_selectors([{'resource_id': 'com.mobile.brasiltvmobile:id/search_clear'}, {'content_desc': '清除'}])
                         if element:
                             element.click()
                             allure.attach(screenshot(), name="点击后截图", attachment_type=allure.attachment_type.PNG)
@@ -182,7 +182,7 @@ class TestTC_COM_SS_ANDROID_UGC_AWEME_20250905_184805:
             allure.attach("执行标准操作", name="成功标准")
             
                 # 执行点击操作
-                element = find_element_by_priority_selectors([{'resource_id': 'com.ss.android.ugc.aweme:id/search_submit'}, {'text': '搜索'}])
+                element = find_element_by_priority_selectors([{'resource_id': 'com.mobile.brasiltvmobile:id/search_submit'}, {'text': '搜索'}])
                 if element:
                     element.click()
                     allure.attach(screenshot(), name="点击后截图", attachment_type=allure.attachment_type.PNG)

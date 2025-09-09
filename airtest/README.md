@@ -76,7 +76,7 @@ flowchart LR
 "在抖音APP中搜索'美食视频'，如果搜索框有历史记录先清空"
 
 # LLM自动生成智能JSON用例
-python tools/case_generator.py --description "测试需求" --app com.ss.android.ugc.aweme
+python tools/case_generator.py --description "测试需求" --app com.mobile.brasiltvmobile
 ```
 
 #### **步骤2: 设备信息探测与适配**
@@ -156,7 +156,7 @@ if is_media_playing():
 ### **资源路径管理规则**
 
 **命名规范**: `{pkg_name}_{device_name}`
-- `com.ss.android.ugc.aweme` + `Pixel_6_Pro` = `com_ss_android_ugc_aweme_Pixel6Pro`
+- `com.mobile.brasiltvmobile` + `Pixel_6_Pro` = `com_ss_android_ugc_aweme_Pixel6Pro`
 - 时间戳精确到毫秒: `step01_click_before_20241205_143022_123.png`
 - 文件类型明确: `omni_result`, `element_screenshot`, `execution_log`
 
@@ -216,7 +216,7 @@ python examples/complete_workflow_demo.py
 # 步骤1: 生成智能JSON用例
 python tools/case_generator.py \
   --description "在抖音APP中搜索'美食视频'，如果搜索框有历史记录先清空" \
-  --app com.ss.android.ugc.aweme
+  --app com.mobile.brasiltvmobile
 
 # 步骤2: 探测设备信息并适配
 python lib/device_adapter.py testcases/generated/generated_test.json

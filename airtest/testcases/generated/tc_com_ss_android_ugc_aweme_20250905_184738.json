@@ -6,13 +6,10 @@
   "generated_at": "2025-09-05T18:47:38.221364",
   "generation_method": "llm_assisted",
   "original_description": "在抖音APP中搜索'美食视频'，如果搜索框有历史记录先清空",
-  "target_app": "com.ss.android.ugc.aweme",
+  "target_app": "com.mobile.brasiltvmobile",
   "metadata": {
     "tags": [
-      "llm_generated",
-      "search",
-      "smart_judgment",
-      "demo"
+      "search"
     ],
     "priority": "high",
     "estimated_duration": 60,
@@ -24,7 +21,7 @@
   },
   "variables": {
     "search_keyword": "美食视频",
-    "target_app_package": "com.ss.android.ugc.aweme",
+    "target_app_package": "com.mobile.brasiltvmobile",
     "max_wait_time": 20
   },
   "execution_path": [
@@ -34,7 +31,7 @@
       "target": {
         "priority_selectors": [
           {
-            "resource_id": "com.ss.android.ugc.aweme:id/search_btn"
+            "resource_id": "com.mobile.brasiltvmobile:id/search_btn"
           },
           {
             "content_desc": "搜索"
@@ -55,7 +52,7 @@
         "target": {
           "priority_selectors": [
             {
-              "resource_id": "com.ss.android.ugc.aweme:id/search_edit"
+              "resource_id": "com.mobile.brasiltvmobile:id/search_edit"
             },
             {
               "class": "android.widget.EditText"
@@ -70,7 +67,7 @@
           "target": {
             "priority_selectors": [
               {
-                "resource_id": "com.ss.android.ugc.aweme:id/search_clear"
+                "resource_id": "com.mobile.brasiltvmobile:id/search_clear"
               },
               {
                 "content_desc": "清除"
@@ -82,7 +79,7 @@
         "if_empty": {
           "action": "input",
           "target": {
-            "resource_id": "com.ss.android.ugc.aweme:id/search_edit"
+            "resource_id": "com.mobile.brasiltvmobile:id/search_edit"
           },
           "data": "${search_keyword}",
           "reason": "搜索框为空，直接输入搜索词"
@@ -95,7 +92,7 @@
       "step": 3,
       "action": "input",
       "target": {
-        "resource_id": "com.ss.android.ugc.aweme:id/search_edit"
+        "resource_id": "com.mobile.brasiltvmobile:id/search_edit"
       },
       "data": "${search_keyword}",
       "description": "输入搜索关键词"
@@ -106,7 +103,7 @@
       "target": {
         "priority_selectors": [
           {
-            "resource_id": "com.ss.android.ugc.aweme:id/search_submit"
+            "resource_id": "com.mobile.brasiltvmobile:id/search_submit"
           },
           {
             "text": "搜索"
