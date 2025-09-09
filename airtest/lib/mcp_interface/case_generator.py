@@ -1,0 +1,591 @@
+#!/usr/bin/env python3
+"""
+Only-Test Interactive Case Generator
+===================================
+
+交互式测试用例生成器
+让LLM能够实时获取设备信息并生成高质量测试用例
+"""
+
+import asyncio
+import json
+import logging
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import sys
+import os
+
+# 添加项目路径
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
+from lib.llm_integration.llm_client import LLMClient
+from lib.test_generator import TestCaseGenerator
+from .mcp_server import mcp_tool
+from .device_inspector import DeviceInspector
+
+logger = logging.getLogger(__name__)
+
+
+class InteractiveCaseGenerator:
+    """
+    交互式用例生成器
+    
+    核心流程：
+    1. 接收用户描述
+    2. 指导LLM获取设备信息
+    3. LLM基于信息生成用例
+    4. 验证和优化用例
+    5. 输出最终结果
+    """
+    
+    def __init__(self, device_id: Optional[str] = None):
+        """初始化交互式用例生成器"""
+        self.device_id = device_id
+        self.device_inspector = DeviceInspector(device_id)
+        self.llm_client: Optional[LLMClient] = None
+        self.base_generator: Optional[TestCaseGenerator] = None
+        self._initialized = False
+        
+        # 生成会话状态
+        self.current_session = {
+            "session_id": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "description": "",
+            "device_info": {},
+            "generation_history": [],
+            "current_case": None
+        }
+        
+        logger.info(f"交互式用例生成器初始化 - 会话: {self.current_session['session_id']}")
+    
+    async def initialize(self) -> bool:
+        """初始化所有组件"""
+        try:
+            # 初始化设备探测器
+            await self.device_inspector.initialize()
+            
+            # 初始化LLM客户端
+            self.llm_client = LLMClient()
+            
+            # 初始化基础生成器
+            self.base_generator = TestCaseGenerator()
+            
+            self._initialized = True
+            logger.info("交互式用例生成器初始化成功")
+            return True
+            
+        except Exception as e:
+            logger.error(f"交互式用例生成器初始化失败: {e}")
+            return False
+    
+    @mcp_tool(
+        name="start_case_generation",
+        description="开始交互式用例生成流程",
+        category="case_generation",
+        parameters={
+            "description": {"type": "string", "description": "测试需求描述"},
+            "app_package": {"type": "string", "description": "目标应用包名（可选）", "default": ""},
+            "complexity": {"type": "string", "description": "复杂度", "enum": ["simple", "medium", "complex"], "default": "medium"}
+        }
+    )
+    async def start_case_generation(self, description: str, app_package: str = "", complexity: str = "medium") -> Dict[str, Any]:
+        """开始用例生成流程"""
+        if not self._initialized:
+            await self.initialize()
+        
+        try:
+            # 更新会话状态
+            self.current_session["description"] = description
+            self.current_session["app_package"] = app_package
+            self.current_session["complexity"] = complexity
+            self.current_session["start_time"] = datetime.now().isoformat()
+            
+            # 第一步：获取设备基本信息
+            device_info = await self.device_inspector.get_device_basic_info()
+            self.current_session["device_info"] = device_info
+            
+            # 第二步：获取当前屏幕状态
+            screen_info = await self.device_inspector.get_current_screen_info(include_elements=True)
+            self.current_session["screen_info"] = screen_info
+            
+            # 第三步：分析应用状态
+            app_analysis = await self.device_inspector.analyze_app_state(app_package, deep_analysis=True)
+            self.current_session["app_analysis"] = app_analysis
+            
+            # 生成LLM引导信息
+            guidance = self._create_llm_guidance(description, device_info, screen_info, app_analysis)
+            
+            return {
+                "success": True,
+                "session_id": self.current_session["session_id"],
+                "description": description,
+                "device_info_collected": bool(device_info),
+                "screen_info_collected": bool(screen_info),
+                "app_analysis_completed": bool(app_analysis),
+                "next_step": "call_generate_with_context",
+                "llm_guidance": guidance,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"开始用例生成失败: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    @mcp_tool(
+        name="generate_with_context",
+        description="基于收集的设备信息生成测试用例",
+        category="case_generation",
+        parameters={
+            "use_similar_cases": {"type": "boolean", "description": "是否参考相似用例", "default": True},
+            "optimize_for_device": {"type": "boolean", "description": "是否针对设备优化", "default": True}
+        }
+    )
+    async def generate_with_context(self, use_similar_cases: bool = True, optimize_for_device: bool = True) -> Dict[str, Any]:
+        """基于上下文生成测试用例"""
+        try:
+            if not self.current_session["description"]:
+                return {
+                    "success": False,
+                    "error": "请先调用 start_case_generation"
+                }
+            
+            # 构建生成上下文
+            generation_context = self._build_generation_context(use_similar_cases)
+            
+            # 创建增强的生成prompt
+            enhanced_prompt = self._create_enhanced_generation_prompt(
+                self.current_session["description"],
+                generation_context,
+                optimize_for_device
+            )
+            
+            # 调用LLM生成用例
+            llm_response = await self._call_llm_for_generation(enhanced_prompt)
+            
+            if llm_response.get("success", False):
+                # 解析生成的用例
+                generated_case = self._parse_generated_case(llm_response["content"])
+                
+                # 验证和优化用例
+                validation_result = await self._validate_generated_case(generated_case)
+                
+                # 保存生成结果
+                self.current_session["current_case"] = generated_case
+                self.current_session["generation_history"].append({
+                    "timestamp": datetime.now().isoformat(),
+                    "prompt": enhanced_prompt[:200] + "...",  # 截断保存
+                    "generated_case": generated_case,
+                    "validation": validation_result
+                })
+                
+                return {
+                    "success": True,
+                    "session_id": self.current_session["session_id"],
+                    "generated_case": generated_case,
+                    "validation": validation_result,
+                    "next_step": "convert_to_python" if validation_result["valid"] else "refine_case",
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": llm_response.get("error", "LLM生成失败"),
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"上下文生成失败: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    @mcp_tool(
+        name="refine_case",
+        description="基于问题反馈优化测试用例",
+        category="case_generation",
+        parameters={
+            "issues": {"type": "array", "description": "发现的问题列表"},
+            "suggestions": {"type": "string", "description": "改进建议", "default": ""}
+        }
+    )
+    async def refine_case(self, issues: List[str], suggestions: str = "") -> Dict[str, Any]:
+        """优化测试用例"""
+        try:
+            if not self.current_session.get("current_case"):
+                return {
+                    "success": False,
+                    "error": "没有当前用例可以优化"
+                }
+            
+            current_case = self.current_session["current_case"]
+            
+            # 创建优化prompt
+            refinement_prompt = self._create_refinement_prompt(
+                current_case, issues, suggestions
+            )
+            
+            # 调用LLM优化
+            llm_response = await self._call_llm_for_generation(refinement_prompt)
+            
+            if llm_response.get("success", False):
+                # 解析优化后的用例
+                refined_case = self._parse_generated_case(llm_response["content"])
+                
+                # 验证优化结果
+                validation_result = await self._validate_generated_case(refined_case)
+                
+                # 更新当前用例
+                self.current_session["current_case"] = refined_case
+                self.current_session["generation_history"].append({
+                    "timestamp": datetime.now().isoformat(),
+                    "action": "refinement",
+                    "issues": issues,
+                    "suggestions": suggestions,
+                    "refined_case": refined_case,
+                    "validation": validation_result
+                })
+                
+                return {
+                    "success": True,
+                    "refined_case": refined_case,
+                    "validation": validation_result,
+                    "improvement_applied": True,
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": llm_response.get("error", "优化失败")
+                }
+                
+        except Exception as e:
+            logger.error(f"用例优化失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    @mcp_tool(
+        name="get_generation_status",
+        description="获取当前生成会话状态",
+        category="session_management",
+        parameters={}
+    )
+    async def get_generation_status(self) -> Dict[str, Any]:
+        """获取生成状态"""
+        return {
+            "session_id": self.current_session["session_id"],
+            "description": self.current_session.get("description", ""),
+            "has_device_info": bool(self.current_session.get("device_info")),
+            "has_screen_info": bool(self.current_session.get("screen_info")),
+            "has_app_analysis": bool(self.current_session.get("app_analysis")),
+            "has_current_case": bool(self.current_session.get("current_case")),
+            "generation_count": len(self.current_session.get("generation_history", [])),
+            "last_activity": self.current_session.get("generation_history", [{}])[-1].get("timestamp", ""),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    @mcp_tool(
+        name="export_case",
+        description="导出生成的测试用例",
+        category="case_generation",
+        parameters={
+            "format": {"type": "string", "description": "导出格式", "enum": ["json", "python"], "default": "json"},
+            "include_metadata": {"type": "boolean", "description": "是否包含元数据", "default": True}
+        }
+    )
+    async def export_case(self, format: str = "json", include_metadata: bool = True) -> Dict[str, Any]:
+        """导出测试用例"""
+        try:
+            if not self.current_session.get("current_case"):
+                return {
+                    "success": False,
+                    "error": "没有可导出的用例"
+                }
+            
+            current_case = self.current_session["current_case"]
+            
+            if format == "json":
+                # JSON格式导出
+                exported_case = current_case.copy()
+                
+                if include_metadata:
+                    exported_case["_metadata"] = {
+                        "generated_by": "Only-Test Interactive Generator",
+                        "session_id": self.current_session["session_id"],
+                        "generation_time": datetime.now().isoformat(),
+                        "device_info": self.current_session.get("device_info", {}),
+                        "original_description": self.current_session.get("description", "")
+                    }
+                
+                return {
+                    "success": True,
+                    "format": "json",
+                    "case": exported_case,
+                    "filename_suggestion": f"test_case_{self.current_session['session_id']}.json"
+                }
+                
+            elif format == "python":
+                # Python格式导出（需要调用json_to_python转换器）
+                try:
+                    from lib.code_generator.json_to_python import JSONToPythonConverter
+                    
+                    converter = JSONToPythonConverter()
+                    python_code = converter.convert(current_case)
+                    
+                    return {
+                        "success": True,
+                        "format": "python",
+                        "code": python_code,
+                        "filename_suggestion": f"test_case_{self.current_session['session_id']}.py"
+                    }
+                    
+                except ImportError:
+                    return {
+                        "success": False,
+                        "error": "Python代码生成器不可用"
+                    }
+            
+        except Exception as e:
+            logger.error(f"用例导出失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    # === 私有辅助方法 ===
+    
+    def _create_llm_guidance(self, description: str, device_info: Dict, screen_info: Dict, app_analysis: Dict) -> str:
+        """创建LLM引导信息"""
+        guidance = f"""
+# Only-Test 用例生成指导
+
+## 用户需求
+{description}
+
+## 当前设备信息
+- 设备型号: {device_info.get('model', 'Unknown')}
+- Android版本: {device_info.get('android_version', 'Unknown')}
+- 屏幕分辨率: {device_info.get('screen_resolution', 'Unknown')}
+- 当前应用: {screen_info.get('current_app', 'Unknown')}
+
+## 当前屏幕状态
+- 总元素数: {screen_info.get('total_elements', 0)}
+- 可点击元素: {screen_info.get('clickable_elements', 0)}
+- 推断页面类型: {app_analysis.get('inferred_page_type', 'unknown')}
+- 媒体播放状态: {app_analysis.get('media_state', {}).get('is_playing', False)}
+
+## 可用功能分析
+{json.dumps(app_analysis.get('features', {}), indent=2, ensure_ascii=False)}
+
+## 生成建议
+基于以上信息，你现在可以调用 generate_with_context 来生成针对性的测试用例。
+"""
+        return guidance
+    
+    def _build_generation_context(self, use_similar_cases: bool) -> Dict[str, Any]:
+        """构建生成上下文"""
+        context = {
+            "device_info": self.current_session.get("device_info", {}),
+            "screen_info": self.current_session.get("screen_info", {}),
+            "app_analysis": self.current_session.get("app_analysis", {}),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # 添加相似用例（如果需要）
+        if use_similar_cases:
+            # TODO: 实现相似用例检索
+            context["similar_cases"] = []
+        
+        return context
+    
+    def _create_enhanced_generation_prompt(self, description: str, context: Dict, optimize_for_device: bool) -> str:
+        """创建增强的生成prompt"""
+        
+        device_optimization = ""
+        if optimize_for_device:
+            device_info = context.get("device_info", {})
+            screen_info = context.get("screen_info", {})
+            
+            device_optimization = f"""
+## 设备优化要求
+- 目标设备: {device_info.get('model', 'Unknown')} (Android {device_info.get('android_version', 'Unknown')})
+- 屏幕分辨率: {device_info.get('screen_resolution', 'Unknown')}
+- 当前元素数: {screen_info.get('total_elements', 0)}
+- 识别策略: {screen_info.get('element_analysis', {}).get('recognition_strategy', 'unknown')}
+
+请根据设备特性优化生成的用例，特别注意：
+1. 如果是播放状态，优先使用视觉识别
+2. 根据元素数量调整等待时间
+3. 考虑设备性能选择合适的操作间隔
+"""
+        
+        prompt = f"""
+你是Only-Test框架的专业测试用例生成器。请根据以下信息生成高质量的测试用例：
+
+## 用户需求
+{description}
+
+## 当前设备和界面信息
+{json.dumps(context, indent=2, ensure_ascii=False)}
+
+{device_optimization}
+
+## Only-Test用例格式要求
+请生成符合Only-Test框架规范的JSON格式测试用例，包含：
+
+1. **基本信息**: testcase_id, name, description
+2. **元数据**: tags, priority, device_types等
+3. **执行路径**: 详细的步骤序列，每步包含page, action, target等
+4. **智能判断**: 使用conditional_action处理复杂逻辑
+5. **断言验证**: 必要的检查点
+
+## 特别注意
+- 基于当前屏幕信息选择合适的元素定位方式
+- 如果检测到播放状态，考虑使用视觉识别策略
+- 包含适当的等待时间和错误处理
+- 添加有意义的注释说明每步操作的业务逻辑
+
+请输出完整的JSON格式测试用例：
+"""
+        
+        return prompt
+    
+    def _create_refinement_prompt(self, current_case: Dict, issues: List[str], suggestions: str) -> str:
+        """创建优化prompt"""
+        prompt = f"""
+请优化以下Only-Test测试用例，解决发现的问题：
+
+## 当前用例
+{json.dumps(current_case, indent=2, ensure_ascii=False)}
+
+## 发现的问题
+{json.dumps(issues, indent=2, ensure_ascii=False)}
+
+## 改进建议
+{suggestions}
+
+## 优化要求
+1. 保持用例的核心功能不变
+2. 修复所有标识的问题
+3. 改进元素定位的准确性
+4. 增强错误处理能力
+5. 优化执行流程的稳定性
+
+请输出优化后的完整JSON用例：
+"""
+        return prompt
+    
+    async def _call_llm_for_generation(self, prompt: str) -> Dict[str, Any]:
+        """调用LLM进行生成"""
+        try:
+            if not self.llm_client:
+                return {"success": False, "error": "LLM客户端未初始化"}
+            
+            response = await self.llm_client.generate_completion(prompt)
+            
+            return {
+                "success": True,
+                "content": response,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"LLM调用失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def _parse_generated_case(self, llm_content: str) -> Dict[str, Any]:
+        """解析LLM生成的用例内容"""
+        try:
+            # 尝试提取JSON内容
+            import re
+            
+            # 查找JSON代码块
+            json_match = re.search(r'```json\n(.*?)\n```', llm_content, re.DOTALL)
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # 尝试查找大括号包围的内容
+                brace_match = re.search(r'\{.*\}', llm_content, re.DOTALL)
+                if brace_match:
+                    json_content = brace_match.group(0)
+                else:
+                    json_content = llm_content
+            
+            # 解析JSON
+            parsed_case = json.loads(json_content)
+            
+            return parsed_case
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON解析失败: {e}")
+            return {
+                "error": "JSON格式无效",
+                "raw_content": llm_content[:500]  # 保存前500字符用于调试
+            }
+        except Exception as e:
+            logger.error(f"用例解析失败: {e}")
+            return {
+                "error": str(e),
+                "raw_content": llm_content[:500]
+            }
+    
+    async def _validate_generated_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        """验证生成的用例"""
+        validation_result = {
+            "valid": True,
+            "issues": [],
+            "warnings": [],
+            "score": 0
+        }
+        
+        try:
+            # 检查必需字段
+            required_fields = ["testcase_id", "name", "description", "execution_path"]
+            for field in required_fields:
+                if field not in case:
+                    validation_result["issues"].append(f"缺少必需字段: {field}")
+                    validation_result["valid"] = False
+            
+            # 检查执行路径
+            if "execution_path" in case:
+                execution_path = case["execution_path"]
+                if not isinstance(execution_path, list) or len(execution_path) == 0:
+                    validation_result["issues"].append("执行路径为空或格式不正确")
+                    validation_result["valid"] = False
+                else:
+                    # 检查每个步骤
+                    for i, step in enumerate(execution_path):
+                        if not isinstance(step, dict):
+                            validation_result["issues"].append(f"步骤 {i+1} 格式不正确")
+                            continue
+                        
+                        # 检查必需的步骤字段
+                        required_step_fields = ["step", "page", "action"]
+                        for field in required_step_fields:
+                            if field not in step:
+                                validation_result["warnings"].append(f"步骤 {i+1} 缺少字段: {field}")
+            
+            # 计算质量得分
+            score = 100
+            score -= len(validation_result["issues"]) * 20  # 每个问题扣20分
+            score -= len(validation_result["warnings"]) * 5  # 每个警告扣5分
+            validation_result["score"] = max(0, score)
+            
+            return validation_result
+            
+        except Exception as e:
+            logger.error(f"用例验证失败: {e}")
+            return {
+                "valid": False,
+                "issues": [f"验证过程异常: {e}"],
+                "score": 0
+            }

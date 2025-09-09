@@ -306,3 +306,7 @@ allure open reports/allure-report
 ---
 
 *Based on Airtest framework, integrated with phone-use functionality, supporting LLM-driven test case generation and execution.*
+
+
+----
+
