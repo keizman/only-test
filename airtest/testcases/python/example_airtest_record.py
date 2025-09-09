@@ -5,6 +5,8 @@
 from airtest.core.api import *
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 
+# setup_hook()
+# 这里会放置一些测之前的必要条件 
 connect_device("android://127.0.0.1:5037/192.168.100.112:5555?touch_method=ADBTOUCH&")
 poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
 
@@ -62,6 +64,9 @@ poco("com.mobile.brasiltvmobile:id/mImageFullScreen").click()
 ## [page] playing, [action] assert, [comment] 断言验证节目正在正常播放
 # there is assert program are already playing 
 #....
+
+# teardown_hook()
+# 这里会放置一些测之前的必要条件 
 
 
 

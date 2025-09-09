@@ -19,7 +19,7 @@ devices:
     # === 设备基本信息 ===
     phone_type: "android_phone"  # android_phone, android_tablet, android_tv
     custom_name: "小米9Pro 5G"
-    description: "高性能测试设备，支持5G网络"
+    description: "这里时自定义手机信息"
     
     # === 设备硬件信息 (可自动探测覆盖) ===
     android_version: "10"
@@ -51,31 +51,9 @@ devices:
       
     # === 设备连接信息 ===
     connection:
-      adb_serial: null               # ADB设备序列号(null=自动检测)
+      adb_serial: "192.168.100.112"               # ADB设备序列号(null=自动检测)
       connection_timeout: 10
       
-  # 可添加更多设备
-  pixel_6_pro:
-    phone_type: "android_phone"
-    custom_name: "Google Pixel 6 Pro"
-    description: "Google原生Android设备"
-    android_version: "13"
-    screen_info:
-      resolution: "3120x1440"
-      density: 560
-      orientation: "portrait"
-    hardware_info:
-      brand: "Google"
-      model: "Pixel_6_Pro"
-      cpu_cores: 8
-      memory_gb: 12
-    execution_config:
-      interaction_delay: 0.3
-      screenshot_format: "jpg"       # 高分辨率设备使用压缩格式
-      screenshot_quality: 75
-    recognition_config:
-      primary_mode: "hybrid"
-      confidence_threshold: 0.85     # 高分辨率可以更严格
 
 # 应用配置组 - 支持多应用测试
 applications:

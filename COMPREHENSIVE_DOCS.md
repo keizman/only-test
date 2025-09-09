@@ -145,14 +145,14 @@ airtest/
 
 **用户输入**（自然语言）：
 ```
-"在抖音APP中搜索'美食视频'，如果搜索框有历史记录先清空，然后点击第一个视频播放"
+"在 com.mobile.brasiltvmobile 中搜索'Ironheart S1'节目，如果搜索框有历史记录先清空，然后点击第一个结果播放"
 ```
 
 **LLM自动生成JSON智能用例**：
 ```json
 {
-  "testcase_id": "TC_DOUYIN_SEARCH_20241205",
-  "name": "抖音美食视频搜索测试",
+  "testcase_id": "TC_BRASILTVMOBILE_SEARCH_20241205",
+  "name": "BrasilTVMobile节目搜索播放测试",
   "target_app": "com.mobile.brasiltvmobile",
   "execution_path": [
     {
@@ -171,7 +171,7 @@ airtest/
         },
         "if_empty": {
           "action": "input",
-          "data": "美食视频"
+          "data": "Ironheart S1"
         }
       },
       "business_logic": "智能判断搜索框状态，确保输入正确",
@@ -862,7 +862,7 @@ fi
 ```bash
 # 生成用例
 python tools/case_generator.py \
-  --description "在网易云音乐中搜索'告白气球'，如果搜索历史有内容先清空" \
+  --description "在 com.mobile.brasiltvmobile 中搜索并播放'电视剧'频道内容，如果搜索历史有内容先清空" \
   --app "com.netease.cloudmusic"
 
 # 执行用例

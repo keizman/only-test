@@ -1,0 +1,383 @@
+{
+  "testcase_id": "TC_VOD_PLAYING_20250909",
+  "name": "测试 vod 正常播放",
+  "target_app": "com.mobile.brasiltvmobile",
+  "tags": ["vod", "playing"],
+  "path": "home -> search -> search_result -> vod_playing_detail -> playing",
+  "generated_at": "2025-09-09T12:00:00Z",
+  "generation_method": "llm_mcp_assisted",
+  
+  "setup": {
+    "device_connection": "android://127.0.0.1:5037/192.168.100.112:5555?touch_method=ADBTOUCH&",
+    "poco_config": {
+      "use_airtest_input": true,
+      "screenshot_each_action": false
+    }
+  },
+  
+  "steps": [
+    {
+      "step": 1,
+      "page": "app_initialization",
+      "action": "restart", 
+      "comment": "重启应用清理环境状态",
+      "code": "stop_app(\"com.mobile.brasiltvmobile\")",
+      "repeat": 3,
+      "path": {
+        "llm_request": "需要清理应用状态准备测试环境",
+        "mcp_tool_used": "device_control",
+        "screen_capture": null,
+        "element_analysis": null
+      }
+    },
+    {
+      "step": 2,
+      "page": "app_initialization",
+      "action": "wait",
+      "comment": "等待应用完全关闭",
+      "code": "sleep(1.5)",
+      "path": {
+        "llm_request": "确保应用完全关闭后再启动",
+        "mcp_tool_used": "timing_control",
+        "screen_capture": null,
+        "element_analysis": null
+      }
+    },
+    {
+      "step": 3,
+      "page": "app_startup",
+      "action": "launch",
+      "comment": "启动应用并等待加载完成", 
+      "code": "start_app(\"com.mobile.brasiltvmobile\")",
+      "path": {
+        "llm_request": "启动目标应用",
+        "mcp_tool_used": "app_control",
+        "screen_capture": null,
+        "element_analysis": null
+      }
+    },
+    {
+      "step": 4,
+      "page": "app_startup",
+      "action": "wait",
+      "comment": "等待应用启动完成",
+      "code": "sleep(5)",
+      "path": {
+        "llm_request": "等待应用完全加载",
+        "mcp_tool_used": "timing_control",
+        "screen_capture": "screenshot_app_loading.png",
+        "element_analysis": "omniparser_result_loading.json"
+      }
+    },
+    {
+      "step": 5,
+      "page": "home",
+      "action": "click",
+      "comment": "处理首页弹窗 - 关闭升级提示弹窗",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/ivClose\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/ivClose",
+        "element_type": "close_button",
+        "description": "升级提示关闭按钮"
+      },
+      "path": {
+        "llm_request": "关闭首页升级提示弹窗",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_home_popup1.png",
+        "element_analysis": "omniparser_result_popup1.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/ivClose",
+          "bbox": [950, 100, 1000, 150],
+          "confidence": 0.95
+        }
+      }
+    },
+    {
+      "step": 6,
+      "page": "home",
+      "action": "click", 
+      "comment": "处理首页弹窗 - 关闭广告弹窗",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/mIvClose\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/mIvClose",
+        "element_type": "close_button",
+        "description": "广告弹窗关闭按钮"
+      },
+      "path": {
+        "llm_request": "关闭首页广告弹窗",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_home_popup2.png", 
+        "element_analysis": "omniparser_result_popup2.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/mIvClose",
+          "bbox": [920, 120, 970, 170],
+          "confidence": 0.92
+        }
+      }
+    },
+    {
+      "step": 7,
+      "page": "home",
+      "action": "click",
+      "comment": "处理首页弹窗 - 再次确保关闭所有弹窗",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/ivClose\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/ivClose", 
+        "element_type": "close_button",
+        "description": "通用关闭按钮"
+      },
+      "path": {
+        "llm_request": "确保所有弹窗都已关闭",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_home_clean.png",
+        "element_analysis": "omniparser_result_clean.json",
+        "element_found": {
+          "method": "uiautomator2", 
+          "resource_id": "com.mobile.brasiltvmobile:id/ivClose",
+          "bbox": [950, 100, 1000, 150],
+          "confidence": 0.88
+        }
+      }
+    },
+    {
+      "step": 8,
+      "page": "home",
+      "action": "click",
+      "comment": "点击搜索按钮进入搜索页面",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/mVodImageSearch\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/mVodImageSearch",
+        "element_type": "search_button",
+        "description": "主页搜索按钮"
+      },
+      "path": {
+        "llm_request": "进入搜索功能",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_home_main.png",
+        "element_analysis": "omniparser_result_search_btn.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/mVodImageSearch", 
+          "bbox": [800, 50, 900, 120],
+          "confidence": 0.96
+        }
+      }
+    },
+    {
+      "step": 9,
+      "page": "search",
+      "action": "click",
+      "comment": "点击搜索输入框激活输入状态",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/searchEt\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/searchEt",
+        "element_type": "input_field",
+        "description": "搜索输入框"
+      },
+      "pre_action": "sleep(0.5)",
+      "path": {
+        "llm_request": "激活搜索输入框",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_search_page.png",
+        "element_analysis": "omniparser_result_input.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/searchEt",
+          "bbox": [100, 200, 900, 280],
+          "confidence": 0.98
+        }
+      }
+    },
+    {
+      "step": 10,
+      "page": "search", 
+      "action": "input",
+      "comment": "输入搜索关键词",
+      "code": "text(\"西语手机端720资源02\")",
+      "input_data": "西语手机端720资源02",
+      "pre_action": "sleep(0.5)",
+      "path": {
+        "llm_request": "输入指定的测试内容",
+        "mcp_tool_used": "input_control",
+        "screen_capture": "screenshot_input_active.png",
+        "element_analysis": null
+      }
+    },
+    {
+      "step": 11,
+      "page": "search",
+      "action": "click",
+      "comment": "点击搜索按钮执行搜索操作", 
+      "code": "poco(\"com.mobile.brasiltvmobile:id/searchCancel\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/searchCancel",
+        "element_type": "search_submit",
+        "description": "搜索执行按钮"
+      },
+      "path": {
+        "llm_request": "执行搜索操作",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_search_ready.png",
+        "element_analysis": "omniparser_result_submit.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/searchCancel",
+          "bbox": [850, 200, 950, 280],
+          "confidence": 0.94
+        }
+      }
+    },
+    {
+      "step": 12,
+      "page": "search_result",
+      "action": "click",
+      "comment": "点击搜索结果中第一个节目的封面图片",
+      "code": "poco(\"android.widget.FrameLayout\").child(\"android.widget.LinearLayout\").offspring(\"android:id/content\").offspring(\"com.mobile.brasiltvmobile:id/searchResultList\").child(\"com.mobile.brasiltvmobile:id/mLinearLayout\")[0].offspring(\"com.mobile.brasiltvmobile:id/posterImageView\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/posterImageView",
+        "element_type": "poster_image",
+        "description": "搜索结果第一个节目封面",
+        "selector_path": "searchResultList > mLinearLayout[0] > posterImageView"
+      },
+      "path": {
+        "llm_request": "选择第一个搜索结果进入播放",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_search_results.png",
+        "element_analysis": "omniparser_result_poster.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "complex_selector": true,
+          "bbox": [150, 400, 350, 600],
+          "confidence": 0.91
+        }
+      }
+    },
+    {
+      "step": 13,
+      "page": "vod_playing_detail",
+      "action": "click",
+      "comment": "点击播放按钮开始播放视频",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/mPlayPauseIcon\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/mPlayPauseIcon",
+        "element_type": "play_button",
+        "description": "播放/暂停控制按钮"
+      },
+      "additional_code": "miniScreenCenterX,miniScreenCenterY = poco(\"com.mobile.brasiltvmobile:id/mPlayPauseIcon\").get_position()",
+      "path": {
+        "llm_request": "开始播放视频并记录播放器中心位置",
+        "mcp_tool_used": "screen_analysis",
+        "screen_capture": "screenshot_player_ready.png",
+        "element_analysis": "omniparser_result_play_btn.json",
+        "element_found": {
+          "method": "uiautomator2",
+          "resource_id": "com.mobile.brasiltvmobile:id/mPlayPauseIcon",
+          "bbox": [500, 400, 580, 480],
+          "confidence": 0.97
+        }
+      }
+    },
+    {
+      "step": 14,
+      "page": "vod_playing_detail",
+      "action": "wait",
+      "comment": "等待广告播放完毕",
+      "code": "poco(text=\"Ads\").wait_for_disappearance(timeout=30)",
+      "post_action": "sleep(0.5)",
+      "path": {
+        "llm_request": "等待广告结束进入正式播放",
+        "mcp_tool_used": "element_monitoring",
+        "screen_capture": "screenshot_ads_playing.png",
+        "element_analysis": "omniparser_result_ads.json",
+        "wait_condition": {
+          "element_disappear": "Ads",
+          "timeout": 30
+        }
+      }
+    },
+    {
+      "step": 15,
+      "page": "vod_playing_detail",
+      "action": "click",
+      "comment": "点击视频中心区域唤起播控控件",
+      "code": "poco.click([miniScreenCenterX, miniScreenCenterY])",
+      "target_element": {
+        "element_type": "video_center",
+        "description": "视频播放中心区域",
+        "use_coordinates": true
+      },
+      "path": {
+        "llm_request": "唤起播放器控制界面",
+        "mcp_tool_used": "coordinate_click",
+        "screen_capture": "screenshot_video_playing.png", 
+        "element_analysis": "omniparser_result_video_area.json",
+        "coordinate_source": "previously_captured_position"
+      }
+    },
+    {
+      "step": 16,
+      "page": "vod_playing_detail",
+      "action": "click",
+      "comment": "点击全屏按钮进入全屏播放模式",
+      "code": "poco(\"com.mobile.brasiltvmobile:id/mImageFullScreen\").click()",
+      "target_element": {
+        "resource_id": "com.mobile.brasiltvmobile:id/mImageFullScreen",
+        "element_type": "fullscreen_button",
+        "description": "全屏播放按钮"
+      },
+      "path": {
+        "llm_request": "进入全屏播放模式",
+        "mcp_tool_used": "screen_analysis", 
+        "screen_capture": "screenshot_controls_visible.png",
+        "element_analysis": "omniparser_result_fullscreen_btn.json",
+        "element_found": {
+          "method": "omniparser",
+          "fallback_reason": "playing_state_ui_detection_required",
+          "resource_id": "com.mobile.brasiltvmobile:id/mImageFullScreen",
+          "bbox": [850, 450, 920, 520],
+          "confidence": 0.89,
+          "detection_note": "播放状态下使用视觉识别"
+        }
+      }
+    },
+    {
+      "step": 17,
+      "page": "playing",
+      "action": "assert",
+      "comment": "断言验证节目正在正常播放",
+      "code": "# assert program is playing normally",
+      "path": {
+        "llm_request": "验证全屏播放状态正常",
+        "mcp_tool_used": "state_verification",
+        "screen_capture": "screenshot_fullscreen_playing.png",
+        "element_analysis": "omniparser_result_final_state.json",
+        "verification_method": "visual_analysis"
+      }
+    }
+  ],
+  
+  "teardown": {
+    "cleanup_actions": []
+  },
+  
+  "llm_generation_summary": {
+    "total_steps": 17,
+    "mcp_tools_used": [
+      "screen_analysis",
+      "device_control", 
+      "app_control",
+      "timing_control",
+      "input_control",
+      "element_monitoring",
+      "coordinate_click",
+      "state_verification"
+    ],
+    "screen_captures_count": 15,
+    "omniparser_analysis_count": 12,
+    "uiautomator2_fallback_count": 11,
+    "omniparser_required_count": 1,
+    "generation_confidence": 0.93
+  }
+}

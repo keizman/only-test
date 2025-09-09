@@ -19,6 +19,7 @@ from .element_recognizer import ElementRecognizer
 from .strategy_manager import StrategyManager, RecognitionStrategy
 from .omniparser_client import OmniparserClient
 from .playback_detector import PlaybackDetector
+from .visual_integration import VisualIntegration, get_all_elements, is_media_playing
 
 __version__ = "1.0.0"
 __author__ = "Only-Test Team"
@@ -29,7 +30,10 @@ __all__ = [
     "StrategyManager", 
     "RecognitionStrategy",
     "OmniparserClient",
-    "PlaybackDetector"
+    "PlaybackDetector",
+    "VisualIntegration",
+    "get_all_elements",
+    "is_media_playing"
 ]
 
 # 默认配置

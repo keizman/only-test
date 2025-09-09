@@ -281,12 +281,12 @@ Only-Test 用例描述"为什么这样做" + "如何进行智能判断"
 - 文本相似度提取相关 key，按照高置信度点击，若下一页不为期望的则返回上一页点击下一个，若没有则收集信息停止任务
 
 **输入描述：**
-"测试在网易云音乐中搜索并播放'周杰伦'歌曲，确保正常播放且音质清晰"
+"测试在 com.mobile.brasiltvmobile 中搜索并播放'Ironheart S1'节目，确保正常播放且视频流畅"
 
 **生成输出：**
-- 测试用例名称：网易云音乐搜索播放测试
+- 测试用例名称：BrasilTVMobile节目搜索播放测试
 - 生成步骤：launch_app, click search_icon, input search_box, click search_button, click first_result, wait_for_playing
-- 断言：check_is_playing, check_has_audio
+- 断言：check_is_playing, check_video_quality
 
 ### 7.3 智能优化策略
 

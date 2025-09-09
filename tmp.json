@@ -1,7 +1,111 @@
 {
   "parsed_content_list": [
     {
-      "uuid": "5623d83a",
+      "uuid": "6c8bf04b",
+      "type": "text",
+      "bbox": [
+        0.0,
+        0.0,
+        0.04062499850988388,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "P:0/1",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "db36eff5",
+      "type": "text",
+      "bbox": [
+        0.140625,
+        0.0,
+        0.18242187798023224,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "dX: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "cb590b2a",
+      "type": "text",
+      "bbox": [
+        0.283203125,
+        0.0,
+        0.3238281309604645,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "dY: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "452b8c72",
+      "type": "text",
+      "bbox": [
+        0.4261718690395355,
+        0.0,
+        0.4644531309604645,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "Xv: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "a28e3743",
+      "type": "text",
+      "bbox": [
+        0.5687500238418579,
+        0.0,
+        0.607421875,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "Yv: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "1bce7fe1",
+      "type": "text",
+      "bbox": [
+        0.7113281488418579,
+        0.0,
+        0.7542968988418579,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "Prs: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "ef150f83",
+      "type": "text",
+      "bbox": [
+        0.854296863079071,
+        0.0,
+        0.9019531011581421,
+        0.02569444477558136
+      ],
+      "interactivity": false,
+      "content": "Size: 0.0",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "dac2a610",
+      "type": "text",
+      "bbox": [
+        0.04570312425494194,
+        0.7666666507720947,
+        0.09257812798023224,
+        0.7993055582046509
+      ],
+      "interactivity": false,
+      "content": "01:19",
+      "source": "box_ocr_content_ocr"
+    },
+    {
+      "uuid": "8fe45ee4",
       "type": "icon",
       "bbox": [
         0.47813358902931213,
@@ -10,10 +114,11 @@
         0.9638110399246216
       ],
       "interactivity": true,
-      "content": "Playing"
+      "content": "grana ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "ebb2ff96",
+      "uuid": "4a3c8eab",
       "type": "icon",
       "bbox": [
         0.6673824191093445,
@@ -22,22 +127,11 @@
         0.14244379103183746
       ],
       "interactivity": true,
-      "content": "480P"
+      "content": "480P ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "fcb75c2c",
-      "type": "icon",
-      "bbox": [
-        0.8476415872573853,
-        0.07749173790216446,
-        0.8929044604301453,
-        0.1439530849456787
-      ],
-      "interactivity": true,
-      "content": "Screen ratio"
-    },
-    {
-      "uuid": "9b132f7e",
+      "uuid": "ae815134",
       "type": "icon",
       "bbox": [
         0.5995723009109497,
@@ -46,46 +140,11 @@
         0.9487711787223816
       ],
       "interactivity": true,
-      "content": "Forward 10"
+      "content": "10 ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "8541e58a",
-      "type": "icon",
-      "bbox": [
-        0.9326321482658386,
-        0.07718314230442047,
-        0.9780964851379395,
-        0.1496036797761917
-      ],
-      "interactivity": true,
-      "content": "a menu or list."
-    },
-    {
-      "uuid": "2e46a097",
-      "type": "icon",
-      "bbox": [
-        0.8501955270767212,
-        0.8801293969154358,
-        0.8839925527572632,
-        0.9376885890960693
-      ],
-      "interactivity": true,
-      "content": "Subtitle"
-    },
-    {
-      "uuid": "be35794b",
-      "type": "icon",
-      "bbox": [
-        0.927524745464325,
-        0.8678024411201477,
-        0.9775518178939819,
-        0.9625605344772339
-      ],
-      "interactivity": true,
-      "content": "Audio language"
-    },
-    {
-      "uuid": "d36c3926",
+      "uuid": "ee9f61ce",
       "type": "icon",
       "bbox": [
         0.3780789077281952,
@@ -94,10 +153,11 @@
         0.9565342664718628
       ],
       "interactivity": true,
-      "content": "Back 10"
+      "content": "10 ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "0557aee0",
+      "uuid": "4e437aa5",
       "type": "icon",
       "bbox": [
         0.05993213504552841,
@@ -106,34 +166,11 @@
         0.13161107897758484
       ],
       "interactivity": true,
-      "content": "Properties S1"
+      "content": "Ironheart S1 1 ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "1347f480",
-      "type": "icon",
-      "bbox": [
-        0.7565749287605286,
-        0.07486403733491898,
-        0.8062735795974731,
-        0.16280370950698853
-      ],
-      "interactivity": true,
-      "content": "Cast"
-    },
-    {
-      "uuid": "e1000a98",
-      "type": "icon",
-      "bbox": [
-        0.11283252388238907,
-        0.2051171213388443,
-        0.8622323274612427,
-        0.8002585768699646
-      ],
-      "interactivity": true,
-      "content": "System"
-    },
-    {
-      "uuid": "496d7570",
+      "uuid": "d0493aba",
       "type": "icon",
       "bbox": [
         0.9299678802490234,
@@ -142,10 +179,11 @@
         0.8039749264717102
       ],
       "interactivity": true,
-      "content": "40:58"
+      "content": "40:58 ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "e8696284",
+      "uuid": "bb4e0db2",
       "type": "icon",
       "bbox": [
         0.43148812651634216,
@@ -154,10 +192,11 @@
         0.9725716710090637
       ],
       "interactivity": true,
-      "content": "Preciso"
+      "content": "Preciso ",
+      "source": "box_yolo_content_ocr"
     },
     {
-      "uuid": "c21a83b4",
+      "uuid": "c47c339f",
       "type": "icon",
       "bbox": [
         0.5413072109222412,
@@ -166,8 +205,87 @@
         0.9573859572410583
       ],
       "interactivity": true,
-      "content": "Dinheiro"
+      "content": "Dinheiro. ",
+      "source": "box_yolo_content_ocr"
+    },
+    {
+      "uuid": "58e2649e",
+      "type": "icon",
+      "bbox": [
+        0.8476415872573853,
+        0.07749173790216446,
+        0.8929044604301453,
+        0.1439530849456787
+      ],
+      "interactivity": true,
+      "content": "Screen ratio",
+      "source": "box_yolo_content_yolo"
+    },
+    {
+      "uuid": "e90ddcff",
+      "type": "icon",
+      "bbox": [
+        0.9326321482658386,
+        0.07718314230442047,
+        0.9780964851379395,
+        0.1496036797761917
+      ],
+      "interactivity": true,
+      "content": "a menu or list.",
+      "source": "box_yolo_content_yolo"
+    },
+    {
+      "uuid": "3c5e0a8e",
+      "type": "icon",
+      "bbox": [
+        0.8501955270767212,
+        0.8801293969154358,
+        0.8839925527572632,
+        0.9376885890960693
+      ],
+      "interactivity": true,
+      "content": "Subtitle",
+      "source": "box_yolo_content_yolo"
+    },
+    {
+      "uuid": "952b2179",
+      "type": "icon",
+      "bbox": [
+        0.927524745464325,
+        0.8678024411201477,
+        0.9775518178939819,
+        0.9625605344772339
+      ],
+      "interactivity": true,
+      "content": "Audio language",
+      "source": "box_yolo_content_yolo"
+    },
+    {
+      "uuid": "d51e702a",
+      "type": "icon",
+      "bbox": [
+        0.7565749287605286,
+        0.07486403733491898,
+        0.8062735795974731,
+        0.16280370950698853
+      ],
+      "interactivity": true,
+      "content": "Cast",
+      "source": "box_yolo_content_yolo"
+    },
+    {
+      "uuid": "dfea7a27",
+      "type": "icon",
+      "bbox": [
+        0.11283252388238907,
+        0.2051171213388443,
+        0.8622323274612427,
+        0.8002585768699646
+      ],
+      "interactivity": true,
+      "content": "Share",
+      "source": "box_yolo_content_yolo"
     }
   ],
-  "latency": 2.8497860431671143
+  "latency": 1.4142532348632812
 }
