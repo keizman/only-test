@@ -21,16 +21,28 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-# 设置日志
+# 设置日志（控制台 + 文件）
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+try:
+    logs_dir = Path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = logs_dir / f"test_mcp_llm_integration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    fh = logging.FileHandler(log_file, encoding='utf-8')
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(fh)
+    logger.info(f"日志文件: {log_file}")
+except Exception as e:
+    # 不因日志文件失败而中断
+    logger.warning(f"文件日志初始化失败: {e}")
 
 # 添加项目路径
 sys.path.insert(0, '/mnt/c/Download/git/uni/airtest')
 sys.path.insert(0, '/mnt/c/Download/git/uni')
 
-from airtest.lib.visual_recognition.omniparser_client import OmniparserClient
-from airtest.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
+from only_test.lib.visual_recognition.omniparser_client import OmniparserClient
+from only_test.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
 
 # 模拟真实的LLM响应（基于GPT-4或Claude的典型输出）
 class IntelligentLLMSimulator:
@@ -462,7 +474,7 @@ async def simulate_user_interaction():
     generated_test_case = await llm.generate_test_case(analysis, omniparser_data)
     
     # 7. 保存生成的测试用例
-    output_file = f"/mnt/c/Download/git/uni/airtest/testcases/generated/llm_generated_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = f"/mnt/c/Download/git/uni/only_test/testcases/generated/llm_generated_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -553,13 +565,58 @@ async def test_mcp_llm_integration():
         ))
         
         # 测试LLM工具调用
-        logger.info("🧠 测试LLM屏幕分析...")
-        analysis_result = await mcp_server.execute_tool("llm_analyze_screen", {"focus_area": "player_controls"})
-        print(f"   LLM分析结果: {analysis_result.result['analysis']}")
+        logger.info("🧠 测试LLM屏幕分析 (MCP真实工具)")
+        # 注册真实设备探测工具
+        try:
+            from only_test.lib.mcp_interface.device_inspector import DeviceInspector
+            inspector = DeviceInspector()
+            await inspector.initialize()
+            for attr_name in dir(inspector):
+                fn = getattr(inspector, attr_name, None)
+                if callable(fn) and hasattr(fn, "_mcp_tool_info"):
+                    info = getattr(fn, "_mcp_tool_info")
+                    mcp_server.register_tool(MCPTool(
+                        name=info["name"], description=info["description"],
+                        parameters=info.get("parameters", {}), function=fn,
+                        category=info.get("category", "general")
+                    ))
+            logger.info("已注册DeviceInspector工具")
+        except Exception as e:
+            logger.error(f"注册DeviceInspector工具失败: {e}")
+
+        # 调用真实屏幕分析
+        analysis_result = await mcp_server.execute_tool("get_current_screen_info", {"include_elements": True})
+        if analysis_result.success:
+            print(f"   当前元素数: {analysis_result.result.get('total_elements', 0)}")
+            logger.info(f"get_current_screen_info: {json.dumps(analysis_result.to_dict(), ensure_ascii=False)[:2000]}")
+        else:
+            logger.error(f"get_current_screen_info失败: {analysis_result.error}")
         
-        logger.info("⚙️ 测试LLM步骤生成...")
-        steps_result = await mcp_server.execute_tool("llm_generate_test_steps", {"scenario": "playback_control"})
-        print(f"   生成步骤数: {len(steps_result.result['generated_steps'])}")
+        logger.info("⚙️ 使用模板化Prompt引导真实LLM生成下一步")
+        try:
+            from only_test.templates.prompts.generate_cases import TestCaseGenerationPrompts
+            from only_test.lib.llm_integration.llm_client import LLMClient
+            llm = LLMClient()
+            if not llm.is_available():
+                logger.error("LLM服务不可用，无法生成步骤")
+            else:
+                step_prompt = TestCaseGenerationPrompts.get_mcp_step_guidance_prompt(
+                    current_step=1,
+                    screen_analysis_result=analysis_result.result if analysis_result.success else {},
+                    test_objective="验证播放控制",
+                    previous_steps=[]
+                )
+                logger.info(f"STEP_PROMPT:\n{step_prompt[:4000]}")
+                resp = llm.chat_completion([
+                    {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only."},
+                    {"role": "user", "content": step_prompt}
+                ], temperature=0.2, max_tokens=800)
+                if resp.success:
+                    logger.info(f"LLM_STEP_RESPONSE_RAW:\n{(resp.content or '')[:4000]}")
+                else:
+                    logger.error(f"LLM步骤生成失败: {resp.error}")
+        except Exception as e:
+            logger.error(f"步骤生成流程异常: {e}")
         
         logger.info("✅ MCP与LLM集成测试通过")
         return True

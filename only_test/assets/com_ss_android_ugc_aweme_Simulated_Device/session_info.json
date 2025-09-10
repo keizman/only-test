@@ -1,0 +1,116 @@
+{
+  "session_id": "TC_COM_SS_ANDROID_UGC_AWEME_20250905_184805_20250905_184805",
+  "app_package": "com.mobile.brasiltvmobile",
+  "device_name": "Simulated_Device",
+  "testcase_id": "TC_COM_SS_ANDROID_UGC_AWEME_20250905_184805",
+  "start_time": "2025-09-05T18:48:05.052807",
+  "session_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device",
+  "assets_saved": [
+    {
+      "type": "screenshot",
+      "step_number": 1,
+      "action_type": "click",
+      "timing": "before",
+      "filename": "step01_click_before_20250905_184805_057.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step01_click_before_20250905_184805_057.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step01_click_before_20250905_184805_057.png",
+      "timestamp": "20250905_184805_057",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 1,
+      "action_type": "click",
+      "timing": "after",
+      "filename": "step01_click_after_20250905_184805_073.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step01_click_after_20250905_184805_073.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step01_click_after_20250905_184805_073.png",
+      "timestamp": "20250905_184805_073",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 2,
+      "action_type": "conditional_action",
+      "timing": "before",
+      "filename": "step02_conditional_action_before_20250905_184805_197.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step02_conditional_action_before_20250905_184805_197.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step02_conditional_action_before_20250905_184805_197.png",
+      "timestamp": "20250905_184805_197",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "omniparser_result",
+      "step_number": 2,
+      "filename": "step02_omni_result_20250905_184805_207.json",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step02_omni_result_20250905_184805_207.json",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step02_omni_result_20250905_184805_207.json",
+      "timestamp": "20250905_184805_207",
+      "file_size": 780,
+      "elements_recognized": 2
+    },
+    {
+      "type": "screenshot",
+      "step_number": 2,
+      "action_type": "conditional_action",
+      "timing": "after",
+      "filename": "step02_conditional_action_after_20250905_184805_220.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step02_conditional_action_after_20250905_184805_220.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step02_conditional_action_after_20250905_184805_220.png",
+      "timestamp": "20250905_184805_220",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 3,
+      "action_type": "input",
+      "timing": "before",
+      "filename": "step03_input_before_20250905_184805_336.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step03_input_before_20250905_184805_336.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step03_input_before_20250905_184805_336.png",
+      "timestamp": "20250905_184805_336",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 3,
+      "action_type": "input",
+      "timing": "after",
+      "filename": "step03_input_after_20250905_184805_349.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step03_input_after_20250905_184805_349.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step03_input_after_20250905_184805_349.png",
+      "timestamp": "20250905_184805_349",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 4,
+      "action_type": "click",
+      "timing": "before",
+      "filename": "step04_click_before_20250905_184805_468.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step04_click_before_20250905_184805_468.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step04_click_before_20250905_184805_468.png",
+      "timestamp": "20250905_184805_468",
+      "file_size": 197,
+      "metadata": {}
+    },
+    {
+      "type": "screenshot",
+      "step_number": 4,
+      "action_type": "click",
+      "timing": "after",
+      "filename": "step04_click_after_20250905_184805_481.png",
+      "relative_path": "com_ss_android_ugc_aweme_Simulated_Device/step04_click_after_20250905_184805_481.png",
+      "absolute_path": "/mnt/c/Download/git/uni/only_test/assets/com_ss_android_ugc_aweme_Simulated_Device/step04_click_after_20250905_184805_481.png",
+      "timestamp": "20250905_184805_481",
+      "file_size": 197,
+      "metadata": {}
+    }
+  ]
+}

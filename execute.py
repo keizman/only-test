@@ -218,7 +218,7 @@ class OnlyTestExecutor:
         
         try:
             # 调用测试用例生成器
-            from airtest.lib.test_generator import TestCaseGenerator
+            from only_test.lib.test_generator import TestCaseGenerator
             
             generator = TestCaseGenerator(device_id=self.device_id)
             testcase_name = generator.generate_from_description(description)

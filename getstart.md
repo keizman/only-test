@@ -43,8 +43,13 @@ cd ..
 
 3) 验证基础环境
 ```bash
-# 验证 MCP 与 LLM（使用 Mock，不依赖外网）
-python -X utf8 test_mcp_llm_integration.py
+# 方式A：端到端流程演示（MCP→LLM→JSON→Python，优先真实LLM，失败回退Mock）
+python -X utf8 airtest/examples/mcp_llm_workflow_demo.py \
+  --requirement "验证播放页的搜索与结果展示" \
+  --target-app com.mobile.brasiltvmobile
+
+# 方式B：更全面的验证脚本（含MCP Mock集成与LLM逻辑演示）
+python -X utf8 test_llm_driven_generation.py
 ```
 
 若看到“测试通过/成功”即表示环境可运行示例工作流。
@@ -71,15 +76,16 @@ adb shell am start -n com.mobile.brasiltvmobile/.MainActivity
 - 断言结果列表非空
 ```
 
-3) 调用 MCP 的“模拟 LLM”工具生成用例 JSON
+3) 调用 MCP 工具生成用例 JSON（自动优先真实 LLM）
 ```bash
 python -X utf8 airtest/examples/mcp_llm_workflow_demo.py \
   --requirement "验证播放页的搜索与结果展示" \
   --target-app com.mobile.brasiltvmobile
 ```
 输出：
+- 若配置好真实 LLM，将调用真实 LLM 生成 JSON；否则自动使用 Mock LLM
 - 生成的 JSON 用例路径（位于 `airtest/testcases/generated/llm_generated_*.json`）
-- 自动转换后的 Python 测试文件路径
+- 自动转换后的 Python 测试文件路径（脚本风格）
 
 4)（可选）本地转为 Python（上一步已自动执行）
 ```bash
@@ -99,7 +105,33 @@ pytest airtest/testcases/python/test_xxx.py --alluredir=reports/allure-results -
 - 截图/识别结果/执行日志：`airtest/assets/{app}_{device}/`
 - allure 报告：`allure open reports/allure-report`
 
-## 四、视觉识别与服务（可选）
+## 四、启用真实 LLM（可选但推荐）
+
+1) 环境变量（OpenAI 兼容接口）
+- `LLM_PROVIDER=openai_compatible`
+- `LLM_API_URL` 指向基础路径（必须是 `/v1` 结尾，例如 `https://api.llmproai.xyz/v1`）
+- `LLM_API_KEY=<你的Key>`
+- `LLM_MODEL=<模型名>`（例如 `gpt-4o-mini` 或你服务支持的模型）
+
+示例（Linux/macOS）：
+```bash
+export LLM_PROVIDER=openai_compatible
+export LLM_API_URL=https://api.llmproai.xyz/v1
+export LLM_API_KEY=sk-xxxxx
+export LLM_MODEL=gpt-4o-mini
+```
+
+2) 快速自检
+```bash
+python -X utf8 airtest/lib/llm_integration/llm_client.py
+```
+显示“✅ LLM服务可用”即表示配置成功。随后再运行第“三章-3)”的 MCP 演示，流程会优先调用真实 LLM。
+
+3) 调试提示
+- 首次运行会打印 `LLM(OpenAICompatible) base_url=..., model=...` 便于确认连通
+- 如遇 401/404/超时，会自动回退 Mock；请检查 `LLM_API_URL` 是否为基础 `/v1`，Key 是否正确
+
+## 五、视觉识别与服务（可选）
 
 若需体验视觉识别（OmniParser），请先确认服务器连通性：
 ```bash
@@ -108,3 +140,13 @@ curl http://<omniparser-server>:9333/probe/
 然后可用示例图片做一次识别实验（本地脚本或 `test_airtest_omniparser.py`）。
 
 注意：若未配置 OmniParser，框架仍可通过 XML（UIAutomator2）路径运行基本流程。
+
+可通过环境变量指定服务器：
+```bash
+export OMNIPARSER_SERVER=http://100.122.57.128:9333
+```
+
+## 六、我的想法（简述）
+- 现状：默认示例此前仅用 Mock LLM。已改造 `airtest/examples/mcp_llm_workflow_demo.py` 优先尝试真实 LLM（基于 `LLMClient`），失败自动回退 Mock，便于新同学“即跑即用”。
+- Prompt 动态取用：模板位于 `airtest/templates/prompts/generate_cases.py`，目前未在示例中直接调用；交互式生成器（`airtest/lib/mcp_interface/case_generator.py`）内置了自己的 Prompt 逻辑，后续我会统一到模板并让示例走模板化 Prompt，保证“外部 LLM 不知道做什么”时仍能稳妥地产生可执行用例。
+- 路径追溯与资产：示例生成的 JSON 已注入 `path` 结构，后续会完善执行期的 per-step 日志与截图留痕，便于完整追溯。

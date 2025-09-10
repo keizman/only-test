@@ -118,6 +118,17 @@ Only-Test通过**JSON + Python协作架构**解决这些问题，实现"说出�
 
 ## 🔄 完整工作流程
 
+## ⚙️ 运行环境约定（Conda）
+
+- Python 执行统一使用 Conda 环境 `orun`。
+- 本地运行命令建议使用：
+  - `conda run -n orun python your_script.py ...`
+  - 或使用仓库提供的快捷脚本：
+    - Windows PowerShell: `tools/orun.ps1 -- your_script.py --args ...`
+    - Bash: `tools/orun.sh your_script.py --args ...`
+
+这可避免全局 Python 与依赖冲突，确保截图/识别/LLM 客户端一致性。
+
 ### Q14: 完整的工作流程是什么？
 **A:** 核心4步骤工作流：
 

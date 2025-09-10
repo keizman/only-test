@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, '/mnt/c/Download/git/uni/airtest')
 sys.path.insert(0, '/mnt/c/Download/git/uni')
 
-from airtest.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
-from airtest.lib.llm_integration.llm_client import LLMClient
-from airtest.lib.visual_recognition.omniparser_client import OmniparserClient
-from airtest.lib.config_manager import ConfigManager
+from only_test.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
+from only_test.lib.llm_integration.llm_client import LLMClient
+from only_test.lib.visual_recognition.omniparser_client import OmniparserClient
+from only_test.lib.config_manager import ConfigManager
 
 class TestCaseGenerationWorkflow:
     """真实的测试用例生成工作流程"""

@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, '/mnt/c/Download/git/uni/airtest')
 sys.path.insert(0, '/mnt/c/Download/git/uni')
 
-from airtest.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
-from airtest.lib.llm_integration.llm_client import LLMClient
-from airtest.lib.visual_recognition.omniparser_client import OmniparserClient
+from only_test.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
+from only_test.lib.llm_integration.llm_client import LLMClient
+from only_test.lib.visual_recognition.omniparser_client import OmniparserClient
 
 # Mock LLM 响应（用于测试）
 MOCK_LLM_RESPONSES = {
@@ -140,8 +140,8 @@ async def test_llm_integration():
     logger.info("=== 测试 LLM 集成 ===")
     
     try:
-        # 创建 Mock LLM 客户端
-        llm_client = MockLLMClient()
+        # 创建真实的 LLM 客户端
+        llm_client = LLMClient()
         
         # 测试消息发送
         test_messages = [
@@ -158,9 +158,15 @@ async def test_llm_integration():
         responses = []
         for i, msg in enumerate(test_messages, 1):
             logger.info(f"发送测试消息 {i}: {msg['content'][:50]}...")
-            response = await llm_client.send_message(msg["content"], msg["context"])
-            responses.append(response)
-            logger.info(f"收到 LLM 响应 {i}: {len(response)} 字符")
+            # 构建LLM消息格式
+            from only_test.lib.llm_integration.llm_client import LLMMessage
+            llm_messages = [
+                LLMMessage(role="system", content="你是一个移动端UI自动化测试专家"),
+                LLMMessage(role="user", content=msg["content"])
+            ]
+            response = llm_client.chat_completion(llm_messages)
+            responses.append(response.content)
+            logger.info(f"收到 LLM 响应 {i}: {len(response.content)} 字符")
         
         logger.info("✅ LLM 集成测试通过")
         return responses
