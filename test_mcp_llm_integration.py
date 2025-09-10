@@ -290,8 +290,8 @@ async def test_end_to_end_workflow():
                 "mcp_server": mcp_success
             },
             "screen_analysis": {
-                "elements_detected": omni_result.get("elements_count", 0),
-                "interactive_elements": omni_result.get("interactive_elements", 0)
+                "elements_detected": omni_result.get("elements_count", 0) if isinstance(omni_result, dict) else 0,
+                "interactive_elements": omni_result.get("interactive_elements", 0) if isinstance(omni_result, dict) else 0
             },
             "llm_responses": len(llm_responses) if llm_responses else 0,
             "workflow_status": "success"

@@ -84,6 +84,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 base_url=config.get('api_url', 'https://api.openai.com/v1'),
                 timeout=self.timeout
             )
+            # Debug: 基本连接信息（不打印密钥）
+            try:
+                logger.info(f"LLM(OpenAICompatible) base_url={config.get('api_url')}, model={config.get('model')}")
+            except Exception:
+                pass
             
         except ImportError:
             logger.error("未安装openai库: pip install openai")

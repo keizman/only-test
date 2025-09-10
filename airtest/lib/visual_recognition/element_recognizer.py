@@ -14,9 +14,11 @@ from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 
+import os
 from .strategy_manager import StrategyManager, RecognitionStrategy
 from .omniparser_client import OmniparserClient
 from .playback_detector import PlaybackDetector
+from ..screen_capture import ScreenCapture
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,7 @@ class ElementRecognizer:
     """
     
     def __init__(self, 
-                 omniparser_server: str = "http://100.122.57.128:9333",
+                 omniparser_server: str = None,
                  device_id: Optional[str] = None,
                  cache_enabled: bool = True,
                  debug_mode: bool = False):
@@ -100,8 +102,11 @@ class ElementRecognizer:
         
         # 初始化核心组件
         self.strategy_manager = StrategyManager()
+        if omniparser_server is None:
+            omniparser_server = os.getenv("OMNIPARSER_SERVER", "http://100.122.57.128:9333")
         self.omniparser_client = OmniparserClient(omniparser_server)
         self.playback_detector = PlaybackDetector()
+        self.screen_capture = ScreenCapture(device_id)
         
         # 内部状态
         self._last_recognition_result: Optional[RecognitionResult] = None
@@ -461,7 +466,7 @@ class ElementRecognizer:
                     "resource_id": "",  # 视觉识别没有resource_id
                     "content_desc": element.get("content", ""),
                     "clickable": element.get("interactivity", False),
-                    "bounds": self._bbox_to_bounds(element.get("bbox", [])),
+                    "bounds": self._bbox_to_bounds_dynamic(element.get("bbox", [])),
                     "package": "",  # 视觉识别没有package信息
                     "class_name": element.get("type", "visual_element"),
                     "source": "omniparser"
@@ -514,27 +519,28 @@ class ElementRecognizer:
             return False
     
     async def _take_screenshot(self) -> str:
-        """获取屏幕截图的base64编码"""
+        """使用 ScreenCapture 统一获取截图（base64）。"""
         try:
-            import subprocess
-            import base64
-            
-            # 使用adb获取屏幕截图
-            cmd = "adb exec-out screencap -p"
-            if self.device_id:
-                cmd = f"adb -s {self.device_id} exec-out screencap -p"
-                
-            result = subprocess.run(cmd.split(), capture_output=True)
-            
-            if result.returncode == 0:
-                return base64.b64encode(result.stdout).decode('utf-8')
-            else:
-                raise Exception(f"截图失败: {result.stderr}")
-                
+            return self.screen_capture.get_screenshot_base64()
         except Exception as e:
-            logger.error(f"获取屏幕截图失败: {e}")
+            logger.error(f"获取截图失败: {e}")
             raise
-    
+    def _bbox_to_bounds_dynamic(self, bbox: List[float]) -> List[int]:
+        """����һ����bboxת��Ϊbounds��ʽ (���ݵ�ǰ��Ļ�ߴ�)"""
+        if not bbox or len(bbox) != 4:
+            return []
+        try:
+            si = self.screen_capture.get_screen_info()
+            screen_width, screen_height = si.width, si.height
+        except Exception:
+            screen_width, screen_height = 1080, 1920
+        return [
+            int(bbox[0] * screen_width),
+            int(bbox[1] * screen_height),
+            int(bbox[2] * screen_width),
+            int(bbox[3] * screen_height),
+        ]
+
     def _bbox_to_bounds(self, bbox: List[float]) -> List[int]:
         """将归一化的bbox转换为bounds格式"""
         if len(bbox) != 4:
@@ -550,3 +556,9 @@ class ElementRecognizer:
             int(bbox[2] * screen_width),   # right
             int(bbox[3] * screen_height)   # bottom
         ]
+
+
+
+
+
+

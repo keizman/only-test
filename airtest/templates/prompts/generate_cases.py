@@ -25,7 +25,7 @@ class TestCaseGenerationPrompts:
         device_type: str = "mobile"
     ) -> str:
         """
-        主测试用例生成 Prompt
+        主测试用例生成 Prompt - 用于指导外部 LLM 使用 MCP 工具生成测试用例
         
         Args:
             description: 用户需求描述
@@ -39,102 +39,259 @@ class TestCaseGenerationPrompts:
         screen_elements_text = TestCaseGenerationPrompts._format_screen_elements(screen_elements)
         device_specific_notes = TestCaseGenerationPrompts._get_device_specific_notes(device_type)
         
-        return f"""你是Only-Test框架的测试用例生成专家。请根据用户描述生成高质量的自动化测试用例。
+        return f"""# Only-Test 框架专用：外部 LLM 用例生成指导
 
-## 任务描述
-用户需求: {description}
-目标应用: {app_package}
-设备类型: {device_type}
+你是 Only-Test 框架的智能测试工程师。你的任务是：
+1. **使用 MCP 工具**实时感知设备状态
+2. **逐步生成测试用例**，每一步都基于真实的屏幕元素
+3. **输出标准 JSON 格式**，供 Only-Test 框架转换为可执行的 Python 脚本
 
-## Only-Test框架规范
+## 🔧 可用的 MCP 工具（必须按顺序使用）
 
-### 1. 元数据格式
-每个测试用例都必须包含以下元数据注释：
-- `# [tag] 标签1, 标签2` - 用例分类标签
-- `# [path] 页面1 -> 页面2 -> 页面3` - 完整页面流转路径
+### 1. analyze_current_screen - 分析当前屏幕
+**用途**: 获取当前屏幕的所有UI元素和状态信息
+**调用时机**: 每个测试步骤开始前
+**返回**: 屏幕元素列表（包含 resource_id, text, bbox, interactivity 等）
 
-### 2. 步骤注释格式
-每个操作步骤都必须使用以下格式的注释：
-`## [page] 页面名称, [action] 动作类型, [comment] 详细说明`
+### 2. interact_with_ui_element - 与元素交互  
+**用途**: 点击、输入、滑动等操作
+**参数**: 
+- element_id: 从 analyze_current_screen 获得的元素ID
+- action: "tap", "input", "swipe", "long_press"
+**调用时机**: 需要执行操作时
 
-### 3. 页面类型规范
-- app_initialization: 应用初始化
-- app_startup: 应用启动
-- home: 首页
-- search: 搜索页面
-- search_result: 搜索结果页面
-- vod: 点播内容页面
-- vod_playing_detail: 点播详情页面
-- vod_playing_full: 点播播放全屏
-- playing: 播放页面
-- live: 直播页面
-- live_playing_full: 直播播放全屏
-- login: 登录页面
-- signup: 注册页面
-- settings: 设置页面
-- user_center: 用户中心
+### 3. generate_test_case_step - 生成测试步骤
+**用途**: 基于屏幕分析结果生成单个测试步骤
+**参数**:
+- screen_data: 来自 analyze_current_screen 的结果
+- test_objective: 当前步骤要达成的目标
 
-### 4. 动作类型规范
-- launch: 启动应用
-- restart: 重启应用
-- click: 点击操作
-- input: 文本输入
-- swipe: 滑动操作
-- wait: 等待操作
-- assert: 断言验证
+## 📋 标准工作流程（外部 LLM 必须遵循）
 
-### 5. 智能条件判断
-当存在多种可能的操作路径时，请在comment中描述判断逻辑，例如：
-"根据搜索框内容状态智能选择点击搜索或取消搜索按钮"
+```
+第一步: 调用 analyze_current_screen 获取当前屏幕状态
+第二步: 基于屏幕元素，确定下一个操作目标
+第三步: 调用 interact_with_ui_element 执行操作
+第四步: 再次调用 analyze_current_screen 验证操作结果
+第五步: 调用 generate_test_case_step 记录这个步骤到JSON
+第六步: 重复直到测试目标完成
+```
 
-### 6. 设备特定注意事项
-{device_specific_notes}
+## 🎯 当前测试任务
+- **用户需求**: {description}
+- **目标应用**: {app_package}
+- **设备类型**: {device_type}
 
-## 现有测试用例示例
-{examples_text}
+## 📐 JSON 输出格式（最终目标）
+
+你需要逐步构建以下格式的 JSON：
+
+```json
+{{
+  "testcase_id": "TC_{app_package.split('.')[-1]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+  "name": "简短的测试用例名称",
+  "description": "{description}",
+  "target_app": "{app_package}",
+  "device_info": {{
+    "type": "{device_type}",
+    "detected_at": "自动填充",
+    "screen_info": "自动填充"
+  }},
+  "execution_path": [
+    {{
+      "step": 1,
+      "page": "从MCP工具识别的页面类型",
+      "action": "launch|click|input|swipe|wait|assert",
+      "description": "这一步要做什么（中文）",
+      "target_element": {{
+        "uuid": "从analyze_current_screen获得的真实uuid",
+        "resource_id": "从屏幕分析获得的真实resource_id",
+        "text": "元素的实际文本",
+        "content_desc": "可访问性描述",
+        "bbox": "元素边界框坐标",
+        "fallback_coordinates": "如果resource_id为空时使用的坐标"
+      }},
+      "data": "输入的数据（如搜索词）",
+      "timeout": 10,
+      "success_criteria": "如何判断这步成功",
+      "path": {{
+        "mcp_tool_used": "使用了哪个MCP工具",
+        "screen_hash": "屏幕状态的哈希值",
+        "analysis_result": "分析结果摘要",
+        "decision_reason": "为什么选择这个元素进行操作"
+      }}
+    }}
+  ]
+}}
+```
+
+## ⚠️ 重要约束
+
+1. **必须使用真实元素**: 只能操作 analyze_current_screen 返回的实际元素
+2. **不能虚构控件ID**: 如果 resource_id 为空，使用 bbox 计算坐标点击
+3. **逐步验证**: 每个操作后都要重新分析屏幕状态
+4. **记录追溯信息**: path 字段必须记录你使用的工具和决策过程
+5. **播放状态适应**: 视频播放时只能使用视觉识别（omniparser），非播放时优先XML识别
+
+## 🔄 双模式识别机制
+
+Only-Test 会自动在两种模式间切换：
+- **XML模式**: 快速、准确，但播放状态下不可用
+- **视觉模式**: 基于AI识别，播放状态下可用，准确率90%
+
+你无需关心模式切换，但要知道：
+- 播放状态下可能只有 bbox 坐标，没有 resource_id
+- 此时应该在JSON中设置 `"fallback_coordinates": [x, y]`
 
 {screen_elements_text}
 
-## 生成要求
+{device_specific_notes}
 
-1. **严格遵循Only-Test元数据格式**
-2. **生成完整可执行的Python代码**
-3. **包含智能条件判断逻辑**
-4. **使用合适的等待时间和异常处理**
-5. **添加必要的断言验证**
-6. **代码结构清晰，注释详细**
-7. **考虑设备特定的交互方式**
+## 💡 开始指令
 
-## 代码结构要求
+请按以下步骤开始：
+1. 首先调用 `analyze_current_screen` 获取当前屏幕状态
+2. 基于屏幕元素，制定测试计划
+3. 逐步执行并记录每个步骤到JSON
+4. 最终输出完整的测试用例JSON
 
-```python
-# 测试描述和标签
-# [tag] 相关标签
-# [path] 页面流转路径
+现在开始第一步：请调用 analyze_current_screen 获取当前屏幕状态。"""
 
-from airtest.core.api import *
-from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+    @staticmethod
+    def get_mcp_step_guidance_prompt(
+        current_step: int,
+        screen_analysis_result: Dict[str, Any],
+        test_objective: str,
+        previous_steps: List[Dict[str, Any]] = None
+    ) -> str:
+        """
+        MCP 驱动的分步指导 Prompt - 指导外部 LLM 基于屏幕分析结果执行下一步
+        
+        Args:
+            current_step: 当前步骤编号
+            screen_analysis_result: 屏幕分析结果
+            test_objective: 测试目标
+            previous_steps: 之前执行的步骤
+        """
+        
+        elements_info = TestCaseGenerationPrompts._format_mcp_elements(screen_analysis_result.get('elements', []))
+        previous_steps_text = TestCaseGenerationPrompts._format_mcp_previous_steps(previous_steps or [])
+        
+        return f"""# 步骤 {current_step}: MCP 驱动的测试步骤生成
 
-connect_device("android://127.0.0.1:5037/device_id?touch_method=ADBTOUCH&")
-poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
+## 📊 当前屏幕分析结果
 
-## [page] 页面, [action] 动作, [comment] 说明
-# 具体的操作代码
+**检测到的元素数量**: {screen_analysis_result.get('elements_found', 0)}
+**可交互元素数量**: {screen_analysis_result.get('interactive_elements', 0)}
+**应用状态**: {screen_analysis_result.get('app_state', 'unknown')}
+**当前内容**: {screen_analysis_result.get('current_content', 'unknown')}
 
-# ... 更多步骤
+## 🎯 测试目标
+{test_objective}
 
-## [page] playing, [action] assert, [comment] 最终验证
-# 断言代码
+{previous_steps_text}
+
+## 📱 可用的屏幕元素
+{elements_info}
+
+## 🤖 下一步操作指导
+
+基于上述屏幕分析结果，请选择合适的元素执行下一个操作：
+
+1. **分析当前状态**: 确定当前页面类型和可能的操作
+2. **选择目标元素**: 从上述元素列表中选择最合适的元素
+3. **执行操作**: 调用 `interact_with_ui_element` 执行操作
+4. **生成步骤记录**: 调用 `generate_test_case_step` 记录这一步
+
+## 📝 输出要求
+
+请按以下格式输出你的决策：
+
+```json
+{{
+  "analysis": {{
+    "current_page_type": "识别的页面类型",
+    "available_actions": ["可能的操作列表"],
+    "recommended_element": {{
+      "uuid": "选择的元素UUID",
+      "reason": "选择这个元素的原因"
+    }}
+  }},
+  "next_action": {{
+    "mcp_tool": "interact_with_ui_element",
+    "parameters": {{
+      "element_id": "选择的元素UUID",
+      "action": "tap|input|swipe"
+    }},
+    "expected_result": "期望的操作结果"
+  }}
+}}
 ```
 
-请生成一个完整的Python测试用例文件。输出格式：
+现在请基于屏幕分析结果，制定下一步操作计划。"""
 
-```python
-# 生成的完整测试用例代码
+    @staticmethod
+    def get_mcp_completion_prompt(
+        generated_steps: List[Dict[str, Any]],
+        test_objective: str,
+        final_state: Dict[str, Any]
+    ) -> str:
+        """
+        MCP 用例完成 Prompt - 指导外部 LLM 整合所有步骤生成最终JSON
+        
+        Args:
+            generated_steps: 已生成的步骤列表
+            test_objective: 测试目标
+            final_state: 最终屏幕状态
+        """
+        
+        steps_summary = TestCaseGenerationPrompts._format_steps_summary(generated_steps)
+        
+        return f"""# 测试用例生成完成：整合所有步骤
+
+## ✅ 测试目标
+{test_objective}
+
+## 📋 已执行的步骤
+{steps_summary}
+
+## 🎯 最终状态
+**应用状态**: {final_state.get('app_state', 'unknown')}
+**当前内容**: {final_state.get('current_content', 'unknown')}
+**测试结果**: {"成功" if final_state.get('success', False) else "需要验证"}
+
+## 📝 最终任务
+
+请将所有步骤整合成完整的 Only-Test JSON 测试用例：
+
+```json
+{{
+  "testcase_id": "TC_brasiltvmobile_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+  "name": "基于测试目标的简短名称",
+  "description": "{test_objective}",
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {{
+    "type": "mobile",
+    "detected_at": "{datetime.now().isoformat()}",
+    "screen_info": "从最终状态获取"
+  }},
+  "execution_path": [
+    // 将所有执行的步骤按顺序整合到这里
+    // 每个步骤包含完整的 path 追溯信息
+  ]
+}}
 ```
 
-现在请开始生成:"""
-    
+## ⚠️ 整合要求
+
+1. **保持步骤顺序**: 按执行顺序排列所有步骤
+2. **完整追溯信息**: 每步都要有完整的 path 字段
+3. **真实元素信息**: 使用实际的 UUID 和元素属性
+4. **执行时间记录**: 包含每步的执行时间和结果
+5. **成功标准验证**: 确保每步都有明确的成功判断
+
+请输出最终的完整 JSON 测试用例。"""
+
     @staticmethod
     def get_interactive_generation_prompt(
         description: str,
@@ -458,6 +615,69 @@ poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=Fa
 ## 元素映射关系
 {mapping_text}
 """
+
+    @staticmethod
+    def _format_mcp_elements(elements: List[Dict[str, Any]]) -> str:
+        """格式化 MCP 屏幕元素信息"""
+        if not elements:
+            return "暂无可用元素信息。"
+        
+        formatted_elements = []
+        for i, elem in enumerate(elements[:20], 1):  # 显示前20个元素
+            elem_info = f"""
+**元素 {i}**:
+- UUID: `{elem.get('uuid', 'N/A')}`
+- Resource ID: `{elem.get('resource_id', 'N/A')}`
+- 文本内容: "{elem.get('content', elem.get('text', ''))}"
+- 元素类型: {elem.get('type', elem.get('class_name', 'unknown'))}
+- 可交互: {'✅' if elem.get('interactivity', elem.get('clickable', False)) else '❌'}
+- 位置: {elem.get('bbox', [])}
+- 中心坐标: ({elem.get('center_x', 0):.3f}, {elem.get('center_y', 0):.3f})
+"""
+            formatted_elements.append(elem_info)
+        
+        return '\n'.join(formatted_elements)
+
+    @staticmethod
+    def _format_mcp_previous_steps(previous_steps: List[Dict[str, Any]]) -> str:
+        """格式化 MCP 之前执行的步骤"""
+        if not previous_steps:
+            return ""
+        
+        steps_text = []
+        for i, step in enumerate(previous_steps, 1):
+            step_info = f"""
+**步骤 {i}**: {step.get('description', 'N/A')}
+- 操作: {step.get('action', 'N/A')}
+- 目标元素: {step.get('target_element', {}).get('uuid', 'N/A')}
+- 执行结果: {step.get('result', 'N/A')}
+"""
+            steps_text.append(step_info)
+        
+        return f"""
+## 📝 已执行的步骤
+{''.join(steps_text)}
+"""
+
+    @staticmethod
+    def _format_steps_summary(steps: List[Dict[str, Any]]) -> str:
+        """格式化步骤摘要"""
+        if not steps:
+            return "暂无执行步骤。"
+        
+        summary_lines = []
+        for i, step in enumerate(steps, 1):
+            summary = f"""
+**步骤 {i}**: {step.get('description', 'N/A')}
+- 页面: {step.get('page', 'N/A')} 
+- 操作: {step.get('action', 'N/A')}
+- 目标: {step.get('target_element', {}).get('uuid', 'N/A')}
+- 结果: {step.get('success', False) and '✅ 成功' or '❌ 失败'}
+- 用时: {step.get('execution_time', 0):.2f}s
+"""
+            summary_lines.append(summary)
+        
+        return '\n'.join(summary_lines)
 
 
 # 预定义的常用Prompt模板

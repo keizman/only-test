@@ -199,8 +199,65 @@ except Exception as e:
         steps = []
         
         metadata = json_data.get('metadata', json_data)
+        variables = json_data.get('variables', {}) if isinstance(json_data.get('variables', {}), dict) else {}
         raw_steps = metadata.get('steps', [])
         
+        # 兼容 LLM/MCP 生成的 execution_path 结构
+        if not raw_steps and 'execution_path' in json_data:
+            for ep in json_data.get('execution_path', []):
+                action_str = ep.get('action', 'click').lower()
+                page = ep.get('page', 'unknown')
+                comment = ep.get('description', '')
+                timeout = float(ep.get('timeout', 10))
+                input_text = ep.get('data')
+                if isinstance(input_text, str) and input_text.startswith('${') and input_text.endswith('}'):
+                    var_name = input_text[2:-1]
+                    input_text = variables.get(var_name, input_text)
+                target_element = self._select_best_selector(ep.get('target', {}))
+
+                action_map = {
+                    'click': ActionType.CLICK,
+                    'input': ActionType.INPUT,
+                    'swipe': ActionType.SWIPE,
+                    'wait_for_elements': ActionType.WAIT,
+                    'wait': ActionType.WAIT,
+                    'restart': ActionType.RESTART,
+                    'launch': ActionType.LAUNCH,
+                    'assert': ActionType.ASSERT,
+                }
+                action_type = action_map.get(action_str, ActionType.CLICK)
+
+                step = ActionStep(
+                    action_type=action_type,
+                    page=page,
+                    comment=comment,
+                    target_element=target_element,
+                    input_text=input_text,
+                    timeout=timeout,
+                )
+                step.locate_strategy = self._determine_locate_strategy(step)
+                steps.append(step)
+
+            logger.info(f"解析了 {len(steps)} 个动作步骤 (execution_path)")
+            return steps
+    def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
+        """从 priority_selectors/selectors 选择最优定位（resource_id > content_desc > text）。"""
+        if not isinstance(target, dict):
+            return None
+        selectors = target.get('priority_selectors') or target.get('selectors') or []
+        if not isinstance(selectors, list):
+            return None
+        for sel in selectors:
+            if isinstance(sel, dict) and sel.get('resource_id'):
+                return sel['resource_id']
+        for sel in selectors:
+            if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('desc')):
+                return sel.get('content_desc') or sel.get('desc')
+        for sel in selectors:
+            if isinstance(sel, dict) and sel.get('text'):
+                return sel['text']
+        return None
+
         for step_data in raw_steps:
             # 解析动作类型
             action_str = step_data.get('action', 'click').lower()
@@ -231,6 +288,23 @@ except Exception as e:
         
         logger.info(f"解析了 {len(steps)} 个动作步骤")
         return steps
+    def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
+        """从 priority_selectors/selectors 选择最优定位（resource_id > content_desc > text）。"""
+        if not isinstance(target, dict):
+            return None
+        selectors = target.get('priority_selectors') or target.get('selectors') or []
+        if not isinstance(selectors, list):
+            return None
+        for sel in selectors:
+            if isinstance(sel, dict) and sel.get('resource_id'):
+                return sel['resource_id']
+        for sel in selectors:
+            if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('desc')):
+                return sel.get('content_desc') or sel.get('desc')
+        for sel in selectors:
+            if isinstance(sel, dict) and sel.get('text'):
+                return sel['text']
+        return None
     
     def _determine_locate_strategy(self, step: ActionStep) -> ElementLocateStrategy:
         """确定元素定位策略"""
@@ -456,6 +530,13 @@ except Exception as e:
             ])
             
             complete_code = '\n'.join(code_lines)
+            # 若未提供真实设备连接，注释 connect_device 行，便于使用 airtest run --device
+            placeholder = 'connect_device("android://127.0.0.1:5037/device_id?touch_method=ADBTOUCH&")'
+            if placeholder in complete_code:
+                complete_code = complete_code.replace(
+                    placeholder,
+                    '# connect_device("android://127.0.0.1:5037/DEVICE?touch_method=ADBTOUCH&")  # 使用 airtest run --device 传入或在此填写'
+                )
             
             # 保存到文件
             if output_file:
@@ -672,3 +753,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

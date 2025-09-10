@@ -66,14 +66,15 @@ applications:
 
 # 测试套件配置
 test_suites:
-
+  vod_playback_test:
     devices: ["mi9_pro_5g"]
     applications: ["brav_mob"]
-    - type: "app_launch"
-      description: "vod 点播播放测试"
-      json_path: "testcases/generate/example_airtest_record.json"
-      path: "testcases/python/example_airtest_record.py"
-      coord_py_case: "testcases/python/example_airtest_record.py"  # if is "", use path
+    cases:
+      - type: "app_launch"
+        description: "vod 点播播放测试"
+        json_path: "testcases/generate/example_airtest_record.json"
+        path: "testcases/python/example_airtest_record.py"
+        coord_py_case: "testcases/python/example_airtest_record.py"  # if is "", use path
 # when it has already excute, it will record the coordinates of the elements in json_path each step. the we can use this py to excute the case to speed-up excute tiem .
 
 

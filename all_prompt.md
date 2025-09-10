@@ -28,7 +28,7 @@
 
 ----
 
-1.检查当前的 omniparser 输出结果是什么 ,我看到其它地方直接使用 json 了, 你可以四送这张可用图过去实验世界结构, 验证当前结构是如设想"C:\Download\git\uni\zdep_OmniParser-v2-finetune\imgs\yc_vod_playing_fullscreen.png" 
+1.检查当前的 omniparser 输出结果是什么 ,我看到其它地方直接使用 json 了, 你可以送这张可用图过去实验世界结构, 验证当前结构是如设想"C:\Download\git\uni\zdep_OmniParser-v2-finetune\imgs\yc_vod_playing_fullscreen.png" 
 2.很多注释或说明的功能是与当前项目无关的 比如 在抖音中搜索'美食视频'，如果搜索框有内容先清空, 请再遇到这些内容更改为测试 com.mobile.brasiltvmobile 的播放功能, 等, 避免引起后人对其疑惑
 2.实验 MCP 功能, 尝试发送消息到 LLM, 确认其可用, 之后确认如何与我们创建的 MCP 进行交互, 你可以 mock 一段内容, 来进行尝试
 3.最终那个目的是成功生成一个用例, 指定好 plan 后开始work, 注意, 不是你来生成,  而是模拟人一样使用另一个 LLM 来生成一个用例, 这才是这个项目的意义所在
@@ -83,3 +83,16 @@
 这就是再教导一个 mem 有限的孩童做事情, 你需要知道它的记忆有限, 因此要尽可能的简单又清晰的做好一切描述, 才能确保走在正确的路上, 否则只是原地
 这个问答过程也是让你自己更了解这个项目内容的过程)
 
++------
+
+
+1.检查当前的 omniparser 输出结果是什么 ,我看到其它地方直接使用 json 了, 你可以送这张可用图过去实验世界结构, 验证当前结构是如设想"C:\Download\git\uni\zdep_OmniParser-v2-finetune\imgs\yc_vod_playing_fullscreen.png" 
+2.实验 MCP 功能, 尝试发送消息到 LLM, 确认其可用, 之后确认如何与我们创建的 MCP 进行交互, 你可以 mock 一段内容, 来进行尝试
+3.最终那个目的是成功生成一个用例, 指定好 plan 后开始work, 注意, 不是你来生成,  而是模拟人一样使用另一个 LLM 来生成一个用例, 这才是这个项目的意义所在
+
+-*--
+
+▌你可尝试使用真实方式验证, env 中包含了 请求 LLM 的apikey , 与 URL 等信息, 你可直接接入后请求, adb 目前已链接设备 192.168.100.112:5555   device product:crux model:Mi9_Pro_5G device:crux transport_id:2 这是目前
+▌的测试设备, airtest run C:\Download\git\uni\airtest\testcases\python\example_airtest_record.py  是我手动录制的文件, 也是期望的生成后的 py文件样式, 我期望的是你打通整个流程, 最终直接输入功能点生成一条用例, 如
+▌果有任何不明白的请记录并问题, QA.md 是一个值得信赖的我想说的话.
+还有一点重要的需要你明确, 外部 LLM 根本不知道如何生成一个用例, 不知道要做什么, 不知道如何编排使用 MCP,  请你善用C:\Download\git\uni\airtest\templates\prompts\generate_cases.py  prompt 定义和标签定义, 目前可能并不完善, 我需要你精通掌握后修改它们到最优 C:\Download\git\uni\airtest\templates\prompts\

@@ -15,7 +15,7 @@ from pathlib import Path
 
 # 导入自定义模块（实际使用时需要确保导入路径正确）
 from ..metadata_engine.conditional_logic import ConditionalLogicEngine
-from ..phone_use_core.screen_capture import ScreenCapture
+from ..screen_capture import ScreenCapture
 
 # 可选导入 - 如果模块不存在则使用None
 try:

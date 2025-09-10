@@ -8,6 +8,7 @@ Only-Test Omniparser 客户端
 """
 
 import asyncio
+import os
 import json
 import logging
 import time
@@ -93,7 +94,7 @@ class OmniparserClient:
     """
     
     def __init__(self, 
-                 server_url: str = "http://100.122.57.128:9333",
+                 server_url: str = None,
                  timeout: int = 30,
                  max_retries: int = 3):
         """
@@ -104,18 +105,30 @@ class OmniparserClient:
             timeout: 请求超时时间（秒）
             max_retries: 最大重试次数
         """
+        # 优先从环境变量读取，默认采用 100.* 内网段
+        if not server_url:
+            server_url = os.getenv("OMNIPARSER_SERVER", "http://100.122.57.128:9333")
         self.server_url = server_url.rstrip('/')
         self.timeout = timeout
         self.max_retries = max_retries
         
         # 创建会话和重试策略
         self.session = requests.Session()
-        retry_strategy = Retry(
-            total=max_retries,
-            status_forcelist=[429, 500, 502, 503, 504],
-            method_whitelist=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
-            backoff_factor=1
-        )
+        # 兼容 urllib3 v1/v2: method_whitelist(旧) / allowed_methods(新)
+        try:
+            retry_strategy = Retry(
+                total=max_retries,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
+                backoff_factor=1,
+            )
+        except TypeError:
+            retry_strategy = Retry(
+                total=max_retries,
+                status_forcelist=[429, 500, 502, 503, 504],
+                method_whitelist=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
+                backoff_factor=1,
+            )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
@@ -127,6 +140,7 @@ class OmniparserClient:
             'Accept-Encoding': 'gzip, deflate',
             'User-Agent': 'Only-Test-Visual-Recognition/1.0'
         })
+        logger.info(f"OmniParser server: {self.server_url}")
         
         # 内部状态
         self._server_healthy = None
@@ -168,7 +182,9 @@ class OmniparserClient:
             
             # 解析响应
             result = response.json()
-            is_healthy = result.get("status") == "healthy"
+            # 兼容不同的服务器响应格式
+            is_healthy = (result.get("status") == "healthy" or 
+                         result.get("message") == "Omniparser API ready")
             
             # 更新缓存状态
             self._server_healthy = is_healthy
