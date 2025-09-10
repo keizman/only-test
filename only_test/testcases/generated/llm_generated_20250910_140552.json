@@ -1,0 +1,149 @@
+{
+  "testcase_id": "TC_brasiltvmobile_20250910_140551",
+  "name": "播放页搜索结果验证",
+  "description": "验证播放页的搜索与结果展示",
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {
+    "type": "mobile",
+    "detected_at": "2025-09-10T14:05:51.895155",
+    "screen_info": "elements=17"
+  },
+  "execution_path": [
+    {
+      "step_number": 1,
+      "page": "播放页",
+      "operation": "点击搜索框",
+      "target": {
+        "uuid": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+        "resource_id": "com.mobile.brasiltvmobile:id/search_input",
+        "class": "android.widget.EditText",
+        "text": ""
+      },
+      "result": "failure",
+      "duration_seconds": 0.0,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T06:05:52.727883Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_140552_0",
+          "iteration": 1,
+          "step_index": 1
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": null,
+          "input_data": null,
+          "success_criteria": null
+        }
+      },
+      "validation": {
+        "expected": "搜索框获得焦点",
+        "actual": "未获得焦点"
+      }
+    },
+    {
+      "step_number": 2,
+      "page": "播放页",
+      "operation": "输入搜索关键词并提交",
+      "target": {
+        "uuid": "b2c3d4e5-6789-0abc-def1-234567890abc",
+        "resource_id": "com.mobile.brasiltvmobile:id/search_button",
+        "class": "android.widget.ImageButton",
+        "content_desc": "搜索"
+      },
+      "result": "failure",
+      "duration_seconds": 0.0,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T06:05:52.727883Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_140552_0",
+          "iteration": 1,
+          "step_index": 2
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": null,
+          "input_data": null,
+          "success_criteria": null
+        }
+      },
+      "validation": {
+        "expected": "展示搜索结果列表",
+        "actual": "未展示任何结果"
+      }
+    }
+  ]
+}

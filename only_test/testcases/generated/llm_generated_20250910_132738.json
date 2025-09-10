@@ -1,0 +1,195 @@
+{
+  "testcase_id": "TC_brasiltvmobile_20250910_132738",
+  "name": "播放页搜索与结果展示验证",
+  "description": "验证播放页的搜索与结果展示",
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {
+    "type": "mobile",
+    "detected_at": "2025-09-10T13:27:38.092407",
+    "screen_info": "unknown"
+  },
+  "execution_path": [
+    {
+      "step": 1,
+      "page": null,
+      "action": null,
+      "target": null,
+      "result": "failed",
+      "duration_seconds": 0.0,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T05:27:38.773898Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_132738_0",
+          "iteration": 1,
+          "step_index": 1
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": null,
+          "input_data": null,
+          "success_criteria": null
+        }
+      }
+    },
+    {
+      "step": 2,
+      "page": null,
+      "action": null,
+      "target": null,
+      "result": "failed",
+      "duration_seconds": 0.0,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T05:27:38.773898Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_132738_0",
+          "iteration": 1,
+          "step_index": 2
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": null,
+          "input_data": null,
+          "success_criteria": null
+        }
+      }
+    },
+    {
+      "step": 3,
+      "page": null,
+      "action": null,
+      "target": null,
+      "result": "failed",
+      "duration_seconds": 0.0,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T05:27:38.773898Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_132738_0",
+          "iteration": 1,
+          "step_index": 3
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": null,
+          "input_data": null,
+          "success_criteria": null
+        }
+      }
+    }
+  ],
+  "final_state": {
+    "application_state": "unknown",
+    "current_content": "elements=0",
+    "test_result": "success"
+  }
+}

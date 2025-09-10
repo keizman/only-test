@@ -1,0 +1,79 @@
+{
+  "testcase_id": "TC_brasiltvmobile_20250910_105125",
+  "name": "播放页搜索结果验证",
+  "description": "验证播放页的搜索与结果展示",
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {
+    "type": "mobile",
+    "detected_at": "2025-09-10T10:51:25.974512",
+    "screen_info": "unknown"
+  },
+  "execution_path": [
+    {
+      "step_index": 1,
+      "action": "N/A",
+      "page": "N/A",
+      "element_uuid": null,
+      "element_properties": null,
+      "path": {
+        "schema": {
+          "version": "v1",
+          "timestamp": "2025-09-10T02:51:27.567693Z"
+        },
+        "workflow": {
+          "workflow_id": "wf_20250910_105127_0",
+          "iteration": 1,
+          "step_index": 1
+        },
+        "tool": {
+          "name": "llm_generate_testcase",
+          "category": "generator",
+          "version": "1.0"
+        },
+        "device": {
+          "id": "unknown"
+        },
+        "app": {
+          "package": "com.mobile.brasiltvmobile"
+        },
+        "recognition": {
+          "strategy": null,
+          "playback_state": null,
+          "source": null,
+          "fallback_used": false,
+          "screen_hash": null,
+          "screenshot_path": null
+        },
+        "element": {
+          "uuid": null,
+          "resource_id": null,
+          "content_desc": null,
+          "text": null,
+          "class_name": null,
+          "bbox_norm": null,
+          "bounds_px": null,
+          "selector_used": null,
+          "selector_candidates": [],
+          "confidence": null
+        },
+        "decision": {
+          "reasoning": null,
+          "score": null
+        },
+        "action": {
+          "action_type": "N/A",
+          "input_data": null,
+          "success_criteria": null
+        }
+      },
+      "result": false,
+      "duration_seconds": 0.0,
+      "validation": "步骤未执行，标记为失败"
+    }
+  ],
+  "overall_result": true,
+  "final_state": {
+    "application_state": "unknown",
+    "content_summary": "elements=0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "testcase_id": "TC_brasiltvmobile_20250910_140229",
+  "name": "播放页搜索与结果展示验证",
+  "description": "验证播放页的搜索与结果展示",
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {
+    "type": "mobile",
+    "detected_at": "2025-09-10T14:02:29.749020",
+    "screen_info": "unknown"
+  },
+  "execution_path": []
+}
