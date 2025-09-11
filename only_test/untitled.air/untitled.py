@@ -1,7 +1,7 @@
 # -*- encoding=utf8 -*-
 __author__ = "zard"
 
-from airtest.core.api import *
+from only_test.lib.airtest_compat import *
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
 poco.click(0.4996527777777778,0.8701171875)

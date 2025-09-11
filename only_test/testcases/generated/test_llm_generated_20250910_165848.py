@@ -11,7 +11,7 @@
 
 import pytest
 import allure
-from airtest.core.api import *
+from only_test.lib.airtest_compat import *
 from airtest.core.android.android import Android
 from airtest.core.cv import Template
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco

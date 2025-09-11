@@ -27,7 +27,7 @@ async def main():
     parser.add_argument("--target-app", default="com.mobile.brasiltvmobile")
     parser.add_argument("--mode", choices=["single", "continuous"], default="continuous")
     parser.add_argument("--consecutive-no-ad", type=int, default=3)
-    parser.add_argument("--max-duration", type=float, default=10.0)
+    parser.add_argument("--max-duration", type=float, default=20.0)
     args = parser.parse_args()
 
     result = await close_ads(

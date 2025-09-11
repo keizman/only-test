@@ -1,128 +1,157 @@
 {
   "testcase_id": "TC_brasiltvmobile_golden",
-  "name": "VOD 正常播放（黄金示例）",
-  "description": "示例：关闭广告 → 搜索 '720' → 点击首个结果 → 播放并断言播放状态",
+  "name": "测试 vod 正常播放, 点播节目名称 西语手机端720资源02",
+  "description": "测试 vod 正常播放, 点播节目名称 西语手机端720资源02",
   "target_app": "com.mobile.brasiltvmobile",
-  "metadata": {"priority": "high", "category": "playback", "estimated_duration": 90},
+  "metadata": {
+    "priority": "high",
+    "category": "playback",
+    "estimated_duration": 90,
+    "tags": ["vod", "playing"],
+    "page_scope": ["home", "search", "search_result", "vod_playing_detail", "playing"]
+  },
   "variables": {"search_keyword": "西语手机端720资源02"},
   "execution_path": [
     {
       "step": 1,
       "page": "app_initialization",
+      "type": "ui",
       "action": "restart",
-      "description": "重启应用清理环境状态",
-      "timeout": 3
+      "description": "重启应用清理环境状态(多次关闭)",
+      "timeout": 3,
+      "expected_result": "应用已完全停止"
     },
     {
       "step": 2,
       "page": "app_startup",
+      "type": "ui",
       "action": "launch",
       "description": "启动应用并等待加载完成",
-      "timeout": 5
+      "timeout": 5,
+      "expected_result": "应用进入首页"
     },
     {
       "step": 3,
       "page": "home",
-      "action": "click",
-      "description": "处理首页弹窗 - 关闭升级提示弹窗",
-      "target": {"priority_selectors": [
-        {"resource_id": "com.mobile.brasiltvmobile:id/ivClose"}
-      ]},
-      "timeout": 5,
-      "success_criteria": "升级提示消失"
+      "type": "tool",
+      "tool_name": "close_ads",
+      "description": "进入 APK 后使用统一策略自动关闭广告/弹窗（连续3次未检测到广告或20秒内结束）",
+      "params": {"mode": "continuous", "consecutive_no_ad": 3, "max_duration": 20.0},
+      "timeout": 20,
+      "expected_result": "首页广告/弹窗已关闭"
     },
     {
       "step": 4,
       "page": "home",
-      "action": "click",
-      "description": "处理首页弹窗 - 关闭广告弹窗",
-      "target": {"priority_selectors": [
-        {"resource_id": "com.mobile.brasiltvmobile:id/mIvClose"}
-      ]},
-      "timeout": 5,
-      "success_criteria": "广告弹窗消失"
-    },
-    {
-      "step": 5,
-      "page": "home",
+      "type": "ui",
       "action": "click",
       "description": "点击搜索按钮进入搜索页面",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/mVodImageSearch"}
       ]},
-      "timeout": 5
+      "timeout": 5,
+      "expected_result": "进入搜索页"
     },
     {
-      "step": 6,
+      "step": 5,
       "page": "search",
+      "type": "ui",
       "action": "click",
       "description": "点击搜索输入框激活输入状态",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/searchEt"}
       ]},
-      "timeout": 5
+      "timeout": 5,
+      "expected_result": "输入框获得焦点"
     },
     {
-      "step": 7,
+      "step": 6,
       "page": "search",
+      "type": "ui",
       "action": "input",
       "description": "输入搜索关键词",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/searchEt"}
       ]},
       "data": "${search_keyword}",
-      "timeout": 5
+      "timeout": 5,
+      "expected_result": "关键词已输入"
     },
     {
-      "step": 8,
+      "step": 7,
       "page": "search",
+      "type": "ui",
       "action": "click",
       "description": "点击搜索按钮执行搜索操作",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/searchCancel"}
       ]},
-      "timeout": 5
+      "timeout": 5,
+      "expected_result": "进入搜索结果页"
+    },
+    {
+      "step": 8,
+      "page": "search_result",
+      "type": "ui",
+      "action": "click",
+      "description": "点击目标节目卡片",
+      "target": {
+        "priority_selectors": [
+          {"resource_id": "com.mobile.brasiltvmobile:id/mPosterName"},
+          {"text": "西语手机端720资源02"}
+        ]
+      },
+      "timeout": 10,
+      "expected_result": "进入播放详情页"
     },
     {
       "step": 9,
-      "page": "search_result",
-      "action": "click",
-      "description": "点击搜索结果中第一个节目的封面图片",
-      "target": {"priority_selectors": [
-        {"resource_id": "com.mobile.brasiltvmobile:id/posterImageView"},
-        {"resource_id": "com.mobile.brasiltvmobile:id/searchResultList"}
-      ]},
-      "timeout": 10
-    },
-    {
-      "step": 10,
       "page": "vod_playing_detail",
+      "type": "ui",
       "action": "click",
       "description": "点击播放按钮开始播放视频",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/mPlayPauseIcon"}
       ]},
-      "timeout": 10
+      "timeout": 10,
+      "expected_result": "播放开始，出现广告"
+    },
+    {
+      "step": 10,
+      "page": "vod_playing_detail",
+      "type": "ui",
+      "action": "wait_for_elements",
+      "description": "等待广告播放完毕（Ads 消失）",
+      "target": {"priority_selectors": [
+        {"text": "Ads"}
+      ], "disappearance": true},
+      "timeout": 30,
+      "wait_after": 0.5,
+      "expected_result": "广告已结束"
     },
     {
       "step": 11,
       "page": "vod_playing_detail",
-      "action": "wait_for_elements",
-      "description": "等待广告播放完毕",
-      "target": {"priority_selectors": [
-        {"text": "Ads"}
-      ]},
-      "timeout": 30
+      "type": "tool",
+      "tool_name": "click_center_of",
+      "description": "点击视频中心区域唤起播控控件",
+      "params": {
+        "priority_selectors": [
+          {"resource_id": "com.mobile.brasiltvmobile:id/mPlayPauseIcon"}
+        ]
+      }
     },
     {
       "step": 12,
       "page": "vod_playing_detail",
+      "type": "ui",
       "action": "click",
       "description": "点击全屏按钮进入全屏播放模式",
       "target": {"priority_selectors": [
         {"resource_id": "com.mobile.brasiltvmobile:id/mImageFullScreen"}
       ]},
-      "timeout": 10
+      "timeout": 10,
+      "expected_result": "进入全屏播放"
     }
   ],
   "assertions": [
@@ -133,4 +162,3 @@
     }
   ]
 }
-

@@ -16,6 +16,10 @@ global_config:
 devices:
   # 设备唯一标识 (用于路径生成和资源管理)
   mi9_pro_5g:
+    # === 设备连接信息 ===
+    connection:
+      adb_serial: "192.168.100.112"               # ADB设备序列号(null=自动检测)
+      connection_timeout: 10
     # === 设备基本信息 ===
     phone_type: "android_phone"  # android_phone, android_tablet, android_tv
     custom_name: "小米9Pro 5G"
@@ -48,11 +52,7 @@ devices:
       fallback_mode: "visual"        # 主模式失败时的备用模式
       confidence_threshold: 0.8      # 视觉识别置信度
       element_wait_timeout: 10       # 元素等待超时
-      
-    # === 设备连接信息 ===
-    connection:
-      adb_serial: "192.168.100.112"               # ADB设备序列号(null=自动检测)
-      connection_timeout: 10
+
       
 
 # 应用配置组 - 支持多应用测试
@@ -65,6 +65,11 @@ applications:
     description: "brav_mob 公共"
     ui_activity: "com.mobile.brasiltv.activity.SplashAty"  
     # 启动方式可使用指定 activty 方式, 具体每一个 APK 是什么找开发看下就好 : adb shell am start -S -W com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.SplashAty  -S 强制重启, -n 不会停止, 只是再加一层 Activity
+  brav_tv:
+    package_name: "com.interactive.brasiliptv"
+    app_name: "Brav tv"
+    description: "brav_tv 葡语自有"
+    ui_activity: "com.interactive.brasiliptv.ui.activity.WelcomeActivity"    
 
 
 # 测试套件配置

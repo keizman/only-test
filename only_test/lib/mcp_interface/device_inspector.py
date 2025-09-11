@@ -22,6 +22,8 @@ from lib.visual_recognition import VisualIntegration, get_all_elements, is_media
 from lib.visual_recognition.visual_integration import IntegrationConfig
 from lib.device_adapter import DeviceAdapter
 from .mcp_server import mcp_tool
+from lib.yaml_monitor import YamlMonitor
+from lib.app_launcher import start_app as unified_start_app
 
 # === 广告检测/关闭关键词（统一常量） ===
 # 全部使用小写做比较，匹配时先对目标字符串 lower()
@@ -326,6 +328,28 @@ class DeviceInspector:
             "last_ads_info": last_info,
             "timed_out": (_t.time() >= end_t)
         }
+
+    @mcp_tool(
+        name="start_app",
+        description="启动应用：支持 app_id 或 package_name；若配置了 ui_activity 则优先使用该方式",
+        category="app_control",
+        parameters={
+            "application": {"type": "string", "description": "app_id 或 package_name"},
+            "force_restart": {"type": "boolean", "default": True},
+        }
+    )
+    async def start_app(self, application: str, force_restart: bool = True) -> Dict[str, Any]:
+        """统一的启动应用入口（读取 main.yaml，优先使用 ui_activity）。"""
+        if not self._initialized:
+            await self.initialize()
+        try:
+            # 通过 YAML 解析，支持 app_id / package
+            ym = YamlMonitor()
+            pkg = ym.get_package_name(application) or application
+            result = unified_start_app(application=pkg, device_id=self.device_id, force_restart=force_restart)
+            return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # === 广告自动处理相关 ===
     def _elem_center(self, bounds: list) -> tuple:

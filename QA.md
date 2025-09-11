@@ -439,3 +439,178 @@ assets/
   - 加入 OmniParser Normalizer（coordinates→标准字段：uuid/content/bbox[0-1]/interactivity+像素 bounds），保证 XML/视觉统一结构。
   - 实现 path 溯源与工作流状态落盘（workflow_state.json、execution_progress.json、iteration_config.json），并在 Orchestrator 中串起来。
   - 固化 MCP 工具的入参/出参协议，以便真实 LLM 长期可用。
+
+
+## 🆕 统一约定与决策（2025-09-11）
+
+本节记录最近一轮关于“如何让外部 LLM 使用 MCP 生成真实、可执行用例而非臆造”的问答结论与落地改动。
+
+### 背景问题
+- 用外部 LLM 生成的用例经常“幻想 ID/选择器”，没有基于真实屏幕元素；一次性吐出多步；不做执行后的验证与回灌，导致不可执行。
+
+### 选用方案与理由（核心）
+1) TOOL_REQUEST 协议（拒绝臆造）
+- 无屏幕数据/不可信时，LLM 只能返回 `tool_request: analyze_current_screen`，而不是凭空编造 ID。
+- 理由：把“数据获取权”交还给 MCP/Orchestrator，让 LLM 没法凭空生成元素。
+
+2) 单步握手（Plan → Execute → Verify → Append）
+- LLM 每次“只产出一个下一步”，Orchestrator 执行并再次分析屏幕，然后进入下一轮。
+- 理由：把“录制式”的节奏还原为一步一取证，避免一次性长文本偏离现实。
+
+3) 白名单绑定 + 机读校验（step_validator）
+- 选择器必须来自 `elements` 白名单；`bounds_px`（如提供）必须与所选元素 `bbox` 完全一致；支持 `page_check_mode`（off/soft/hard）；返回 `chosen_element` 用于链路构建。
+- 理由：把“是否真实存在”从自然语言判断转为机读校验，彻底遏制幻想选择器。
+
+4) evidence/path/chain（可追溯）
+- evidence：`screen_hash`、`source_element_uuid`、`source_element_snapshot`
+- chain（权威链路）：nodes 记录 step/page/action/selector/uuid/screen_hash_before/after/human_line，edges 串起路径；由 Orchestrator 执行后生成。
+- 理由：把“为什么选它、前后屏幕如何变化”固化下来，便于复现与比对。
+
+### JSON vs Python（源/工件分离）
+- JSON 作为“权威源”，Python 作为“生成工件”。
+- 新增 JSON Schema：`only_test/tools/json_schema/testcase.schema.json`
+  - 支持 `type=ui|tool`；`priority_selectors/bounds_px/swipe` 等；每步 `expected_result`。
+- 代码生成器：`only_test/tools/codegen/json_to_airtest.py`
+  - 动作映射：restart→3x stop_app；launch；click；input（sleep(0.5)+text）；wait_for_elements（出现/消失）；swipe；assert(TODO)；
+  - 工具映射：close_ads、connect_device、click_center_of；
+  - 其它：
+    - 合并选择器：`poco(resourceId="...", text="...")`
+    - 输出中文：`ensure_ascii=False`
+    - `--business_path` 选项：生成业务路径头 `[path]`（剔除 app_initialization/app_startup）
+    - 提前 hoist connect_device 到 poco 初始化之前
+    - sys.path 加入 project_root，`from lib import ...` 生效
+- golden JSON 更新：`only_test/testcases/generated/golden_example_airtest_record.json`
+  - 去掉 bias 点击；Ads 消失后加 `wait_after=0.5`；新增 `click_center_of`（在全屏前点击视频中心唤起控件）；连续编号
+- 生成结果：
+  - `only_test/testcases/python/golden_from_json.py`（完整路径头）
+  - `only_test/testcases/python/golden_from_json_business.py`（业务路径头）
+- 理由：结构化的 JSON 更利于校验与自动转换；Python 工件保持与录制脚本“风格一致”，降低上手成本。
+
+### 示例文件（Few-shot）注入与过滤
+- 例子选择器：`only_test/tools/select_examples.py`
+  - 仅选取精心维护的 `.py` 用例；排除生成工件（文件名包含 `from_json` 或位于 `generated`）
+  - 小库（≤3）全量附带；大库（>3）精确取 3 个，并支持内容裁剪（trim）
+- 例子“摘要”器：`only_test/tools/digest_examples.py`
+  - 从 `.py` 中提取 `## [page]/[action]` 行，作为轻量 few-shot
+- Prompt 已嵌入 few-shot 区块并附带“禁止复制选择器/坐标”的硬性声明（见 `templates/prompts/generate_cases.py`）。
+- 理由：用示例教授“节奏/粒度”，而不是复制“选择器”；约束+校验保证安全。
+
+### Prompt 状态
+- `get_main_generation_prompt`：已加入 TOOL_REQUEST、单步输出、白名单绑定/evidence、Few‑shot + 禁止复制声明。
+- `get_mcp_step_guidance_prompt`：已具备严格结构与约束；可选再补一句“示例只用于节奏参考，严禁复制选择器”（目前非必须）。
+
+### 其它工程细节
+- `page_scope`：在 validator 中以 `soft|hard` 检查，保证步骤落在允许页面。
+- `content_desc` → Poco 参数名：默认使用 `description=`，若驱动差异可在生成器里调整。
+- 中文变量：生成 Python 时不再转义（ensure_ascii=False）。
+
+### 后续可选项
+- 在 golden JSON 中加入 `connect_device` 工具步，实现自动设备连接（现生成器已支持）。
+- 在 Orchestrator 中自动调用 `select_examples.py` 注入示例到 Prompt。
+- 提供 JSON Schema 校验 CLI，确保编写期即可发现结构问题。
+
+> 结论：这一套“TOOL_REQUEST + 单步握手 + 白名单绑定 + 机读校验 + 证据链 + 结构化 JSON + 代码生成”的组合，既能压制 LLM 幻想，又保持了录制脚本的使用体验，后续可平滑拓展。
+
+
+
+
+本节补充此前未在 QA.md 明确记录、但对工程落地至关重要的“项目逻辑”。如有不确定之处，我以「[QUERY]」标注等待确认。
+
+### 1) Orchestrator 总控流程（Plan → Execute → Verify → Append）
+- 输入：test_objective、tags、page_scope（可选）
+- 初始化：调用 `analyze_current_screen()` 获取 {screen_hash, current_page, elements}
+- 循环（最多 N 步）：
+  1. 构造 Prompt（带 Few-shot 示例）→ 调用 LLM → 产出两种之一：
+     - tool_request（name=analyze_current_screen）
+     - 单步决策（analysis/next_action/evidence）
+  2. 若 tool_request：再次 `analyze_current_screen()`，继续下一轮
+  3. 若单步：调用 `validate_step(screen, step, page_check_mode, allowed_pages)`
+     - 白名单绑定检查、bounds 与 bbox 一致性、页面一致性（soft/hard）、结构检查
+  4. 通过则执行 `perform_ui_action(step)`，记录耗时
+  5. 执行后再次 `analyze_current_screen()` 得到新屏
+  6. 记录 execution_path 条目与 chain node（step/page/action/selector/uuid/screen_hash_before/after/human_line/meta）
+  7. 更新 screen，继续下一轮；可在达到目标或失败时中止
+- 输出：
+  - llm_generated*.json（包含 execution_path + chain + final_screen）
+  - 可选：生成 Python（json_to_airtest.py）
+
+### 2) Validator 规则（step_validator）
+- 允许动作：click/input/wait_for_elements/wait/restart/launch/assert/swipe
+- 选择器键：resource_id/text/content_desc（蛇形命名）；必须来源于 elements 白名单
+- bounds 规则：如提供 bounds_px，必须与所选元素 bbox 完全一致；否则不得提供
+- 页面一致性：page_check_mode = off|soft|hard；allowed_pages = page_scope
+- evidence 校验：screen_hash 一致、source_element_uuid 对应 chosen_element、snapshot.uuid 一致
+- 返回值：ok、errors（WARN(page): 前缀为软告警）、chosen_element（用于链路）
+
+### 3) Evidence / Path / Chain（可追溯）
+- evidence（随单步决策返回）：
+  - screen_hash、source_element_uuid、source_element_snapshot（原样贴元素）
+- path（可选）：mcp_tool_used、analysis_result/decision_reason、screen_hash_before 等
+- chain（由 Orchestrator 生成）：
+  - nodes: step/page/action/selector/element_uuid/screen_hash_before/after/result/human_line/meta(tags,page_scope)
+  - edges: [{from, to}, ...]
+- 建议：最终结果 JSON 中包含 chain；执行期将截图/日志落盘以便对照
+
+### 4) JSON Schema 关键字段（简述）
+- 顶层：testcase_id/name/description/target_app/metadata(tags,page_scope)/variables/execution_path/assertions
+- execution_path.step：
+  - type: ui|tool
+  - action: launch|restart|click|input|wait|wait_for_elements|assert|swipe（ui 时必填）
+  - tool_name: close_ads|connect_device|click_center_of|...（tool 时必填）
+  - target: priority_selectors|bounds_px|swipe|disappearance|bias(不再推荐)
+  - data/timeout/wait_after/expected_result
+- 规范：去除 bias 依赖；鼓励选择器 + wait_after 细化稳定性
+
+### 5) 代码生成映射（json_to_airtest.py）
+- restart → stop_app×3 + sleep(timeout)
+- launch → start_app + sleep(timeout)
+- click → poco(...).click()（选择器组合：resourceId + text + description）
+- input → sleep(0.5) + text("…")（变量 `${var}` 解析为 variables[var]）
+- wait_for_elements → wait_for_disappearance/appearance(timeout)
+- swipe → swipe([sx,sy],[ex,ey],duration)
+- assert → TODO（等待规范）
+- 工具：
+  - close_ads → asyncio.run(close_ads(...))
+  - connect_device → connect_device(uri)（poco init 前 hoist）
+  - click_center_of → get_position() + poco.click([cx, cy])
+- 其它：
+  - 中文字符串 ensure_ascii=False
+  - `--business_path` 生成业务路径头（剔除 app_* 页面）
+  - sys.path: 注入 repo_root + project_root
+
+### 6) Prompt 集成（Few-shot 示例）
+- 示例选择：`only_test/tools/select_examples.py`（过滤生成工件，≤3 全量，>3 取 3 个，支持 trim）
+- 示例摘要（可选）：`only_test/tools/digest_examples.py` 提取 `## [page]/[action]` 行
+- Prompt 声明（已加入）：
+  - 示例仅用于“节奏/粒度”参考；严禁复制选择器/坐标
+  - 选择器必须来自 MCP 返回的 elements 白名单；bounds 必须等于 bbox
+- 使用：把 examples 传入 `get_main_generation_prompt` / `get_mcp_step_guidance_prompt`
+
+### 7) Tags & page_scope
+- tags：用于 few-shot 选择与策略（如播放场景优先视觉识别）
+- page_scope：用于限制可执行页面（validator soft|hard 检查）；同时写入 chain.meta
+
+### 8) 失败处理与重试（基线）
+- 结构/白名单/页面错误 → 返回错误给 LLM 修复（同一屏）
+- 执行失败（脚本层异常）→ 暂以报错为主，可逐步加入重试（比如 wait_for_elements 的出现→消失）
+- 建议后续将失败分类与重试策略配置化（per action/per page）
+
+### 9) 命名与落盘
+- JSON 源：`only_test/testcases/generated/*.json`
+- Python 工件：`only_test/testcases/python/*.py`
+- 业务路径头：可生成 `*_business.py` 做审阅与回放
+- chain：作为结果 JSON 的一部分；截图/日志落到 assets/{pkg}_{device}/
+
+### 10) [QUERY] 未决问题（请确认/答复）
+- [QUERY] 屏幕“页面字段”统一使用 `current_page` 吗？若使用 Activity 名称，字段名是否约定为 `current_activity`？二者是否同时提供？
+- [QUERY] Poco 对 content_desc 的参数名是否一律使用 `description=`？是否存在机型/驱动差异需要额外适配？
+- [QUERY] assert 步骤的标准实现：
+  - 是否以“播放检测”为主（ADB audio/相似度阈值=99%）、或加上 UI 文案存在性检查？
+  - 断言模板函数名/位置（例如 only_test/lib/assertions.py）？
+- [QUERY] connect_device 的 URI 规范与来源（是否从变量/配置注入），是否默认在所有用例开头自动生成该工具步？
+- [QUERY] path/evidence 的最终字段集合是否固定为（tool/screen_hash/selectors/decision_reason）？是否需要记录 `screen_hash_before/after` 在 path 中，还是只在 chain 中？
+- [QUERY] 示例注入策略默认使用完整代码还是摘要 digest？单轮最大 tokens 预算？
+- [QUERY] 默认超时策略与全局配置：如 restart/launch/wait_for_elements 的缺省 timeout 与 wait_after 是否集中可配？
+- [QUERY] 生成的 chain 是否与测试报告（Allure 等）联动？是否将 chain/截图链接到报告中？
+- [QUERY] 工具步的标准化命名集合：除 close_ads / connect_device / click_center_of 外，还需哪些（如 handle_permission_dialog / wait_ad_countdown）？
+

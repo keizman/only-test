@@ -12,12 +12,8 @@ Only-Test MCP (Model Context Protocol) Interface
 - 错误分析和修复建议
 """
 
-from .mcp_server import MCPServer
-from .tool_registry import ToolRegistry, tool
-from .device_inspector import DeviceInspector
-from .case_generator import InteractiveCaseGenerator
-from .feedback_loop import FeedbackLoop
-from .workflow_orchestrator import WorkflowOrchestrator
+# 为避免 `python -m only_test.lib.mcp_interface.device_inspector` 运行时的重复导入警告，
+# 不在此处直接导入子模块，而是通过 __getattr__ 延迟加载。
 
 __version__ = "1.0.0"
 __author__ = "Only-Test Team"
@@ -32,3 +28,24 @@ __all__ = [
     "FeedbackLoop",
     "WorkflowOrchestrator"
 ]
+
+def __getattr__(name):  # PEP 562
+    if name == "DeviceInspector":
+        from .device_inspector import DeviceInspector
+        return DeviceInspector
+    if name in ("MCPServer",):
+        from .mcp_server import MCPServer
+        return MCPServer
+    if name in ("ToolRegistry", "tool"):
+        from .tool_registry import ToolRegistry, tool
+        return {"ToolRegistry": ToolRegistry, "tool": tool}[name]
+    if name == "InteractiveCaseGenerator":
+        from .case_generator import InteractiveCaseGenerator
+        return InteractiveCaseGenerator
+    if name == "FeedbackLoop":
+        from .feedback_loop import FeedbackLoop
+        return FeedbackLoop
+    if name == "WorkflowOrchestrator":
+        from .workflow_orchestrator import WorkflowOrchestrator
+        return WorkflowOrchestrator
+    raise AttributeError(name)

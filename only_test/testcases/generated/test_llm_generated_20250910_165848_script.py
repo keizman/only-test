@@ -2,7 +2,7 @@
 # [tag] 
 # [path] 
 
-from airtest.core.api import *
+from only_test.lib.airtest_compat import *
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 import logging
 

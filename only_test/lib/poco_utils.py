@@ -7,14 +7,27 @@ Poco工具函数 - 统一管理本地Poco库的导入
 import sys
 import os
 from pathlib import Path
+from typing import Optional, Dict, Any
 
 # 立即设置Poco路径，在模块导入时就执行
+def _find_repo_root(start: Path) -> Path:
+    p = start.resolve()
+    # 尝试向上寻找包含 Poco 目录的根
+    for ancestor in [p] + list(p.parents):
+        if (ancestor / "Poco").exists():
+            return ancestor
+    # 回退：再上一层（适配 only_test/lib 相对路径问题）
+    if p.parents:
+        return p.parents[-1]
+    return p
+
+
 def _init_poco_path():
-    """模块导入时立即设置Poco路径"""
-    current_file = Path(__file__)
-    project_root = current_file.parent.parent.parent  # uni/only_test/lib/poco_utils.py -> uni
-    poco_path = project_root / "Poco"
-    
+    """模块导入时立即设置Poco路径（健壮的向上查找方式）"""
+    current_file = Path(__file__).resolve()
+    repo_root = _find_repo_root(current_file.parent)
+    poco_path = (repo_root / "Poco").resolve()
+
     if poco_path.exists():
         poco_path_str = str(poco_path)
         if poco_path_str not in sys.path:
@@ -29,9 +42,9 @@ _init_poco_path()
 def setup_local_poco_path():
     """设置本地Poco库路径"""
     # 获取项目根目录 (uni)
-    current_file = Path(__file__)
-    project_root = current_file.parent.parent.parent  # uni/only_test/lib/poco_utils.py -> uni
-    poco_path = project_root / "Poco"
+    current_file = Path(__file__).resolve()
+    repo_root = _find_repo_root(current_file.parent)
+    poco_path = (repo_root / "Poco").resolve()
     
     if poco_path.exists():
         poco_path_str = str(poco_path)
@@ -64,7 +77,7 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
         print("尝试检查本地Poco库结构...")
         
         # 检查Poco文件结构
-        poco_root = Path(__file__).parent.parent.parent / "Poco"
+        poco_root = _find_repo_root(Path(__file__).resolve().parent) / "Poco"
         uiautomation2_file = poco_root / "poco" / "drivers" / "android" / "uiautomation2.py"
         
         if not poco_root.exists():
@@ -94,6 +107,53 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
     except Exception as other_error:
         print(f"❌ 创建Poco实例失败 ({type(other_error).__name__}): {other_error}")
         raise
+
+
+# === 辅助：带像素偏移的点击 ===
+def _get_screen_size_fallback() -> tuple[int, int]:
+    """多策略获取屏幕分辨率，返回 (w,h)。"""
+    # 1) 优先从 Airtest 设备取
+    try:
+        from airtest.core.api import device as current_device
+        dev = current_device()
+        if dev:
+            try:
+                w, h = dev.get_current_resolution()  # type: ignore[attr-defined]
+                if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
+                    return w, h
+            except Exception:
+                info = getattr(dev, 'display_info', {}) or {}
+                w = int(info.get('width', 0) or 0)
+                h = int(info.get('height', 0) or 0)
+                if w > 0 and h > 0:
+                    return w, h
+    except Exception:
+        pass
+    # 2) 尝试 poco.get_screen_size()
+    try:
+        from .poco_utils import get_android_poco  # self import safe
+        p = get_android_poco()
+        if hasattr(p, 'get_screen_size'):
+            w, h = p.get_screen_size()  # type: ignore[attr-defined]
+            if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
+                return w, h
+    except Exception:
+        pass
+    # 3) ADB wm size
+    try:
+        import subprocess
+        out = subprocess.run(["adb", "shell", "wm", "size"], capture_output=True, text=True)
+        if out.returncode == 0 and 'Physical size:' in out.stdout:
+            sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
+            w, h = sz.split('x')
+            return int(w), int(h)
+    except Exception:
+        pass
+    # 4) 回退
+    return 1080, 1920
+
+
+# 原生扩展已加到 Poco/poco/proxy.py: UIObjectProxy.click_with_bias()
 
 
 if __name__ == "__main__":

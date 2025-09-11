@@ -89,7 +89,7 @@ class PythonCodeGenerator:
 # [tag] {tags}
 # [path] {path}
 
-from airtest.core.api import *
+from only_test.lib.airtest_compat import *
 # 使用本地自定义的Poco库
 import sys
 import os
@@ -115,7 +115,7 @@ sleep({wait_time})
 ''',
             
             "launch_app": '''## [page] {page}, [action] {action}, [comment] {comment}
-start_app("{app_package}")
+        start_app("{app_package}")
 sleep({wait_time})
 ''',
             

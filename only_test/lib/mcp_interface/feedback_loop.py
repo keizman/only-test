@@ -549,7 +549,7 @@ class FeedbackLoop:
         # 这是一个简化实现，实际项目中应使用完整的转换器
         python_code = f'''# Generated test case: {test_case.get("name", "Unnamed")}
 
-from airtest.core.api import *
+from only_test.lib.airtest_compat import *
 # 使用本地自定义的Poco库
 from ..poco_utils import get_android_poco
 

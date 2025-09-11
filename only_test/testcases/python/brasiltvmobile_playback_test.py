@@ -20,7 +20,13 @@ from datetime import datetime
 from pathlib import Path
 
 # Airtest 相关导入
-from airtest.core.api import *
+import sys, os
+_here = os.path.dirname(__file__)
+_repo_root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from only_test.lib.airtest_compat import *
 from airtest.core.helper import G
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 

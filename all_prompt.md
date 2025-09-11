@@ -264,3 +264,57 @@ Ok 你已经知道了他们的作用, 那你认为目前的prompt 健壮吗, 有
 ▌这是用例文件, 其是否需要兼容你的新方式使其能正常执行, 另外, 我希望将 python -X utf8 only_test/examples/test_ad_closer.py --target-app com.mobile.brasiltvmobile --mode continuous 作为一个入口为一个关闭广告函
 ▌数, 随时调用, 用例中也可调用, 模式为当 continuous 连续 3 次未检测到 广告则直接结束, 并限制最长执行时长为 10s 函数可传值. 支持在 MCP 中调用分析屏幕元素时自动调用这个工具, 默认值也如上所述, 我说了多个修改点修改
 ▌前请先 Plan 怕你不懂就直接修改, 记得改为正式模块 test_ad_closer 是一个测试 name
+
+
+---
+
+
+添加一个功能 你可以看到main.yaml中提供了  ui_activity  请你在任何启动 pkg 的时候查看是否又关联关系, 如果有配置 ui_activity 代表有特殊的启动方式, 没必要用 monkey 启动, 因此可能需要一个统一的 start app 模块供所▌有启动时请求, 你需要检查所有使用启动 apk 的地方进行统一入口化, 包括 MCP. 我希望你在修改前先统计, 评估修改项, 另外 main.yaml 可以说也是一个入口, 其内部会定义很多元数据, 当任何传入 application 的地方都需要通过 ▌这个地方 因此还需要一个yaml monitor 之类的 py 模块供查询和返回, 比如 brav_mob = com.mobile.brasiltvmobile contains app_name description ui_activity, 当我输入  brav_mob com.mobile.brasiltvmobile 任意一个时都应▌该知道我指的是谁, 这个文件以后会随着用例而填入很多的 applications test_suites devices 内容, 因此请考虑靠扩展性不止与   applications 还包括 devices 应该也有扩展性, 
+可以使用统一的 start_app func, 但我希望对于 Airtest 的 start_app 进行重写, 使用我们刚刚规划的方式, 支持回退的启动方式, 这样用例任意地方只要需要启动 start_app即可, 而用例文件引入 airtest 也改为一个 lib 下边的固定模块, 固定模块中重写 start_app, 这样能作为公共入口, 而且兼容了 除 start_app 其它 airtest 正常使用
+
+
+---- 
+
+
+这里能否加 bias poco(text="西语手机端720资源02").click() ,比如我想向上偏移 5px, 要在本地 Poco 包上做一个轻量扩展
+请检查下 click_with_bias 确认计算没问题, 比如增加相关打印日志, 打印原点与 + bias 后的点, 我观察到好像偏离很远
+能打印因为 xy 轴的方式 这样好对比, 比如我目前开启了 andrid coordinate 确认我希望点击位置再 x:285 y:940 处
+
+---
+
+1.查看下这个 json 文件, 虽然有很多遗漏, 但我们正是要找出他的问题, 它使用了特殊的格式来放置用例, 但你觉得这是一个好方式吗, 我们本身用例也不多, 是否只需要放在 code block 里边 直接复制过过去 py 文件呢, 还是你有什么更好的办法,我们一起讨论下,  再找出一些不合理的问题
+是的, 请按照你的想法约束json , 并思考如何把 函数, 参数, 直接映射到 py 文件, 你认为如果现在让你生成后的 json 能和目前录制的 py 文件大差不差吗, 我觉得是个问题, 因此我们呢还需要规范好 py 生成的方式. 你认为呢
+
+1.确认是否附带了相似用例文件比如 json or py 你觉得哪个好. 自动过滤规则是否生效, 比如总用例库数量小于 3 直接附带所有用例文件作为示例(注意刨除我们生成的数据避免prompt 过多.)大于3 则进行定向过滤文件类型后传入相同类型的 3 个文件作为思路学习(辅助 LLM知道操作过程, 因为所有 APK 即使 resourceid name 不同, 但路径是可以借鉴的, 并无本质不同). 如何让他很好的结合呢, 这是个很苦恼的问题  2.试着反思找出现存问题. 
+
+
+将最近我的提问和你的回答, 我们选用方案的理由, 更新到 QA.md 让后人知道我们这样设计的原因. 
+
+
+
+
+
+
+----
+
+
+
+1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
+2.check example_airtest_record.py and golden_example_airtest_record.json to Know more aboout schema constrains
+3.check QA.md WHY current structure.
+4.IN the end pls 结合 MCP 整个工具检查下, 如果是你使用这些 MCP + prompt 驱动, 你能做好用例生成吗, dry run 一下, 目前没有环境给你实际演示
+整个过程不要修改文件, 只是让你了解项目. excute step by step
+
+
+
+
+---
+
+python -X utf8 -m airtest run C:\Download\git\uni\only_test\testcases\python\example_airtest_record_fixed.py
+
+感悟 越向底层越难解释, 比如 CDN 到 APK, 
+-----
+next
+
+用例管理, tag 不想重新生成的 PY 文件?  重新生成的策略
+

@@ -24,7 +24,7 @@ async def close_ads(
     target_app: str = "com.mobile.brasiltvmobile",
     mode: str = "continuous",
     consecutive_no_ad: int = 3,
-    max_duration: float = 10.0,
+    max_duration: float = 20.0,
 ) -> Dict[str, Any]:
     """关闭广告入口（可复用）。
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--target-app", default="com.mobile.brasiltvmobile")
     parser.add_argument("--mode", choices=["single", "continuous"], default="continuous")
     parser.add_argument("--consecutive-no-ad", type=int, default=3)
-    parser.add_argument("--max-duration", type=float, default=10.0)
+    parser.add_argument("--max-duration", type=float, default=20.0)
     args = parser.parse_args()
 
     async def _run():
