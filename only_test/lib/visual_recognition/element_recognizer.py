@@ -488,20 +488,51 @@ class ElementRecognizer:
             return []
     
     async def _calculate_tap_coordinates(self, 
-                                       element: Dict[str, Any], 
-                                       bias_correction: bool = False) -> Tuple[int, int]:
-        """计算点击坐标"""
+                                           element: Dict[str, Any], 
+                                           bias_correction: bool = False) -> Tuple[int, int]:
+        """计算点击坐标。
+        支持两种 bounds 表示：
+        - 像素: [left, top, right, bottom]
+        - 归一化(0~1): [left, top, right, bottom]，在此情况下会根据当前屏幕尺寸转换为像素
+        """
         bounds = element.get("bounds", [])
         
         if len(bounds) == 4:
-            # bounds格式：[left, top, right, bottom]
-            center_x = (bounds[0] + bounds[2]) // 2
-            center_y = (bounds[1] + bounds[3]) // 2
+            # 如为归一化坐标，先转换为像素
+            try:
+                if all(isinstance(v, (int, float)) for v in bounds) and max(bounds) <= 1.0:
+                    si = self.screen_capture.get_screen_info()
+                    logger.info(f"屏幕尺寸: {si.width}x{si.height}")
+                    logger.info(f"原始bounds: {bounds}")
+                    bounds = [
+                        int(float(bounds[0]) * si.width),
+                        int(float(bounds[1]) * si.height), 
+                        int(float(bounds[2]) * si.width),
+                        int(float(bounds[3]) * si.height),
+                    ]
+                    logger.info(f"转换后bounds: {bounds}")
+            except Exception as e:
+                # 转换失败时记录错误并使用默认值
+                logger.error(f"坐标转换失败: {e}")
+                logger.error(f"原始bounds: {bounds}")
+                # 如果转换失败但bounds看起来是归一化的，使用默认屏幕尺寸
+                if all(isinstance(v, (int, float)) for v in bounds) and max(bounds) <= 1.0:
+                    bounds = [
+                        int(float(bounds[0]) * 1440),  # 默认宽度
+                        int(float(bounds[1]) * 2560),  # 默认高度
+                        int(float(bounds[2]) * 1440),
+                        int(float(bounds[3]) * 2560),
+                    ]
+                    logger.info(f"使用默认屏幕尺寸转换bounds: {bounds}")
+            
+            # 计算中心点
+            center_x = int((float(bounds[0]) + float(bounds[2])) / 2.0)
+            center_y = int((float(bounds[1]) + float(bounds[3])) / 2.0)
+            logger.info(f"计算的中心点: ({center_x}, {center_y})")
             
             # 应用偏移修正（用于媒体内容）
             if bias_correction:
-                # 媒体内容的标题通常在可点击区域下方，需要向上偏移
-                height = bounds[3] - bounds[1]
+                height = int(float(bounds[3]) - float(bounds[1]))
                 center_y -= int(height * 0.3)  # 向上偏移30%
                 
             return (center_x, center_y)
@@ -516,7 +547,7 @@ class ElementRecognizer:
             import subprocess
             x, y = coordinates
             
-            cmd = f"adb tap {x} {y}"
+            cmd = f"adb shell input tap {x} {y}"
             if self.device_id:
                 cmd = f"adb -s {self.device_id} shell input tap {x} {y}"
             

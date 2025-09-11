@@ -285,7 +285,7 @@ class SmartTestRunner:
         """
         self.device_id = device_id
         self.config_manager = ConfigManager()
-        self.executor = SmartTestExecutor(device_id, self.config_manager)
+        self.executor = SmartTestExecutor(device_id)
         self.report_generator = TestReportGenerator()
     
     def run_testcase_file(self, testcase_file: str) -> TestCaseResult:

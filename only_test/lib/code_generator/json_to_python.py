@@ -375,9 +375,9 @@ class JSONToPythonConverter:
 
 import pytest
 import allure
-from only_test.core.api import *
-from only_test.core.android.android import Android
-from only_test.core.cv import Template
+from airtest.core.api import *
+from airtest.core.android.android import Android
+from airtest.core.cv import Template
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 
 # 测试元数据

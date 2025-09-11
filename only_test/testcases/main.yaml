@@ -62,7 +62,10 @@ applications:
   brav_mob:
     package_name: "com.mobile.brasiltvmobile"
     app_name: "Brav mob"
-    description: "巴西电视直播应用"
+    description: "brav_mob 公共"
+    ui_activity: "com.mobile.brasiltv.activity.SplashAty"  
+    # 启动方式可使用指定 activty 方式, 具体每一个 APK 是什么找开发看下就好 : adb shell am start -S -W com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.SplashAty  -S 强制重启, -n 不会停止, 只是再加一层 Activity
+
 
 # 测试套件配置
 test_suites:

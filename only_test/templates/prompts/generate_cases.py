@@ -143,6 +143,32 @@ Only-Test 会自动在两种模式间切换：
 - 播放状态下可能只有 bbox 坐标，没有 resource_id
 - 此时应该在JSON中设置 `"fallback_coordinates": [x, y]`
 
+## TOOL_REQUEST 协议（缺少屏幕数据时的唯一合法输出）
+- 当未提供 screen_analysis_result，或 elements 为空/不可信时：你不得生成任何步骤。
+- 你必须输出如下 JSON，请求先获取/刷新屏幕：
+```json
+{
+  "tool_request": {
+    "name": "analyze_current_screen",
+    "params": {},
+    "reason": "需要最新的真实屏幕元素，禁止臆造ID/选择器"
+  }
+}
+```
+
+## 单步握手（Plan → Execute → Verify → Append）
+- 一次只输出一个“下一步”。
+- 每步执行后，等待我返回新的 screen_analysis_result（含 screen_hash），再继续下一步。
+- 如你使用的 screen_hash 与当前不一致，应首先发起 TOOL_REQUEST 刷新屏幕。
+
+## 白名单绑定与自检（强约束）
+- 你的选择器必须从 elements 白名单中精准拷贝（resource_id / text / content_desc 三选一）。
+- 如提供 bounds_px，必须与所选元素的 bbox 完全一致；否则禁止使用。
+- 每个输出必须包含 evidence：
+  - evidence.screen_hash（本次决策所依据的屏幕hash）
+  - evidence.source_element_uuid（被选元素的 uuid）
+  - evidence.source_element_snapshot（该元素对象原样粘贴，便于机读校验）
+
 {screen_elements_text}
 
 {device_specific_notes}
@@ -210,37 +236,59 @@ Only-Test 会自动在两种模式间切换：
 
 ## 📝 输出要求
 
-请按以下格式输出你的决策（严格JSON）：
+你只能返回下列两种 JSON 之一（严格JSON）：
 
+1) 当需要/缺少屏幕数据时，返回 TOOL_REQUEST：
 ```json
-{{
-  "analysis": {{
+{
+  "tool_request": {
+    "name": "analyze_current_screen",
+    "params": {},
+    "reason": "需要最新/更一致的屏幕元素，禁止臆造ID/选择器"
+  }
+}
+```
+
+2) 当可以执行下一步时，返回单步决策：
+```json
+{
+  "analysis": {
     "current_page_type": "识别的页面类型",
     "available_actions": ["可能的操作列表"],
     "reason": "为什么选择该动作"
-  }},
-  "next_action": {{
-    "action": "click|input|wait_for_elements|wait|restart|launch|assert",
-    "target": {{
+  },
+  "next_action": {
+    "action": "click|input|wait_for_elements|wait|restart|launch|assert|swipe",
+    "target": {
       "priority_selectors": [
-        {{"resource_id": "..."}},
-        {{"content_desc": "..."}},
-        {{"text": "..."}}
+        {"resource_id": "..."},
+        {"content_desc": "..."},
+        {"text": "..."}
       ],
       "bounds_px": [left, top, right, bottom]
-    }},
+    },
     "data": "可选的输入数据",
     "wait_after": 0.8,
     "expected_result": "期望的操作结果"
-  }}
-}}
+  },
+  "evidence": {
+    "screen_hash": "当前屏幕hash",
+    "source_element_uuid": "被选元素uuid",
+    "source_element_snapshot": {"原始元素对象": "从 elements 原样粘贴"}
+  }
+}
 ```
 
 ## 严格约束（必须遵守）
-- 动作只能是: click, input, wait_for_elements, wait, restart, launch, assert, swipe
-- 选择器必须包含: priority_selectors（优先 resource_id，其次 content_desc，再次 text）；若无法提供，必须给出 bounds_px（像素坐标）
-- 禁止输出抽象动作名（如 close_ads、search_program），必须用上述原子动作表达
-- 严禁返回非JSON或Markdown
+- 单步输出：一次仅允许产出一个“下一步”，禁止批量生成多个步骤
+- 工具优先：当 elements 缺失/为空/不可信、或 screen_hash 不一致时，必须返回 TOOL_REQUEST
+- 白名单绑定：priority_selectors 的取值必须精确来自 elements 白名单（resource_id/text/content_desc 三选一）
+- bounds 约束：如提供 bounds_px，必须与被选元素的 bbox 完全一致；否则不得提供 bounds_px
+- 动作限制：动作只能是 click, input, wait_for_elements, wait, restart, launch, assert, swipe
+- 结构与命名：priority_selectors 必须为“列表(list)”，且每个列表项是仅包含 resource_id 或 content_desc 或 text 三者之一的对象；严禁使用 resource-id、content-desc、contentDesc、prioritySelectors 等写法；严禁把 priority_selectors 写成单个对象
+- 坐标限制：若无法提供选择器，才允许给出 bounds_px（整数像素坐标 [left, top, right, bottom]）；严禁 0~1 归一化坐标
+- 禁止抽象动作名：如 close_ads、search_program 等，必须拆解为允许的原子动作
+- 输出格式：严禁返回非JSON或Markdown
 
 ## 广告处理提示
 - 系统已在你查看屏幕时自动尝试关闭广告（最多3次），若返回数据包含 `ads_info.warnings`，说明可能仍有广告存在。
@@ -249,7 +297,7 @@ Only-Test 会自动在两种模式间切换：
   - 视觉场景无法拿到id时可使用 bounds_px（点击中心点）
   - 关闭后必须重新分析屏幕，若元素签名变化不明显，则提示失败并调整策略（例如尝试其他 close 按钮或等待广告倒计时）
 
-现在请基于屏幕分析结果，制定下一步操作计划。"""
+现在请基于屏幕分析结果，制定下一步操作计划。
 
     @staticmethod
     def get_mcp_completion_prompt(
@@ -288,7 +336,7 @@ Only-Test 会自动在两种模式间切换：
 ## 🧩 参考示例（Few-shot）
 {examples_text}
 
-请将所有步骤整合成完整的 Only-Test JSON 测试用例（严格JSON，动作允许 swipe 并提供 target.swipe.start_px/end_px）：
+请将所有步骤整合成完整的 Only-Test JSON 测试用例（严格JSON，动作允许 swipe 并提供 target.swipe.start_px/end_px）。每个步骤遵循以下严格结构：
 
 ```json
 {{
@@ -302,10 +350,43 @@ Only-Test 会自动在两种模式间切换：
     "screen_info": "从最终状态获取"
   }},
   "execution_path": [
-    // 仅使用 click/input/wait_for_elements/wait/restart/launch/assert 这些原子动作
+    {{
+      "step": 1,
+      "page": "页面名",
+      "action": "click|input|wait_for_elements|wait|restart|launch|assert|swipe",
+      "description": "这一步要做什么",
+      "target": {{
+        "priority_selectors": [
+          {{"resource_id": "com.example:id/..."}},
+          {{"content_desc": "关闭"}},
+          {{"text": "搜索"}}
+        ],
+        "bounds_px": [100, 200, 300, 260],
+        "swipe": {{
+          "start_px": [540, 1600],
+          "end_px": [540, 800],
+          "duration_ms": 300
+        }}
+      }},
+      "data": "可选输入数据",
+      "timeout": 10,
+      "success_criteria": "如何判断成功",
+      "path": {{
+        "mcp_tool_used": "perform_and_verify|get_current_screen_info|…",
+        "screen_hash": "可选",
+        "analysis_result": "可选",
+        "decision_reason": "可选"
+      }}
+    }}
   ]
 }}
 ```
+
+重要的输出规范：
+- target.priority_selectors 必须是“列表(list)”，且每个列表项是仅包含 resource_id 或 content_desc 或 text 三者之一的对象，键名必须是蛇形命名（resource_id、content_desc、text）；严禁 resource-id、content-desc、prioritySelectors 等写法
+- 若使用 bounds_px，必须是整数像素坐标（例：[100, 200, 300, 260]），严禁 0~1 归一化小数
+- swipe 必须提供 start_px/end_px（像素坐标），可选 duration_ms
+- 每步仅允许使用上述原子动作
 
 ## ⚠️ 整合要求
 
@@ -540,18 +621,11 @@ Only-Test 会自动在两种模式间切换：
 - 考虑竖屏和横屏切换
 - 注意软键盘弹出对布局的影响""",
             
-            "tablet": """
-**平板设备特定注意事项**:
-- 屏幕尺寸较大，布局可能不同
-- 可能支持分屏操作
-- 横屏模式较常用
-- 元素间距和大小可能不同""",
-            
+           
             "tv": """
 **TV设备特定注意事项**:
 - 使用遥控器导航，主要是方向键和确认键
 - 播放状态下可能无法获取XML信息，需要视觉识别
-- DRM保护可能阻止截图，需要白盒测试
 - 全屏播放是主要使用场景
 - 焦点移动和高亮显示很重要"""
         }

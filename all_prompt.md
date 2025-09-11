@@ -118,8 +118,8 @@ vibecoding 思考: 过长上下文只是自我欺骗其有 memory, 实际那些�
 ---
 
 
-▌现在输出你的 plan和要说的内容给你的后人, 我会复制给他, 在你说完后我会关闭当前窗口, 请你谨慎传递 
 
+现在输出你的 plan和要说的内容给你的后人, 我会复制给他, 在你说完后我会关闭当前窗口, 请你谨慎传递, 更新你的想法到 C:\Download\git\uni\memory_trasfer.md
 ---
 
 If U are captrue a screen on lock screen it's a black, pls check the screen stat when u wantto excute a action 
@@ -214,3 +214,53 @@ If U are captrue a screen on lock screen it's a black, pls check the screen stat
   - 将这条动态录制链接入 YAML 控制器：按 main.yaml 的 suite 编排一键执行。
 
   以上改动已完成、可直接试跑。如要我继续把“等待出现/消失”的强判据集成到 MCP 工具里，或将用例按 YAML 控制器编排并执行，请告诉我。  
+
+
+  ------
+raed all md file, talking about this project 距离可应用状态还差什么,  给我你的想法
+----
+你提出了重要的问题, 选择我补充一些内容, 之后需要你开始修复. 1.wait_for_appearance 先不处理, 因为他是一个录制文件的关键动作, 可能他人搞错了将它写道了日志里, 2.airtest 以前是目录名称, 但我发现冲突, 就改为了选择的 only_test, airtest.core现在应该是一个 python 库, 有任何问题请向我提问, 有关键信息请写入 QA.md 文档, 我会检阅或答疑.另外我也希望你在修改任何内容前阅读代码思考其设计路径, 你会有更多了解: 比如其设计确实有道理 但是确实多余 直接修改. 还有刚刚我也进行了代码修改.  你给出的内容较多, 我推荐你重新根据我的补充写一个具体执行plan, 你严格按照 plan 执行, 并完成后勾选, 避免重复或漏  现在开始工作 
+
+
+
+----
+
+
+
+python -X utf8 only_test/examples/mcp_llm_workflow_demo.py --requirement "测试vod点播播放正常: 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'720'点击第一个节目，3.播放节目，断言: 验证设备是否处于播放状态" --target-app com.mobile.brasiltvmobile --max-rounds 2 直接请你尝试生成用例观察输出,修复 error , 发现不合理, 最终完成外部 LLM 的用例自主生成
+
+
+----
+
+过滤设计
+用例过滤规则
+
+XML json filter 规则: 在我们拥有海量数据过后根本不需要再使用笨方法去送个 LLM 分析, 可以直接搜索 直接使用之前的 btn name 再 XML 中搜寻, 搜索不到时再使用老版本过滤即可
+举个例子, 比如目前的 search 是 com.mobile.brasiltvmobile:id/searchEt 但如果换个应用可能叫 searchbtn or any things, 我们唯一知道的是目前需要点击的是 search 相关的内容,我们直接对用例库进行关键字搜寻, 找到经常使用的方式 比如 id (根据搜索出来的数据量) 假设确实都是使用 ID 则推测这次 ID 概率较大, 直接使用 grep id  + search from json , 这时过滤出了所有 id 后 比如有两个, 这时直接从 json 中过滤这条数据即可查看json 体. 如果过滤结果 0 则考虑更换过滤方式或者使用旧的方式直接过滤 clickable 的送给 LLM 进行确认即可. 
+
+
+----
+
+
+▌好应用它 •  提高 LLM 输出一致性：在模板 prompt 中把 priority_selectors 固化为 list[dict]，键名统一使用 resource_id / content_desc / text（避免 resource-id 这类连字符，减少转换歧义）。 .  除此外我还希望你对比下我手动生成的示例文件, 已经 LLM 生成的, 他们的区别, 据我观察, 目前生成的脚本根本不是一个可用的, LLM 生成的是 json,  因此要从 json 和 py 两层去考虑  C:\Download\git\uni\only_test\testcases\generated\test_llm_generated_20250910_154634_script.py  \uni\only_test\testcases\python\example_airtest_record.py , 需要你分析是什么造成了差距,我的 requirement 还不够清晰吗,还是你的prompt 传入的不够, 是否传传入了相似 script (目前样本少, 考虑不过滤直接▌将现有的录制样本传进去) 还需要从源头分析 . 最后, 我发现你在执行录制时屏幕根本无变化, 证明并不是实施录制, 还需要你再检查以下原因, 可以从代码/日志层面触发, 
+
+-----
+
+我要测试自动关闭广告功能, 给我一个可以直接执行的 python 命令, 我会让手机保留广告以验证广告关闭模块
+
+
+---
+
+
+Ok 你已经知道了他们的作用, 那你认为目前的prompt 健壮吗, 有什么优化的地方吗, 比如我目前就遇到一个问题, 比如让 LLM 结合 MCP 生成用例, 其生成的用例全是幻想的,而不是实际的, 我的期望. 其像 提供的示例文件一样 C:\Download\git\uni\only_test\testcases\python\example_airtest_record.py 一步步的点击, 确认每一个 ID 的内容写入json, 模拟人录制用例, 结果是其并未进行任何屏幕操作, 只是生成了一堆的不存在的 ID, 
+
+
+-----
+
+我觉得还可以在 llm_generated*json 产物 增加一项 chain, 你觉得如何, 比如 ## [page] app_initialization, [action] restart, [comment] 重启应用清理环境状态(多次关闭) 这条内容我之前就是像记录链路, 而如果 LLM 或谁也记录了更详细的这将是更有参考意义的, 比如 可以直接记录 ID.   [page] search, [action] click com.mobile.brasiltvmobile:id/ivClose  --> (next cicle) , 不急着添加 我们先讨论是否有必要 
+---
+
+
+▌这是用例文件, 其是否需要兼容你的新方式使其能正常执行, 另外, 我希望将 python -X utf8 only_test/examples/test_ad_closer.py --target-app com.mobile.brasiltvmobile --mode continuous 作为一个入口为一个关闭广告函
+▌数, 随时调用, 用例中也可调用, 模式为当 continuous 连续 3 次未检测到 广告则直接结束, 并限制最长执行时长为 10s 函数可传值. 支持在 MCP 中调用分析屏幕元素时自动调用这个工具, 默认值也如上所述, 我说了多个修改点修改
+▌前请先 Plan 怕你不懂就直接修改, 记得改为正式模块 test_ad_closer 是一个测试 name

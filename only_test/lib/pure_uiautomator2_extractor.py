@@ -254,34 +254,47 @@ class VisualExtractor:
             return 1080, 1920
     
     async def take_screenshot(self) -> str:
-        """截屏并返回base64"""
+        """截屏并返回base64（跨平台临时目录）"""
         try:
-            # 使用ADB截屏
-            temp_file = f"/tmp/screenshot_{int(time.time())}.png"
-            
-            proc = await asyncio.create_subprocess_shell(
-                f"adb shell screencap -p > {temp_file}",
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, f"screenshot_{int(time.time())}.png")
+
+            # 通过 exec-out 获取 PNG 字节并写入本地文件，避免重定向兼容性问题
+            proc = await asyncio.create_subprocess_exec(
+                "adb", *( ["-s", self.device_id] if self.device_id else [] ),
+                "exec-out", "screencap", "-p",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
-            
-            if proc.returncode != 0:
-                raise Exception(f"截屏失败: {stderr.decode()}")
-            
-            # 读取并转换为base64
-            with open(temp_file, 'rb') as f:
-                image_data = f.read()
-                base64_image = base64.b64encode(image_data).decode('utf-8')
-            
-            # 清理临时文件
+
+            if proc.returncode != 0 or not stdout:
+                # 退回 shell 模式，并规范换行
+                proc2 = await asyncio.create_subprocess_exec(
+                    "adb", *( ["-s", self.device_id] if self.device_id else [] ),
+                    "shell", "screencap", "-p",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                out2, err2 = await proc2.communicate()
+                if proc2.returncode != 0 or not out2:
+                    raise Exception(f"截屏失败: {err2.decode(errors='ignore')}")
+                data = out2.replace(b"\r\r\n", b"\n").replace(b"\r\n", b"\n")
+            else:
+                data = stdout
+
+            with open(temp_file, "wb") as f:
+                f.write(data)
+            base64_image = base64.b64encode(data).decode("utf-8")
+
             try:
                 os.remove(temp_file)
-            except:
+            except Exception:
                 pass
-            
+
             return base64_image
-            
+
         except Exception as e:
             logger.error(f"截屏失败: {e}")
             raise
@@ -414,6 +427,28 @@ class EnhancedUIAutomator2Extractor:
         """连接设备"""
         try:
             import uiautomator2 as u2
+            import subprocess
+            
+            # Force stop uiautomator packages to resolve conflicts
+            uiautomator_packages = [
+                "com.github.uiautomator",
+                "com.github.uiautomator.test", 
+                "androidx.test.uiautomator.v18.testrunner"
+            ]
+            
+            for pkg in uiautomator_packages:
+                try:
+                    if self.device_id:
+                        cmd = f"adb -s {self.device_id} shell am force-stop {pkg}"
+                    else:
+                        cmd = f"adb shell am force-stop {pkg}"
+                    result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=5)
+                    logger.debug(f"Force stopped {pkg}: {result.returncode}")
+                except Exception as e:
+                    logger.debug(f"Force stop {pkg} failed: {e}")
+            
+            # Wait a moment after force stopping
+            time.sleep(0.5)
             
             if self.device_id:
                 self.device = u2.connect(self.device_id)
@@ -549,6 +584,15 @@ class EnhancedUIAutomator2Extractor:
         content_desc = attrib.get('content-desc', '').strip()
         package = attrib.get('package', '')
         
+        # 计算clickable：UIAutomator标准XML使用 'clickable'/'long-clickable' 标记；
+        # 个别ROM才会有 'touchable'/'visible'。
+        is_visible = (attrib.get('visible', 'true').lower() == 'true')  # 看不到该键时视为可见
+        is_clickable = (
+            (attrib.get('clickable', 'false').lower() == 'true') or
+            (attrib.get('long-clickable', 'false').lower() == 'true') or
+            (attrib.get('touchable', 'false').lower() == 'true')
+        ) and is_visible and (attrib.get('enabled', 'true').lower() == 'true')
+
         element = UnifiedElement(
             uuid=f"xml_{len(elements)}",
             element_type="xml",
@@ -558,7 +602,7 @@ class EnhancedUIAutomator2Extractor:
             resource_id=resource_id,
             content_desc=content_desc,
             class_name=class_name,
-            clickable=attrib.get('clickable', 'false').lower() == 'true',
+            clickable=is_clickable,
             bounds=norm_bounds,
             center_x=center_x,
             center_y=center_y,

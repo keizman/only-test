@@ -1,26 +1,45 @@
 {
-  "testcase_id": "TC_brasiltvmobile_20250910_143848",
+  "testcase_id": "TC_brasiltvmobile_20250910_165846",
   "name": "VOD点播播放正常",
-  "description": "测试vod点播播放正常: 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'720'点击第一个节目，3.播放节目，断言: 验证设备是否处于播放状态",
+  "description": "测试vod点播播放正常: 关闭广告→搜索→点击首个结果→播放并断言",
   "target_app": "com.mobile.brasiltvmobile",
   "device_info": {
     "type": "mobile",
-    "detected_at": "2025-09-10T14:38:48.479249",
-    "screen_info": "elements=17"
+    "detected_at": "2025-09-10T16:58:46.740409",
+    "screen_info": "unknown"
   },
   "execution_path": [
     {
-      "action": "launch",
-      "target": "com.mobile.brasiltvmobile",
-      "result": "success",
-      "duration_s": 2.5,
+      "step": 1,
+      "page": "Home",
+      "action": "click",
+      "description": "关闭启动广告弹窗",
+      "target": {
+        "priority_selectors": [
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/close_ad_button"
+          },
+          {
+            "content_desc": "关闭"
+          }
+        ],
+        "bounds_px": [
+          900,
+          100,
+          1000,
+          200
+        ]
+      },
+      "data": null,
+      "timeout": 10,
+      "success_criteria": "广告弹窗消失，页面恢复至首页",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 1
         },
@@ -52,32 +71,60 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/close_ad_button"
+            },
+            {
+              "content_desc": "关闭"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
+          "reasoning": "关闭启动广告弹窗",
           "score": null
         },
         "action": {
-          "action_type": "launch",
+          "action_type": "click",
           "input_data": null,
-          "success_criteria": null
+          "success_criteria": "广告弹窗消失，页面恢复至首页"
         }
-      }
+      },
+      "duration_seconds": 1.2,
+      "result": "success"
     },
     {
+      "step": 2,
+      "page": "Home",
       "action": "click",
-      "target": "close_ad_button",
-      "result": "success",
-      "duration_s": 0.8,
+      "description": "点击搜索框以准备输入关键词",
+      "target": {
+        "priority_selectors": [
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/search_input"
+          },
+          {
+            "content_desc": "搜索框"
+          }
+        ],
+        "bounds_px": [
+          100,
+          150,
+          980,
+          250
+        ]
+      },
+      "data": null,
+      "timeout": 10,
+      "success_criteria": "搜索框获得焦点并弹出键盘",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 2
         },
@@ -109,32 +156,51 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/search_input"
+            },
+            {
+              "content_desc": "搜索框"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
+          "reasoning": "点击搜索框以准备输入关键词",
           "score": null
         },
         "action": {
           "action_type": "click",
           "input_data": null,
-          "success_criteria": null
+          "success_criteria": "搜索框获得焦点并弹出键盘"
         }
-      }
+      },
+      "duration_seconds": 0.8,
+      "result": "success"
     },
     {
-      "action": "click",
-      "target": "search_button",
-      "result": "success",
-      "duration_s": 0.6,
+      "step": 3,
+      "page": "Home",
+      "action": "input",
+      "description": "在搜索框中输入关键词“电影”",
+      "target": {
+        "priority_selectors": [
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/search_input"
+          }
+        ]
+      },
+      "data": "电影",
+      "timeout": 10,
+      "success_criteria": "搜索框内显示输入的文字“电影”",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 3
         },
@@ -166,32 +232,57 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/search_input"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
+          "reasoning": "在搜索框中输入关键词“电影”",
           "score": null
         },
         "action": {
-          "action_type": "click",
-          "input_data": null,
-          "success_criteria": null
+          "action_type": "input",
+          "input_data": "电影",
+          "success_criteria": "搜索框内显示输入的文字“电影”"
         }
-      }
+      },
+      "duration_seconds": 0.6,
+      "result": "success"
     },
     {
-      "action": "wait_for_elements",
-      "target": "search_input",
-      "result": "success",
-      "duration_s": 1.2,
+      "step": 4,
+      "page": "SearchResults",
+      "action": "click",
+      "description": "点击搜索结果列表的第一条结果",
+      "target": {
+        "priority_selectors": [
+          {
+            "content_desc": "第一条结果"
+          },
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/result_item_0"
+          }
+        ],
+        "bounds_px": [
+          120,
+          300,
+          960,
+          500
+        ]
+      },
+      "data": null,
+      "timeout": 10,
+      "success_criteria": "进入视频详情页，页面标题为所选结果名称",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 4
         },
@@ -223,33 +314,60 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "content_desc": "第一条结果"
+            },
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/result_item_0"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
+          "reasoning": "点击搜索结果列表的第一条结果",
           "score": null
         },
         "action": {
-          "action_type": "wait_for_elements",
+          "action_type": "click",
           "input_data": null,
-          "success_criteria": null
+          "success_criteria": "进入视频详情页，页面标题为所选结果名称"
         }
-      }
+      },
+      "duration_seconds": 1.1,
+      "result": "success"
     },
     {
-      "action": "input",
-      "target": "search_input",
-      "value": "720",
-      "result": "success",
-      "duration_s": 0.4,
+      "step": 5,
+      "page": "VideoDetail",
+      "action": "click",
+      "description": "点击播放按钮开始播放视频",
+      "target": {
+        "priority_selectors": [
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/play_button"
+          },
+          {
+            "content_desc": "播放"
+          }
+        ],
+        "bounds_px": [
+          420,
+          800,
+          600,
+          980
+        ]
+      },
+      "data": null,
+      "timeout": 15,
+      "success_criteria": "视频播放器状态变为playing，出现播放进度条",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 5
         },
@@ -281,32 +399,51 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/play_button"
+            },
+            {
+              "content_desc": "播放"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
+          "reasoning": "点击播放按钮开始播放视频",
           "score": null
         },
         "action": {
-          "action_type": "input",
+          "action_type": "click",
           "input_data": null,
-          "success_criteria": null
+          "success_criteria": "视频播放器状态变为playing，出现播放进度条"
         }
-      }
+      },
+      "duration_seconds": 2.3,
+      "result": "success"
     },
     {
-      "action": "click",
-      "target": "first_result_item",
-      "result": "success",
-      "duration_s": 0.7,
+      "step": 6,
+      "page": "VideoDetail",
+      "action": "assert",
+      "description": "断言视频正在播放，播放进度大于0秒",
+      "target": {
+        "priority_selectors": [
+          {
+            "resource_id": "com.mobile.brasiltvmobile:id/playback_timer"
+          }
+        ]
+      },
+      "data": null,
+      "timeout": 10,
+      "success_criteria": "播放计时器显示的时间大于0秒",
       "path": {
         "schema": {
           "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
+          "timestamp": "2025-09-10T08:58:48.606551Z"
         },
         "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
+          "workflow_id": "wf_20250910_165848_0",
           "iteration": 1,
           "step_index": 6
         },
@@ -338,134 +475,25 @@
           "bbox_norm": null,
           "bounds_px": null,
           "selector_used": null,
-          "selector_candidates": [],
+          "selector_candidates": [
+            {
+              "resource_id": "com.mobile.brasiltvmobile:id/playback_timer"
+            }
+          ],
           "confidence": null
         },
         "decision": {
-          "reasoning": null,
-          "score": null
-        },
-        "action": {
-          "action_type": "click",
-          "input_data": null,
-          "success_criteria": null
-        }
-      }
-    },
-    {
-      "action": "wait",
-      "target": "playback_start",
-      "duration_s": 3.0,
-      "result": "success",
-      "path": {
-        "schema": {
-          "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
-        },
-        "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
-          "iteration": 1,
-          "step_index": 7
-        },
-        "tool": {
-          "name": "llm_generate_testcase",
-          "category": "generator",
-          "version": "1.0"
-        },
-        "device": {
-          "id": "unknown"
-        },
-        "app": {
-          "package": "com.mobile.brasiltvmobile"
-        },
-        "recognition": {
-          "strategy": null,
-          "playback_state": null,
-          "source": null,
-          "fallback_used": false,
-          "screen_hash": null,
-          "screenshot_path": null
-        },
-        "element": {
-          "uuid": null,
-          "resource_id": null,
-          "content_desc": null,
-          "text": null,
-          "class_name": null,
-          "bbox_norm": null,
-          "bounds_px": null,
-          "selector_used": null,
-          "selector_candidates": [],
-          "confidence": null
-        },
-        "decision": {
-          "reasoning": null,
-          "score": null
-        },
-        "action": {
-          "action_type": "wait",
-          "input_data": null,
-          "success_criteria": null
-        }
-      }
-    },
-    {
-      "action": "assert",
-      "target": "playback_state",
-      "condition": "is_playing",
-      "result": "success",
-      "duration_s": 0.1,
-      "path": {
-        "schema": {
-          "version": "v1",
-          "timestamp": "2025-09-10T06:38:49.592239Z"
-        },
-        "workflow": {
-          "workflow_id": "wf_20250910_143849_0",
-          "iteration": 1,
-          "step_index": 8
-        },
-        "tool": {
-          "name": "llm_generate_testcase",
-          "category": "generator",
-          "version": "1.0"
-        },
-        "device": {
-          "id": "unknown"
-        },
-        "app": {
-          "package": "com.mobile.brasiltvmobile"
-        },
-        "recognition": {
-          "strategy": null,
-          "playback_state": null,
-          "source": null,
-          "fallback_used": false,
-          "screen_hash": null,
-          "screenshot_path": null
-        },
-        "element": {
-          "uuid": null,
-          "resource_id": null,
-          "content_desc": null,
-          "text": null,
-          "class_name": null,
-          "bbox_norm": null,
-          "bounds_px": null,
-          "selector_used": null,
-          "selector_candidates": [],
-          "confidence": null
-        },
-        "decision": {
-          "reasoning": null,
+          "reasoning": "断言视频正在播放，播放进度大于0秒",
           "score": null
         },
         "action": {
           "action_type": "assert",
           "input_data": null,
-          "success_criteria": null
+          "success_criteria": "播放计时器显示的时间大于0秒"
         }
-      }
+      },
+      "duration_seconds": 0.9,
+      "result": "success"
     }
   ]
 }

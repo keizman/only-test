@@ -549,12 +549,13 @@ class FeedbackLoop:
         # 这是一个简化实现，实际项目中应使用完整的转换器
         python_code = f'''# Generated test case: {test_case.get("name", "Unnamed")}
 
-from only_test.core.api import *
-from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+from airtest.core.api import *
+# 使用本地自定义的Poco库
+from ..poco_utils import get_android_poco
 
 # Initialize
 connect_device("android://127.0.0.1:5037/{self.device_id or 'default'}")
-poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
+poco = get_android_poco()
 
 # Test steps
 '''

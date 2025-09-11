@@ -85,14 +85,25 @@ class PythonCodeGenerator:
     def _initialize_templates(self) -> Dict[str, str]:
         """初始化代码模板"""
         return {
-            "file_header": '''# {description}
+'file_header': '''# {description}
 # [tag] {tags}
 # [path] {path}
 
-from only_test.core.api import *
+from airtest.core.api import *
+# 使用本地自定义的Poco库
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../Poco'))
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+import logging
 
+# 建议通过 airtest run --device 传入设备；如需直接连接，请取消下一行注释并填写设备ID
 connect_device("{device_connection}")
+
+# 基础日志器
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
 ''',
             
@@ -209,11 +220,25 @@ except Exception as e:
                 page = ep.get('page', 'unknown')
                 comment = ep.get('description', '')
                 timeout = float(ep.get('timeout', 10))
-                input_text = ep.get('data')
+                input_text = ep.get('data') if ep.get('data') is not None else ep.get('input_text')
                 if isinstance(input_text, str) and input_text.startswith('${') and input_text.endswith('}'):
                     var_name = input_text[2:-1]
                     input_text = variables.get(var_name, input_text)
-                target_element = self._select_best_selector(ep.get('target', {}))
+                target_dict = ep.get('target', {}) or {}
+                target_element = self._select_best_selector(target_dict)
+                # 若无稳定选择器，尝试使用 xpath/path
+                if not target_element and isinstance(target_dict, dict):
+                    if target_dict.get('xpath') or target_dict.get('path'):
+                        target_element = target_dict.get('xpath') or target_dict.get('path')
+                # 同时尝试从 bounds_px 计算坐标（不做归一化，交由执行侧/调用方适配）
+                coordinates = None
+                if isinstance(target_dict, dict):
+                    bounds = target_dict.get('bounds_px')
+                    if isinstance(bounds, list) and len(bounds) == 4:
+                        left, top, right, bottom = bounds
+                        cx = int((left + right) / 2)
+                        cy = int((top + bottom) / 2)
+                        coordinates = (cx, cy)
 
                 action_map = {
                     'click': ActionType.CLICK,
@@ -235,35 +260,66 @@ except Exception as e:
                     input_text=input_text,
                     timeout=timeout,
                 )
+                # 设置坐标定位（如果可用）
+                if coordinates:
+                    step.coordinates = coordinates
                 step.locate_strategy = self._determine_locate_strategy(step)
                 steps.append(step)
 
             logger.info(f"解析了 {len(steps)} 个动作步骤 (execution_path)")
             return steps
     def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
-        """从 priority_selectors/selectors 或直接键选择最优定位（resource_id > content_desc > text）。"""
+        """从 priority_selectors/selectors 或直接键选择最优定位（resource_id > content_desc > text）。
+        兼容以下情况：
+        - priority_selectors 为 dict（含 'resource-id'/'resource_id', 'content-desc'/'content_desc', 'text', 'xpath' 等）
+        - priority_selectors 为 list[dict]
+        - 直接在 target 上提供 resource_id/content_desc/text/path/xpath
+        """
         if not isinstance(target, dict):
             return None
-        # 先看直接键
-        if target.get('resource_id'):
-            return target['resource_id']
-        if target.get('content_desc') or target.get('desc'):
-            return target.get('content_desc') or target.get('desc')
-        if target.get('text'):
-            return target['text']
-        # 再看列表
-        selectors = target.get('priority_selectors') or target.get('selectors') or []
-        if not isinstance(selectors, list):
+        # 直接键优先
+        direct_keys = [
+            ('resource_id', 'resource_id'),
+            ('content_desc', 'content_desc'),
+            ('desc', 'content_desc'),
+            ('text', 'text'),
+            ('xpath', 'xpath'),
+            ('path', 'xpath'),  # 允许 path 作为 xpath 使用
+        ]
+        for key, norm in direct_keys:
+            if target.get(key):
+                return target.get(key)
+        # 处理 priority_selectors / selectors
+        selectors = target.get('priority_selectors') or target.get('selectors')
+        # 如果是 dict，尝试常见命名（包含连字符写法）
+        if isinstance(selectors, dict):
+            # 优先 resource-id / resource_id
+            if selectors.get('resource_id') or selectors.get('resource-id'):
+                return selectors.get('resource_id') or selectors.get('resource-id')
+            # 再 content-desc / content_desc / desc
+            if selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc'):
+                return selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc')
+            # 再 text
+            if selectors.get('text'):
+                return selectors.get('text')
+            # xpath/path
+            if selectors.get('xpath') or selectors.get('path'):
+                return selectors.get('xpath') or selectors.get('path')
             return None
-        for sel in selectors:
-            if isinstance(sel, dict) and sel.get('resource_id'):
-                return sel['resource_id']
-        for sel in selectors:
-            if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('desc')):
-                return sel.get('content_desc') or sel.get('desc')
-        for sel in selectors:
-            if isinstance(sel, dict) and sel.get('text'):
-                return sel['text']
+        # 如果是 list，按优先级遍历
+        if isinstance(selectors, list):
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('resource_id') or sel.get('resource-id')):
+                    return sel.get('resource_id') or sel.get('resource-id')
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')):
+                    return sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')
+            for sel in selectors:
+                if isinstance(sel, dict) and sel.get('text'):
+                    return sel.get('text')
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('xpath') or sel.get('path')):
+                    return sel.get('xpath') or sel.get('path')
         return None
 
         for step_data in raw_steps:
@@ -297,27 +353,44 @@ except Exception as e:
         logger.info(f"解析了 {len(steps)} 个动作步骤")
         return steps
     def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
-        """从 priority_selectors/selectors 或直接键选择最优定位（resource_id > content_desc > text）。"""
+        """与上方实现一致：兼容 dict/list 与连字符键名。"""
         if not isinstance(target, dict):
             return None
-        if target.get('resource_id'):
-            return target['resource_id']
-        if target.get('content_desc') or target.get('desc'):
-            return target.get('content_desc') or target.get('desc')
-        if target.get('text'):
-            return target['text']
-        selectors = target.get('priority_selectors') or target.get('selectors') or []
-        if not isinstance(selectors, list):
+        direct_keys = [
+            ('resource_id', 'resource_id'),
+            ('content_desc', 'content_desc'),
+            ('desc', 'content_desc'),
+            ('text', 'text'),
+            ('xpath', 'xpath'),
+            ('path', 'xpath'),
+        ]
+        for key, norm in direct_keys:
+            if target.get(key):
+                return target.get(key)
+        selectors = target.get('priority_selectors') or target.get('selectors')
+        if isinstance(selectors, dict):
+            if selectors.get('resource_id') or selectors.get('resource-id'):
+                return selectors.get('resource_id') or selectors.get('resource-id')
+            if selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc'):
+                return selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc')
+            if selectors.get('text'):
+                return selectors.get('text')
+            if selectors.get('xpath') or selectors.get('path'):
+                return selectors.get('xpath') or selectors.get('path')
             return None
-        for sel in selectors:
-            if isinstance(sel, dict) and sel.get('resource_id'):
-                return sel['resource_id']
-        for sel in selectors:
-            if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('desc')):
-                return sel.get('content_desc') or sel.get('desc')
-        for sel in selectors:
-            if isinstance(sel, dict) and sel.get('text'):
-                return sel['text']
+        if isinstance(selectors, list):
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('resource_id') or sel.get('resource-id')):
+                    return sel.get('resource_id') or sel.get('resource-id')
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')):
+                    return sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')
+            for sel in selectors:
+                if isinstance(sel, dict) and sel.get('text'):
+                    return sel.get('text')
+            for sel in selectors:
+                if isinstance(sel, dict) and (sel.get('xpath') or sel.get('path')):
+                    return sel.get('xpath') or sel.get('path')
         return None
     
     def _determine_locate_strategy(self, step: ActionStep) -> ElementLocateStrategy:
@@ -351,13 +424,9 @@ except Exception as e:
             'retry_wrapper_end': ''
         }
         
-        # 添加重试包装器
-        if step.retry_count > 1 and step.action_type in [ActionType.CLICK, ActionType.INPUT]:
-            template_params['retry_wrapper_start'] = 'try:'
-            template_params['retry_wrapper_end'] = f'''except Exception as e:
-    logger.warning(f"操作失败，重试中: {{e}}")
-    sleep(1)
-    # 重试逻辑可在此添加'''
+# 保持模板内不直接拼装 try/except 包裹，由下层按需包装
+        template_params['retry_wrapper_start'] = ''
+        template_params['retry_wrapper_end'] = ''
         
         # 根据动作类型和定位策略选择模板
         if step.action_type == ActionType.RESTART:
@@ -385,32 +454,54 @@ except Exception as e:
             return f"# 未知动作类型: {step.action_type}\n"
     
     def _generate_click_code(self, step: ActionStep, params: Dict[str, Any]) -> str:
+        def _wrap_retry(code: str) -> str:
+            # 将多行代码缩进以嵌入 try 块
+            stripped = code.strip().rstrip('\n')
+            indented = '\n    '.join([line for line in stripped.splitlines() if line is not None])
+            return self.code_templates['retry_wrapper'].format(action_code=indented)
         """生成点击操作代码"""
         if step.conditions:
             return self._generate_conditional_click(step, params)
-        
+
         if step.locate_strategy == ElementLocateStrategy.RESOURCE_ID:
             params['resource_id'] = step.target_element
-            return self.code_templates['click_by_resource_id'].format(**params)
-        
+            base = self.code_templates['click_by_resource_id'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+
         elif step.locate_strategy == ElementLocateStrategy.TEXT:
             params['text'] = step.target_element
-            return self.code_templates['click_by_text'].format(**params)
-        
+            base = self.code_templates['click_by_text'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+
         elif step.locate_strategy == ElementLocateStrategy.UUID:
             params['uuid'] = step.element_uuid
-            return self.code_templates['click_by_uuid'].format(**params)
-        
+            base = self.code_templates['click_by_uuid'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+
         elif step.locate_strategy == ElementLocateStrategy.COORDINATE:
             x, y = step.coordinates if step.coordinates else (0.5, 0.5)
             params['x'] = x
             params['y'] = y
-            return self.code_templates['click_by_coordinate'].format(**params)
-        
+            base = self.code_templates['click_by_coordinate'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+
+        elif step.locate_strategy == ElementLocateStrategy.XPATH:
+            # XPath 直接用于 Poco 不可靠，优先回退坐标
+            if step.coordinates:
+                x, y = step.coordinates
+                params['x'] = x
+                params['y'] = y
+                return self.code_templates['click_by_coordinate'].format(**params)
+            else:
+                # 无坐标则退化为文本点击（可能失败）
+                params['text'] = step.target_element or 'unknown'
+                return self.code_templates['click_by_text'].format(**params)
+
         else:
             params['text'] = step.target_element or 'unknown'
-            return self.code_templates['click_by_text'].format(**params)
-    
+            base = self.code_templates['click_by_text'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+
     def _generate_conditional_click(self, step: ActionStep, params: Dict[str, Any]) -> str:
         """生成条件点击代码"""
         conditions = step.conditions
@@ -459,12 +550,32 @@ except Exception as e:
             ), params)
     
     def _generate_input_code(self, step: ActionStep, params: Dict[str, Any]) -> str:
+        def _wrap_retry(code: str) -> str:
+            stripped = code.strip().rstrip('\n')
+            indented = '\n    '.join([line for line in stripped.splitlines() if line is not None])
+            return self.code_templates['retry_wrapper'].format(action_code=indented)
         """生成输入操作代码"""
-        params.update({
-            'target': step.target_element or 'input',
-            'input_text': step.input_text or ''
-        })
-        return self.code_templates['input_text'].format(**params)
+        # 如果有坐标，先点击坐标再输入
+        if step.coordinates:
+            x, y = step.coordinates
+            click_params = params.copy()
+            click_params['x'] = x
+            click_params['y'] = y
+            code_click = self.code_templates['click_by_coordinate'].format(**click_params)
+            input_params = params.copy()
+            input_params.update({
+                'target': step.target_element or 'input',
+                'input_text': step.input_text or ''
+            })
+            base = code_click + self.code_templates['input_text'].format(**input_params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
+        else:
+            params.update({
+                'target': step.target_element or 'input',
+                'input_text': step.input_text or ''
+            })
+            base = self.code_templates['input_text'].format(**params)
+            return _wrap_retry(base) if step.retry_count > 1 else base
     
     def _generate_swipe_code(self, step: ActionStep, params: Dict[str, Any]) -> str:
         """生成滑动操作代码"""

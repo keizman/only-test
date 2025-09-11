@@ -19,8 +19,8 @@ from ..screen_capture import ScreenCapture
 
 # 可选导入 - 如果模块不存在则使用None
 try:
-    from ..phone_use_core.element_recognition import ElementRecognizer
-except ImportError:
+    from ..visual_recognition.element_recognizer import ElementRecognizer
+except Exception:
     ElementRecognizer = None
 
 
@@ -79,7 +79,7 @@ class SmartTestExecutor:
         
         # 初始化核心组件
         self.screen_capture = ScreenCapture(device_id)
-        self.element_recognizer = ElementRecognizer()
+        self.element_recognizer = ElementRecognizer() if ElementRecognizer else None
         self.conditional_engine = ConditionalLogicEngine()
         
         # 执行上下文

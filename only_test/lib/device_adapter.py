@@ -12,8 +12,8 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 try:
-    from only_test.core.api import device as current_device
-    from only_test.core.android.adb import ADB
+    from airtest.core.api import device as current_device
+    from airtest.core.android.adb import ADB
 except ImportError:
     current_device = None
     ADB = None

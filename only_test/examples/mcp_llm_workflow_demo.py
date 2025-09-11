@@ -121,7 +121,7 @@ async def main():
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     session_dir = Path(args.logdir) / f"session_{session_id}"
     session_dir.mkdir(parents=True, exist_ok=True)
-    # Structured subdirectories
+    # Structured subdirectories (kept for backward compatibility; disabled when SINGLE_FILE_LOG=True)
     prompts_dir = session_dir / "prompts"
     responses_dir = session_dir / "responses"
     tools_dir = session_dir / "tools"
@@ -132,6 +132,10 @@ async def main():
     meta_dir = session_dir / "meta"
     for d in [prompts_dir, responses_dir, tools_dir, executions_dir, errors_dir, warnings_dir, artifacts_dir, meta_dir]:
         d.mkdir(exist_ok=True)
+
+    # Unified combined log
+    SINGLE_FILE_LOG = True
+    combined_log_path = session_dir / "session_combined.jsonl"
     try:
         fh = logging.FileHandler(session_dir / "session.log", encoding='utf-8')
         fh.setLevel(logging.INFO)
@@ -142,26 +146,35 @@ async def main():
 
     def dump_text(name: str, content: str) -> None:
         try:
-            # Route files by conventional prefix into structured subdirs
-            if name.startswith("prompt_"):
-                p = prompts_dir / name
-            elif name.startswith("response_"):
-                p = responses_dir / name
-            elif name.startswith("tool_"):
-                p = tools_dir / name
-            elif name.startswith("parsed_") or name.startswith("artifact_"):
-                p = artifacts_dir / name
-            elif name.startswith("error_"):
-                p = errors_dir / name
-            elif name.startswith("warning_"):
-                p = warnings_dir / name
-            elif name.startswith("session") or name.endswith(".log"):
-                p = session_dir / name
-            else:
-                p = meta_dir / name
-            with open(p, 'w', encoding='utf-8') as f:
-                f.write(content if isinstance(content, str) else str(content))
-            logger.info(f"Wrote log artifact: {p}")
+            # Always append to combined log
+            rec = {
+                "name": name,
+                "timestamp": datetime.now().isoformat(),
+                "content": content if isinstance(content, str) else str(content)
+            }
+            with open(combined_log_path, 'a', encoding='utf-8') as cf:
+                cf.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            # Optionally also write discrete files (disabled by default)
+            if not SINGLE_FILE_LOG:
+                if name.startswith("prompt_"):
+                    p = prompts_dir / name
+                elif name.startswith("response_"):
+                    p = responses_dir / name
+                elif name.startswith("tool_"):
+                    p = tools_dir / name
+                elif name.startswith("parsed_") or name.startswith("artifact_"):
+                    p = artifacts_dir / name
+                elif name.startswith("error_"):
+                    p = errors_dir / name
+                elif name.startswith("warning_"):
+                    p = warnings_dir / name
+                elif name.startswith("session") or name.endswith(".log"):
+                    p = session_dir / name
+                else:
+                    p = meta_dir / name
+                with open(p, 'w', encoding='utf-8') as f:
+                    f.write(content if isinstance(content, str) else str(content))
+                logger.info(f"Wrote log artifact: {p}")
         except Exception as e:
             logger.warning(f"Failed writing {name}: {e}")
 
@@ -198,6 +211,9 @@ async def main():
             record.setdefault("timestamp", datetime.now().isoformat())
             with open(exec_log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            # also add to combined log
+            with open(combined_log_path, 'a', encoding='utf-8') as cf:
+                cf.write(json.dumps({"name": "execution_log", **record}, ensure_ascii=False) + "\n")
         except Exception:
             pass
 
@@ -239,15 +255,21 @@ async def main():
 
         def _extract_json(content: str):
             import json, re
-            s = content.strip()
-            if s.startswith('```json'):
-                s = s[7:]
-            if s.endswith('```'):
-                s = s[:-3]
-            # try fenced block anywhere
-            m = re.search(r"```json\n(.*?)\n```", content, re.DOTALL)
+            def sanitize(s: str) -> str:
+                # strip fences
+                if s.startswith('```json'):
+                    s = s[7:]
+                if s.endswith('```'):
+                    s = s[:-3]
+                # remove // line comments
+                s = re.sub(r"(^|\n)\s*//.*?(?=\n|$)", "\n", s)
+                # remove trailing commas before } ]
+                s = re.sub(r",\s*([}\]])", r"\1", s)
+                return s
+            s = sanitize(content.strip())
+            m = re.search(r"\{[\s\S]*\}", s)
             if m:
-                s = m.group(1)
+                s = sanitize(m.group(0))
             return json.loads(s)
 
         def _validate_testcase_json(tc: dict) -> tuple[bool, str, dict]:
@@ -369,12 +391,27 @@ async def main():
 
         def _extract_json(content: str):
             import re, json as _json
+            def sanitize(s: str) -> str:
+                # remove // comments and trailing commas
+                s = re.sub(r"(^|\n)\s*//.*?(?=\n|$)", "\n", s)
+                s = re.sub(r",\s*([}\]])", r"\1", s)
+                return s
             m = re.search(r"\{[\s\S]*\}", content or "")
-            return _json.loads(m.group(0)) if m else {}
+            if not m:
+                return {}
+            s = sanitize(m.group(0))
+            return _json.loads(s)
 
         llm = LLMClient()
         if not llm.is_available():
             raise RuntimeError("LLM provider unavailable")
+
+        def _validate_testcase_json(tc: dict):
+            try:
+                from only_test.lib.schema.validator import validate_testcase_v1_1
+                return validate_testcase_v1_1(tc)
+            except Exception as e:
+                return False, f"validator error: {e}", tc
 
         generated_steps = []
         for round_idx in range(1, max(1, getattr(args, 'max_rounds', 3)) + 1):

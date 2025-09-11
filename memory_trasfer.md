@@ -199,6 +199,84 @@ Notes
       - Keys: workflow_id, tool_name/category, step_index, target_app, device_id, screen_hash (if available), decision_reason.
   - Persist for generation phase; extend in execution phase with: status, error, screenshot_path, selector_used, bounds_px.
 
+---
+
+Successor Update — 2025-09-10 (PM)
+
+Scope: finalize dynamic recording, simplify logging, add schema + swipe, and YAML runner. Copy this to future owners.
+
+Data Model Roles
+- JSON: Per-testcase artifact with executable steps plus rich meta and provenance. Used for logs, replay, auditing, and conversion to Python.
+- YAML: Top-level controller (devices, apps, suites, testcase paths, execution policies). Later can drive “read YAML → run suite”.
+
+What Changed (This Session)
+- Dynamic recording enforced end-to-end (multi-round):
+  - Per round: analyze screen → LLM picks atomic action + selectors → execute on device via MCP → re-analyze → verify change (UI signature or wait condition) → log.
+  - Tools added: perform_ui_action (click/input/swipe), perform_and_verify (exec + verify, optional wait_for: appearance|disappearance with timeout).
+- Auto ad handling before LLM sees the screen:
+  - Heuristic scoring (elements<=20, ad/close keywords, ivClose/mIvClose clickable, distance ad↔close), threshold 0.90 auto-close, loop ≤3; if still ≥0.70, return ads_info.warnings to prompt manual handling.
+- JSON v1.1 + validation:
+  - Schema at only_test/lib/schema/testcase_v1_1.json; validator at only_test/lib/schema/validator.py.
+  - Allowed actions: click, input, wait, wait_for_elements, restart, launch, assert, swipe.
+  - For click/input/wait_for_elements require priority_selectors or bounds_px; for swipe require start_px/end_px.
+  - Demo integrates validator with one retry and a JSON cleaner (removes // comments and trailing commas) to survive noisy LLM outputs.
+- Swipe support wired through MCP and prompts:
+  - perform_ui_action executes adb swipe; derives defaults from bounds_px if needed.
+  - perform_and_verify accepts swipe + wait_for; prompt allows “swipe”.
+- Logging simplified (single-file by default):
+  - Combined log at logs/mcp_demo/session_<ts>/session_combined.jsonl holds prompts/responses, tool outputs, exec logs, errors, warnings.
+  - Session artifacts retained: artifacts/parsed_testcase.json, artifact_json_path.txt, artifact_python_path.txt.
+  - Session summary warns if some steps did not change UI (warnings_count in session_summary.json).
+- YAML runner (proto):
+  - only_test/tools/run_suite.py reads only_test/testcases/main.yaml and resolves USE_LATEST/USE_LATEST_PY under only_test/testcases/generated/.
+  - main.yaml added suite generated_latest to run latest JSON/PY.
+- Docs: LOGS_AND_ARTIFACTS.md describes the new log tree and triage steps.
+
+How To Run (Quick)
+- Generate (orun):
+  - conda run -n orun python -X utf8 only_test/examples/mcp_llm_workflow_demo.py --requirement "测试vod点播播放正常: 关闭广告→搜索→点击首个结果→播放并断言" --target-app com.mobile.brasiltvmobile --max-rounds 2 --device-id <id>
+- Inspect logs/artifacts:
+  - logs/mcp_demo/session_<ts>/session_combined.jsonl (everything in one file)
+  - only_test/testcases/generated/llm_generated_<ts>.json and test_llm_generated_<ts>_script.py
+- Run latest via YAML:
+  - python -X utf8 only_test/tools/run_suite.py --suite generated_latest --dry-run
+  - python -X utf8 only_test/tools/run_suite.py --suite generated_latest
+
+Prompt & Action Rules (Enforced)
+- Atomic actions only: click, input, wait_for_elements, wait, restart, launch, assert, swipe.
+- Selectors required per step: priority_selectors (resource_id > content_desc > text) or bounds_px; swipe requires start_px/end_px.
+- After execution, perform_and_verify compares UI signature and can optionally wait for appearance/disappearance of expected selectors.
+- ads_info.warnings present means auto-close likely failed; prompt guides manual close using selector priority.
+
+Known Issues / Realities
+- Some LLM providers still return non-strict JSON (e.g., trailing commas). Cleaner + schema + one retry are in place. If both attempts fail, we record the violation and proceed using previous-phase JSON to avoid blocking runs.
+- Swipe support is pragmatic (adb input swipe). If more precision is needed, integrate device adapter’s higher-level gestures.
+- Wait conditions are available but not yet mandated at every step; consider asking LLM to always attach wait_for when logical (e.g., after launching or navigating pages).
+
+Short-Term Plan (Concrete)
+- Phase 1: JSON v1.1 + schema validation + one retry — DONE.
+- Phase 2: MCP wait conditions integrated into perform_and_verify — DONE (optional per step; can be made default in prompts).
+- Phase 3: YAML runner to execute suites — DONE (proto).
+- Phase 4: Docs — DONE (LOGS_AND_ARTIFACTS.md) and consolidated logging.
+- Phase 5: App selector hints + prompt hook — TODO.
+- Phase 6: Implement swipe in MCP and templates — DONE.
+
+Acceptance Targets
+- Every step executes on-device; logs show changed=true or wait_result=true; failures emit warnings + actionable errors.
+- Generated JSON passes v1.1 validation; Python code contains no placeholder selectors.
+- YAML can run a suite with current device; session produces the structured combined log and artifacts.
+
+Suggested Next Work (for successor)
+- Make wait_for mandatory for navigation-sensitive steps via prompt and completion schema hints.
+- Add app-specific selector hints (e.g., mVodImageSearch, searchEt, mImageFullScreen) into prompts as “hints”, and inject a repair pass to map fuzzy selectors to known IDs when confidence is low.
+- Optional: adopt json5 for even more tolerant completion parsing.
+- Session utilities: add pack/clean scripts if team wants archive rotation; combined log already simplifies triage.
+
+Environment Notes
+- LLM env must be set (provider/url/key/model). The validator and cleaner are local; no extra deps required unless enabling json5.
+- Device: ensure uiautomator2 available in orun; XML path stable; visual fallback works.
+
+
   Common Pitfalls & What To Log
 
   - LLM unavailable or misconfigured:

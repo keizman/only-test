@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""
+Only-Test 广告自动关闭功能测试脚本
+========================================
+
+专门用于测试only_test的广告自动检测和关闭功能
+支持两种模式：basic(单次检测)和continuous(连续监控)
+"""
+
+import asyncio
+import logging
+import argparse
+import sys
+from pathlib import Path
+from datetime import datetime
+
+# 添加项目路径
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from lib.mcp_interface.device_inspector import DeviceInspector
+from lib.visual_recognition.visual_integration import get_visual_integration, IntegrationConfig
+from lib.visual_recognition.element_recognizer import ElementRecognizer
+from lib.screen_capture import ScreenCapture
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Ensure custom Poco (uiautomator2-based) is on sys.path and import it
+# project_root 指向 only_test 目录，此处需要上溯到仓库根目录再进入 Poco/
+repo_root = project_root.parent
+poco_root = repo_root / "Poco"
+if str(poco_root) not in sys.path:
+    sys.path.insert(0, str(poco_root))
+try:
+    from poco.drivers.android.uiautomator2 import AndroidUiautomator2Poco
+except Exception as _e:
+    AndroidUiautomator2Poco = None
+    logger.error(f"无法导入 AndroidUiautomator2Poco: {_e}")
+
+
+async def test_ad_closer_basic(device_id: str = None, target_app: str = "com.mobile.brasiltvmobile"):
+    """基础广告关闭测试"""
+    print("\n" + "="*60)
+    print("🎯 Only-Test 广告自动关闭功能测试")
+    print("="*60)
+    
+    # 初始化设备检查器
+    inspector = DeviceInspector(device_id=device_id)
+    
+    print(f"📱 启动应用: {target_app}, 测试模式请确保指定 APK 已启动, 不再自动启动")
+    print("\n🔍 开始广告检测和自动关闭测试...")
+    
+    try:
+        # 获取当前界面信息并自动处理广告
+        result = await inspector.get_device_info()
+        
+        # 解析结果
+        ads_info = result.get("auto_close_attempts", 0) if result else 0
+        confidence = result.get("confidence", 0) if result else 0
+        auto_closed = result.get("auto_closed", False) if result else False
+        
+        print(f"\n📊 检测结果:")
+        print(f"   广告检测置信度: {confidence:.2f}")
+        print(f"   自动关闭尝试次数: {ads_info}")
+        print(f"   是否成功关闭: {'✅ 是' if auto_closed else '❌ 否'}")
+        
+        # 显示广告元素详情（如果有的话）
+        if confidence > 0.5:
+            elements = result.get("elements", [])
+            ad_elements = []
+            close_elements = []
+            
+            for elem in elements:
+                text = (elem.get('text') or '').lower()
+                rid = (elem.get('resource_id') or '').lower()
+                
+                # 检查广告相关元素
+                if any(k in text or k in rid for k in ['ad', 'ads', '广告']):
+                    ad_elements.append(elem)
+                
+                # 检查关闭按钮元素
+                if any(k in text or k in rid for k in ['close', '关闭', 'skip', '跳过', 'ivclose', 'mivclose']):
+                    close_elements.append(elem)
+            
+            if ad_elements:
+                print(f"\n🎯 检测到广告元素 ({len(ad_elements)} 个):")
+                for elem in ad_elements[:3]:  # 只显示前3个
+                    if elem.get('text'):
+                        print(f"       文本: {elem['text']}")
+                    if elem.get('resource_id'):
+                        print(f"       ID: {elem['resource_id']}")
+                    if elem.get('clickable'):
+                        print(f"       可点击: ✅")
+                    print()
+            
+            if close_elements:
+                print(f"\n🔘 检测到关闭按钮 ({len(close_elements)} 个):")
+                for elem in close_elements[:3]:  # 只显示前3个
+                    if elem.get('text'):
+                        print(f"       文本: {elem['text']}")
+                    if elem.get('resource_id'):
+                        print(f"       ID: {elem['resource_id']}")
+                    if elem.get('clickable'):
+                        print(f"       可点击: ✅")
+                    print()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"广告关闭测试失败: {e}")
+        return None
+
+
+async def test_ad_closer_continuous(device_id: str = None, target_app: str = "com.mobile.brasiltvmobile"):
+    """连续监控广告关闭测试 - 持续检测并关闭广告"""
+    print("\n" + "="*60)
+    print("🎯 连续监控广告关闭功能测试")
+    print("="*60)
+    print(f"📱 目标应用: {target_app}")
+    print(f"📱 设备ID: {device_id or 'Default'}")
+    
+    # 初始化设备检查器
+    inspector = DeviceInspector(device_id=device_id)
+    
+    print("\n🔄 开始连续监控模式...")
+    print("⚠️  按 Ctrl+C 退出监控")
+    
+    monitor_count = 0
+    success_count = 0
+    
+    try:
+        while True:
+            monitor_count += 1
+            print(f"\n📊 第 {monitor_count} 轮检测...")
+            
+            # 获取当前界面信息并自动处理广告
+            result = await inspector.get_device_info()
+            
+            # 解析结果
+            if result and result.get("auto_closed"):
+                success_count += 1
+                print(f"✅ 第 {monitor_count} 轮: 成功关闭广告 (总成功: {success_count})")
+                print(f"   置信度: {result.get('confidence', 0):.2f}")
+                print(f"   尝试次数: {result.get('auto_close_attempts', 0)}")
+            else:
+                confidence = result.get('confidence', 0) if result else 0
+                print(f"📊 第 {monitor_count} 轮: 未检测到广告 (置信度: {confidence:.2f})")
+            
+            # 等待0.1秒后继续下一轮检测
+            await asyncio.sleep(0.1)
+            
+    except KeyboardInterrupt:
+        print(f"\n\n🏁 监控结束")
+        print(f"📊 统计结果:")
+        print(f"   总检测轮数: {monitor_count}")
+        print(f"   成功关闭次数: {success_count}")
+        print(f"   检测成功率: {success_count/monitor_count*100:.1f}%" if monitor_count > 0 else "   检测成功率: 0%")
+        
+        return {
+            "total_rounds": monitor_count,
+            "success_count": success_count,
+            "success_rate": success_count/monitor_count if monitor_count > 0 else 0
+        }
+
+
+async def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(description="Only-Test 广告自动关闭功能测试工具")
+    parser.add_argument("--device-id", default=None, help="ADB设备ID (可选)")
+    parser.add_argument("--target-app", default="com.mobile.brasiltvmobile", help="目标应用包名")
+    parser.add_argument("--mode", choices=["basic", "continuous"], 
+                       default="basic", help="测试模式: basic=单次检测, continuous=连续监控")
+    
+    args = parser.parse_args()
+    
+    print(f"\n🚀 启动 Only-Test 广告关闭测试")
+    print(f"📱 设备: {args.device_id or 'Default'}")
+    print(f"📦 应用: {args.target_app}")
+    print(f"🎯 模式: {args.mode}")
+    
+    try:
+        if args.mode == "basic":
+            await test_ad_closer_basic(args.device_id, args.target_app)
+        elif args.mode == "continuous":
+            await test_ad_closer_continuous(args.device_id, args.target_app)
+            
+    except KeyboardInterrupt:
+        print("\n\n⚠️  测试被用户中断")
+    except Exception as e:
+        logger.error(f"测试执行失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+

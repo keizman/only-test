@@ -60,16 +60,18 @@ class ScreenCapture:
         """Best-effort to wake and unlock the device to avoid black screenshots.
 
         - Wakes display
-        - Sends MENU/UNLOCK keyevent to dismiss keyguard if present
+        - Dismisses keyguard using safe actions (avoid HOME/RECENTS)
         - Small wait to let UI settle
         """
         try:
             # Wake up display
             subprocess.run(self._adb_cmd(["shell", "input", "keyevent", "KEYCODE_WAKEUP"]), capture_output=True, timeout=2)
-            # Dismiss keyguard
+            # Dismiss keyguard (non-interactive)
             subprocess.run(self._adb_cmd(["shell", "wm", "dismiss-keyguard"]), capture_output=True, timeout=2)
-            # Alternate unlock key
-            subprocess.run(self._adb_cmd(["shell", "input", "keyevent", "82"]), capture_output=True, timeout=2)
+            # Use BACK as a harmless key to close dialogs instead of MENU which may open recents/floating windows on some ROMs
+            subprocess.run(self._adb_cmd(["shell", "input", "keyevent", "4"]), capture_output=True, timeout=2)
+            # Small swipe up to unlock gesture-based keyguard without triggering HOME/RECENTS
+            subprocess.run(self._adb_cmd(["shell", "input", "swipe", "500", "1800", "500", "1200", "150"]), capture_output=True, timeout=2)
             time.sleep(min(max_wait, 0.8))
         except Exception:
             pass
@@ -104,8 +106,11 @@ class ScreenCapture:
         return fixed
 
     def take_screenshot(self, save_path: Optional[str] = None) -> str:
+        # 使用跨平台临时目录
         if save_path is None:
-            save_path = str(Path("/tmp") / f"screenshot_{self.device_id or 'default'}.png")
+            import tempfile
+            temp_dir = Path(tempfile.gettempdir())
+            save_path = str(temp_dir / f"screenshot_{self.device_id or 'default'}.png")
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         data = self._capture_png_bytes()
         if not data:

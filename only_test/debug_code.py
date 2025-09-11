@@ -5,7 +5,7 @@ import os
 import io
 import sys
 import traceback
-from only_test.core.api import *
+from airtest.core.api import *
 
 code = r"""from poco.drivers.android.uiautomation import AndroidUiautomationPocopoco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)touch((0.1015625, 0.05694444444444444))"""
 script_path = r"""C:\Users\junya\AppData\Local\Temp\AirtestIDE\Scripts\untitled.air\untitled.py"""

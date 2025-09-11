@@ -300,6 +300,13 @@ assets/
 
 ## 📋 当前架构状态
 
+## 🧭 统一约定与决策（2025-09-10）
+- 暂缓处理 wait_for_appearance：录制文件的关键动作，不纳入当前日志与执行硬化范围，后续单独规格化再接入。
+- 目录与依赖约定：only_test 为项目根目录，Airtest 为外部 Python 库；代码引用统一使用 airtest.core.*（例如：from airtest.core.api import *）。
+- 视觉/XML 一致性：对外统一元素字段集（uuid, text, content_desc, resource_id, class_name, package, clickable, bounds_px[left,top,right,bottom], source, confidence）。视觉侧缺失字段使用空字符串/缺省值但保证字段存在。
+- 录制链路：维持“多轮执行→取证→回写工件”的策略，但先不将 wait_for_appearance 纳入强判据，仍以前后对比与必要断言为主。
+- 如需调整以上决策，请在本节追加新日期的变更记录。
+
 ### Q29: 已实现功能有哪些？
 **A:** 基于现有代码：
 - ✅ **MCP服务器框架** (`mcp_server.py`)

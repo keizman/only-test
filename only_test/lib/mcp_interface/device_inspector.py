@@ -23,6 +23,23 @@ from lib.visual_recognition.visual_integration import IntegrationConfig
 from lib.device_adapter import DeviceAdapter
 from .mcp_server import mcp_tool
 
+# === 广告检测/关闭关键词（统一常量） ===
+# 全部使用小写做比较，匹配时先对目标字符串 lower()
+PRIORITY_CLOSE_IDS = {
+    'mivclose', 'ivclose', 'close_ad', 'btn_close_ad',
+    'close_ad_button', 'ad_close', 'close_btn'
+}
+EXCLUDED_CLOSE_IDS = {
+    # 常见需要跳过的关闭按钮（例如优惠券）
+    'imcouponclose1'
+}
+# GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用“关闭/跳过”语义
+# - resource-id（例如: com.xxx:id/ivClose；会在小写化后匹配 'close' 等子串）
+# - text（控件显示文本，例如 “关闭”/“跳过”/"close"）
+# - content-desc（无障碍描述，可能标注为 close/关闭 等）
+# 检测逻辑会在 kw['rid']、kw['text']、kw['desc'] 三者上进行包含匹配
+GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x'}
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,7 +161,7 @@ class DeviceInspector:
             "clickable_only": {"type": "boolean", "description": "是否只分析可点击元素", "default": True}
         }
     )
-    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True) -> Dict[str, Any]:
+    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True, auto_close_ads: bool = True) -> Dict[str, Any]:
         """获取当前屏幕信息"""
         if not self._initialized:
             await self.initialize()
@@ -155,22 +172,32 @@ class DeviceInspector:
                 "analysis_type": "current_screen"
             }
             
-            # 获取前台应用
-            import subprocess
-            result = subprocess.run(
-                f"adb {'-s ' + self.device_id if self.device_id else ''} shell dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'".split(),
-                capture_output=True, text=True, shell=True
-            )
+            # 获取前台应用（避免主机侧管道与grep兼容问题，直接拉取并在本地解析）
+            import subprocess, re
+            adb_cmd = ["adb"] + (["-s", self.device_id] if self.device_id else []) + ["shell", "dumpsys", "window", "windows"]
+            result = subprocess.run(adb_cmd, capture_output=True, text=True)
+            current_pkg = "Unknown"
+            if result.returncode == 0 and result.stdout:
+                out = result.stdout
+                # 查找 mCurrentFocus=Window{... u0 package/Activity}
+                m = re.search(r"mCurrentFocus=Window\{[^}]*\s([\w\.]+)/", out)
+                if not m:
+                    # 备选: mFocusedApp=AppWindowToken{... package}
+                    m = re.search(r"mFocusedApp=.*?\s([\w\.]+)\/[\w\.]+", out)
+                if not m:
+                    # 更宽松: 任意像包名的片段
+                    m = re.search(r"([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+){1,})", out)
+                if m:
+                    current_pkg = m.group(1)
+            screen_info["current_app"] = current_pkg
             
-            if result.returncode == 0:
-                output = result.stdout
-                # 解析包名
-                import re
-                match = re.search(r'(\w+\.\w+\.\w+)', output)
-                screen_info["current_app"] = match.group(1) if match else "Unknown"
-            else:
-                screen_info["current_app"] = "Unknown"
-            
+            # 在分析前，按默认参数尝试自动连续关闭广告（支持开关）
+            if auto_close_ads:
+                try:
+                    _ = await self.close_ads(mode="continuous", consecutive_no_ad=3, max_duration=10.0)
+                except Exception as _e:
+                    logger.debug(f"预关闭广告失败（忽略）：{_e}")
+
             # 获取元素信息
             elements = await get_all_elements(clickable_only=clickable_only)
             screen_info["total_elements"] = len(elements)
@@ -196,10 +223,10 @@ class DeviceInspector:
                     "recognition_strategy": elements[0].get("source", "unknown") if elements else "none"
                 }
             
-            # 自动广告检测与关闭（仅在XML/uiautomator2路径下尝试）
-            ads_info = await self._auto_handle_ads(elements)
+            # 二次检测：基于当前元素再计算一次广告信息（记录purpose）
+            all_elements = elements if not clickable_only else await get_all_elements(clickable_only=False)
+            ads_info = await self._auto_handle_ads(all_elements)
             if ads_info.get("auto_close_attempts", 0) > 0:
-                # 自动关闭后刷新元素
                 elements = await get_all_elements(clickable_only=clickable_only)
 
             # 播放状态检测
@@ -237,6 +264,69 @@ class DeviceInspector:
                 "timestamp": datetime.now().isoformat()
             }
 
+    async def get_device_info(self) -> Dict[str, Any]:
+        """获取设备信息并自动处理广告 - 兼容性方法"""
+        return await self.get_current_screen_info(include_elements=True, clickable_only=False)
+
+    @mcp_tool(
+        name="close_ads",
+        description="关闭广告：single=单次尝试，continuous=连续尝试直到多次未检测到广告或超时",
+        category="interaction",
+        parameters={
+            "mode": {"type": "string", "enum": ["single", "continuous"], "default": "continuous"},
+            "consecutive_no_ad": {"type": "integer", "default": 3},
+            "max_duration": {"type": "number", "default": 10.0}
+        }
+    )
+    async def close_ads(self, mode: str = "continuous", consecutive_no_ad: int = 3, max_duration: float = 10.0) -> Dict[str, Any]:
+        """对外提供的广告关闭入口。返回统计信息。"""
+        if not self._initialized:
+            await self.initialize()
+
+        # 单次：调用一次自动关闭
+        if mode == "single":
+            elements = await get_all_elements(clickable_only=False)
+            info = await self._auto_handle_ads(elements)
+            return {"mode": mode, "rounds": 1, "last_ads_info": info}
+
+        # 连续：直到连续N次未检测到广告或达到最大时长
+        rounds = 0
+        closes = 0
+        no_ad_streak = 0
+        import time as _t
+        end_t = _t.time() + float(max_duration)
+        last_info = {}
+        while _t.time() < end_t:
+            rounds += 1
+            elements = await get_all_elements(clickable_only=False)
+            info = await self._auto_handle_ads(elements)
+            last_info = info
+
+            if info.get("auto_closed"):
+                closes += 1
+                no_ad_streak = 0
+            else:
+                conf = float(info.get("confidence", 0.0) or 0.0)
+                # 低置信度且未尝试关闭，认为当前轮无广告
+                if conf < 0.2 and int(info.get("auto_close_attempts", 0)) == 0:
+                    no_ad_streak += 1
+                else:
+                    no_ad_streak = 0
+
+            if no_ad_streak >= max(1, int(consecutive_no_ad)):
+                break
+
+            await asyncio.sleep(0.2)
+
+        return {
+            "mode": mode,
+            "rounds": rounds,
+            "close_count": closes,
+            "no_ad_streak": no_ad_streak,
+            "last_ads_info": last_info,
+            "timed_out": (_t.time() >= end_t)
+        }
+
     # === 广告自动处理相关 ===
     def _elem_center(self, bounds: list) -> tuple:
         try:
@@ -272,13 +362,36 @@ class DeviceInspector:
             score = 0.0
             ad_elems = []
             close_elems = []
+            logger.debug(f"🔍 检测广告置信度 - 元素数量: {n}")
+            # 使用统一常量
+            
             for e in elements:
                 kw = keywords(e)
-                if any(k in kw['text'] or k in kw['rid'] for k in ['ad', 'ads', '广告', 'sponsor']):
+                
+                # 首先检查是否在排除列表中
+                is_excluded = any(excluded_id in kw['rid'] for excluded_id in EXCLUDED_CLOSE_IDS)
+                if is_excluded:
+                    logger.info(f"跳过排除列表中的广告按钮: {e.get('resource_id')}")
+                    continue
+                
+                if any(k in kw['text'] or k in kw['rid'] for k in ['ad', 'ads', '广告', 'sponsor', 'upgrade', 'version', 'update', '升级', '更新']):
                     ad_elems.append(e)
-                if any(k in kw['text'] or k in kw['rid'] or k in kw['desc'] for k in ['close', '关闭', '跳过', 'skip', 'x']) or \
-                   any(k in kw['rid'] for k in ['ivclose', 'mivclose']):
+                    logger.debug(f"  📢 发现广告元素: {e.get('text', '')} | {e.get('resource_id', '')}")
+                
+                # 优先检测强制广告关闭按钮
+                force_close = False
+                for ad_id in PRIORITY_CLOSE_IDS:
+                    if ad_id in kw['rid']:
+                        close_elems.append(e)
+                        force_close = True
+                        break
+                
+                # 常规关闭按钮检测
+                if not force_close and (
+                    any(k in kw['text'] or k in kw['rid'] or k in kw['desc'] for k in GENERIC_CLOSE_KEYWORDS)
+                ):
                     close_elems.append(e)
+                    logger.debug(f"  🔘 发现关闭元素: {e.get('text', '')} | {e.get('resource_id', '')}")
             if n <= 20:
                 score += 0.25
             if ad_elems:
@@ -305,52 +418,174 @@ class DeviceInspector:
                         score += 0.20
                 except Exception:
                     pass
+            logger.debug(f"  📊 置信度计算: 总分={score:.2f}, 广告元素={len(ad_elems)}, 关闭元素={len(close_elems)}")
             return min(1.0, score), ad_elems, close_elems
 
         async def try_close(close_elems: List[Dict[str, Any]]) -> bool:
-            # 依据选择器优先级尝试点击
-            if not self.visual_integration:
-                self.visual_integration = VisualIntegration(IntegrationConfig(device_id=self.device_id))
-                await self.visual_integration.initialize()
-            # 优先特征ID
-            candidates = []
-            for e in close_elems:
-                rid = (e.get('resource_id') or '')
-                if rid:
-                    candidates.append({'type': 'resource_id', 'value': rid})
-            # 再 content_desc/text
-            for e in close_elems:
-                desc = (e.get('content_desc') or '')
-                if desc:
-                    candidates.append({'type': 'content_desc', 'value': desc})
-            for e in close_elems:
-                tx = (e.get('text') or '')
-                if tx:
-                    candidates.append({'type': 'text', 'value': tx})
-            # 执行点击
-            for c in candidates[:3]:
-                ok = await self.visual_integration.find_and_tap(
-                    text=c['value'] if c['type'] == 'text' else None,
-                    resource_id=c['value'] if c['type'] == 'resource_id' else None,
-                    content_desc=c['value'] if c['type'] == 'content_desc' else None,
-                    timeout=5.0
-                )
-                if ok:
+            # 使用poco直接关闭广告 - 采用正确的 resourceId 关键字参数
+            try:
+                # 使用本地自定义的Poco库
+                from ..poco_utils import get_android_poco
+                poco = get_android_poco()
+
+                success_count = 0
+
+                # 遍历所有关闭元素，使用poco直接点击
+                for e in close_elems:
+                    resource_id = e.get('resource_id', '')
+                    text_val = (e.get('text') or '').strip()
+                    if not resource_id and not text_val:
+                        continue
+
+                    rid_lower = (resource_id or '').lower()
+
+                    # 检查是否在排除列表中
+                    is_excluded = any(excluded_id in rid_lower for excluded_id in EXCLUDED_CLOSE_IDS)
+                    if is_excluded:
+                        logger.info(f"跳过排除列表中的广告按钮: {resource_id}")
+                        continue
+
+                    # 检查是否是优先级广告按钮或一般关闭按钮
+                    should_click = any(ad_id in rid_lower for ad_id in PRIORITY_CLOSE_IDS) or \
+                                   any(keyword in rid_lower for keyword in GENERIC_CLOSE_KEYWORDS) or \
+                                   any(keyword in (text_val or '').lower() for keyword in GENERIC_CLOSE_KEYWORDS)
+
+                    if should_click:
+                        try:
+                            logger.info(f"尝试使用poco点击广告关闭按钮: {resource_id or text_val}")
+
+                            # 1) 优先按 resourceId 精准定位（正确写法：resourceId=...）
+                            obj = None
+                            if resource_id:
+                                obj = poco(resourceId=resource_id)
+                                if not obj.exists():
+                                    # 兼容某些驱动，尝试 name=resource_id
+                                    obj = poco(name=resource_id)
+
+                            # 2) 退而求其次按文本定位
+                            if (not obj or not obj.exists()) and text_val:
+                                obj = poco(text=text_val)
+
+                            # 3) 再次兜底，尝试通过后缀匹配ID（部分ROM会省略包名前缀）
+                            if (not obj or not obj.exists()) and resource_id and '/' in resource_id:
+                                rid_suffix = resource_id.split('/')[-1]
+                                try:
+                                    obj = poco(resourceIdMatches=f".*:id/{rid_suffix}$")
+                                except Exception:
+                                    # 某些实现不支持正则，退化为 name 后缀判断
+                                    obj = poco(name=rid_suffix)
+
+                            if obj and obj.exists():
+                                try:
+                                    # 等待出现后点击，提升稳定性
+                                    try:
+                                        obj.wait_for_appearance(timeout=2.0)
+                                    except Exception:
+                                        pass
+                                    obj.click()
+                                    success_count += 1
+                                    logger.info(f"成功点击广告关闭按钮: {resource_id or text_val}")
+
+                                    # 点击后稍等一下让界面更新
+                                    try:
+                                        import asyncio as _aio
+                                        await _aio.sleep(0.5)
+                                    except Exception:
+                                        pass
+                                    continue
+                                except Exception as click_error:
+                                    logger.warning(f"poco点击失败 {resource_id or text_val}: {click_error}")
+                                    # 继续尝试下一个候选
+                                    continue
+
+                        except Exception as e:
+                            logger.warning(f"poco点击处理异常 {resource_id or text_val}: {e}")
+                            # 失败了也不要紧，继续尝试其他按钮
+                            continue
+
+                # 若poco可用但未成功，继续走坐标兜底
+                if success_count > 0:
                     return True
-            return False
+                else:
+                    logger.info("poco点击未奏效，尝试坐标兜底")
+                    # fall through to coordinate fallback
+            except ImportError as import_error:
+                logger.error(f"poco库导入失败，回退到坐标方式: {import_error}")
+            except RuntimeError as device_error:
+                if "设备连接失败" in str(device_error) or "Failed to connect" in str(device_error):
+                    logger.error(f"Android设备未连接，回退到坐标方式: {device_error}")
+                else:
+                    logger.error(f"poco运行时错误，回退到坐标方式: {device_error}")
+            except Exception as e:
+                logger.error(f"poco广告关闭失败，回退到坐标方式: {e}")
+
+            # === 兜底：坐标点击关闭 ===
+            try:
+                import subprocess, time
+
+                # 获取屏幕尺寸
+                def _screen_size():
+                    out = subprocess.run(
+                        f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(),
+                        capture_output=True, text=True
+                    )
+                    if out.returncode == 0 and 'Physical size:' in out.stdout:
+                        sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
+                        w, h = sz.split('x')
+                        return int(w), int(h)
+                    return 1080, 1920
+
+                sw, sh = _screen_size()
+
+                # 优先点击优先级高的关闭元素
+                tried = 0
+                for e in close_elems:
+                    b = e.get('bounds') or []
+                    if not (isinstance(b, (list, tuple)) and len(b) == 4):
+                        continue
+                    # 归一化->像素
+                    if max(b) <= 1.0:
+                        left, top, right, bottom = int(b[0] * sw), int(b[1] * sh), int(b[2] * sw), int(b[3] * sh)
+                    else:
+                        left, top, right, bottom = map(int, b)
+                    cx, cy = (left + right) // 2, (top + bottom) // 2
+                    # 轻微扰动多次点击
+                    for dx, dy in [(0,0), (8,0), (-8,0), (0,8), (0,-8)]:
+                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {cx+dx} {cy+dy}"
+                        subprocess.run(cmd.split(), capture_output=True, text=True)
+                        time.sleep(0.25)
+                    tried += 1
+                    # 点击一次高优先级元素后先退出循环，交由外层再次评估置信度
+                    break
+
+                return tried > 0
+            except Exception as e:
+                logger.error(f"坐标兜底失败: {e}")
+                return False
 
         # 自动关闭循环
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
             conf, ad_es, close_es = detect_conf(elements)
             info['confidence'] = conf
-            if conf >= 0.90 and close_es:
+            # 如果有广告关闭按钮，直接尝试点击，无视置信度
+            # 特别是对于已知的广告关闭按钮ID，但排除不应该关闭的按钮
+            excluded_ids = EXCLUDED_CLOSE_IDS
+            priority_ids = PRIORITY_CLOSE_IDS
+            
+            has_priority_close = any(
+                any(ad_id in (e.get('resource_id', '')).lower() for ad_id in priority_ids) and
+                not any(excluded_id in (e.get('resource_id', '')).lower() for excluded_id in excluded_ids)
+                for e in close_es
+            )
+            
+            if (has_priority_close or conf >= 0.50) and close_es:
                 clicked = await try_close(close_es)
                 info['auto_close_attempts'] += 1
                 if not clicked:
                     break
-                # 刷新元素以便下一轮判断
-                elements = await get_all_elements(clickable_only=True)
+                # 刷新元素以便下一轮判断  
+                elements = await get_all_elements(clickable_only=False)
                 # 若置信度下降则退出
                 conf2, _, _ = detect_conf(elements)
                 if conf2 < 0.70:
@@ -874,3 +1109,4 @@ class DeviceInspector:
                 loading_indicators.append(element.get("text", "") or "Loading indicator")
         
         return loading_indicators
+

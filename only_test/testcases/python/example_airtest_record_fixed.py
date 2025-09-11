@@ -3,17 +3,19 @@
 # [path] home -> search -> search_result -> vod_playing_detail -> playing
 
 from airtest.core.api import *
-# 使用本地自定义的Poco库
+# 使用修复后的poco工具函数（已解决所有导入和依赖问题）
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../Poco'))
-# from poco.drivers.android.uiautomation2 import AndroidUiautomationPoco
-from poco.drivers.android.uiautomation2 import AndroidUiautomator2Poco
+# 添加项目路径
+project_root = os.path.join(os.path.dirname(__file__), '../..')
+sys.path.insert(0, project_root)
+
+from lib.poco_utils import get_android_poco
 
 # setup_hook()
 # 这里会放置一些测之前的必要条件 
 connect_device("android://127.0.0.1:5037/192.168.100.112:5555?touch_method=ADBTOUCH&")
-poco = AndroidUiautomator2Poco(use_airtest_input=True, screenshot_each_action=False)
+poco = get_android_poco()
 
 ## [page] app_initialization, [action] restart, [comment] 重启应用清理环境状态(多次关闭)
 stop_app("com.mobile.brasiltvmobile")
@@ -27,34 +29,34 @@ start_app("com.mobile.brasiltvmobile")
 sleep(5) # APP 有启动动画, 需要等待
 
 ## [page] home, [action] click, [comment] 处理首页弹窗 - 关闭升级提示弹窗
-poco("com.mobile.brasiltvmobile:id/ivClose").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/ivClose").click()
 
 ## [page] home, [action] click, [comment] 处理首页弹窗 - 关闭广告弹窗
-poco("com.mobile.brasiltvmobile:id/mIvClose").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/mIvClose").click()
 
 ## [page] home, [action] click, [comment] 处理首页弹窗 - 再次确保关闭所有弹窗
-poco("com.mobile.brasiltvmobile:id/ivClose").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/ivClose").click()
 
 ## [page] home, [action] click, [comment] 点击搜索按钮进入搜索页面
-poco("com.mobile.brasiltvmobile:id/mVodImageSearch").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/mVodImageSearch").click()
 
 ## [page] search, [action] click, [comment] 点击搜索输入框激活输入状态
 sleep(0.5)
-poco("com.mobile.brasiltvmobile:id/searchEt").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/searchEt").click()
 
 ## [page] search, [action] input, [comment] 输入搜索关键词
 sleep(0.5)
 text("西语手机端720资源02")
 
 ## [page] search, [action] click, [comment] 点击搜索按钮执行搜索操作
-poco("com.mobile.brasiltvmobile:id/searchCancel").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/searchCancel").click()
 
 ## [page] search_result, [action] click, [comment] 点击搜索结果中第一个节目的封面图片
 poco("android.widget.FrameLayout").child("android.widget.LinearLayout").offspring("android:id/content").offspring("com.mobile.brasiltvmobile:id/searchResultList").child("com.mobile.brasiltvmobile:id/mLinearLayout")[0].offspring("com.mobile.brasiltvmobile:id/posterImageView").click()
 
 ## [page] vod_playing_detail, [action] click, [comment] 点击播放按钮开始播放视频
-miniScreenCenterX,miniScreenCenterY = poco("com.mobile.brasiltvmobile:id/mPlayPauseIcon").get_position()
-poco("com.mobile.brasiltvmobile:id/mPlayPauseIcon").click()
+miniScreenCenterX,miniScreenCenterY = poco(resourceId="com.mobile.brasiltvmobile:id/mPlayPauseIcon").get_position()
+poco(resourceId="com.mobile.brasiltvmobile:id/mPlayPauseIcon").click()
 
 ## [page] vod_playing_detail, [action] wait, [comment] 等待广告播放完毕
 poco(text="Ads").wait_for_disappearance(timeout=30)
@@ -64,7 +66,7 @@ sleep(0.5)
 poco.click([miniScreenCenterX, miniScreenCenterY])
 
 ## [page] vod_playing_detail, [action] click, [comment] 点击全屏按钮进入全屏播放模式
-poco("com.mobile.brasiltvmobile:id/mImageFullScreen").click()
+poco(resourceId="com.mobile.brasiltvmobile:id/mImageFullScreen").click()
 
 ## [page] playing, [action] assert, [comment] 断言验证节目正在正常播放
 # there is assert program are already playing 
@@ -72,7 +74,6 @@ poco("com.mobile.brasiltvmobile:id/mImageFullScreen").click()
 
 # teardown_hook()
 # 这里会放置一些测之前的必要条件 
-
 
 
 

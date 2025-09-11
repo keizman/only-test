@@ -2,7 +2,7 @@
 # [tag] 
 # [path] 
 
-from only_test.core.api import *
+from airtest.core.api import *
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 
 # connect_device("android://127.0.0.1:5037/DEVICE?touch_method=ADBTOUCH&")  # 使用 airtest run --device 传入或在此填写

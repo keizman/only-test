@@ -20,8 +20,8 @@ from datetime import datetime
 from pathlib import Path
 
 # Airtest 相关导入
-from only_test.core.api import *
-from only_test.core.helper import G
+from airtest.core.api import *
+from airtest.core.helper import G
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 
 # Only-Test 框架导入
