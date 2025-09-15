@@ -55,6 +55,10 @@ recognition:
   # 默认识别模式
   default_mode: "hybrid"   # xml, visual, hybrid, sdk
   
+  # 广告策略
+  ads:
+    auto_close_limit: 3   # 仅在前N次屏幕分析时自动关闭广告（防止过度干预）
+  
   # 模式切换策略
   mode_switching:
     auto_switch: true      # 自动切换模式

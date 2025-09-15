@@ -63,6 +63,27 @@ class DeviceInspector:
         self.visual_integration: Optional[VisualIntegration] = None
         self.device_adapter: Optional[DeviceAdapter] = None
         self._initialized = False
+        # 目标应用包名（用于限制操作范围）
+        self.target_app_package: Optional[str] = None
+        # 允许操作的系统包白名单（权限对话框等）
+        self.allowed_external_packages = {
+            'android',
+            'com.android.permissioncontroller',
+            'com.google.android.permissioncontroller',
+            'com.android.packageinstaller',
+            'com.android.systemui'
+        }
+        # MCP 屏幕分析轮次计数，用于限制自动关广告次数
+        self._analysis_round: int = 0
+        # 自动关广告最大轮次（可通过 get_current_screen_info 的 auto_close_limit 覆盖）
+        self.auto_close_ads_limit: int = 3
+        # 从环境变量读取全局覆盖（每会话），例如 ONLY_TEST_AUTO_CLOSE_LIMIT=2
+        try:
+            env_limit = os.getenv("ONLY_TEST_AUTO_CLOSE_LIMIT")
+            if env_limit is not None and str(env_limit).strip() != "":
+                self.auto_close_ads_limit = int(env_limit)
+        except Exception:
+            pass
         
         logger.info(f"设备探测器初始化 - 设备: {device_id or 'default'}")
     
@@ -160,18 +181,31 @@ class DeviceInspector:
         category="screen_analysis",
         parameters={
             "include_elements": {"type": "boolean", "description": "是否包含元素列表", "default": False},
-            "clickable_only": {"type": "boolean", "description": "是否只分析可点击元素", "default": True}
+            "clickable_only": {"type": "boolean", "description": "是否只分析可点击元素", "default": True},
+            "auto_close_limit": {"type": "integer", "description": "限制仅在前N次分析时自动关闭广告(默认3)", "default": 3}
         }
     )
-    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True, auto_close_ads: bool = True) -> Dict[str, Any]:
+    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True, auto_close_ads: bool = True, auto_close_limit: Optional[int] = None) -> Dict[str, Any]:
         """获取当前屏幕信息"""
         if not self._initialized:
             await self.initialize()
         
         try:
+            # 更新分析轮次
+            try:
+                self._analysis_round = int(self._analysis_round) + 1
+            except Exception:
+                self._analysis_round = 1
+            # 计算自动关广告是否启用（仅前N次）
+            limit = int(auto_close_limit) if auto_close_limit is not None else int(getattr(self, 'auto_close_ads_limit', 3))
+            should_auto_close = bool(auto_close_ads) and (self._analysis_round <= max(0, limit))
+
             screen_info = {
                 "timestamp": datetime.now().isoformat(),
-                "analysis_type": "current_screen"
+                "analysis_type": "current_screen",
+                "analysis_round": self._analysis_round,
+                "auto_close_ads_enabled": should_auto_close,
+                "auto_close_limit": limit
             }
             
             # 获取前台应用（避免主机侧管道与grep兼容问题，直接拉取并在本地解析）
@@ -225,8 +259,8 @@ class DeviceInspector:
             # 兼容 step_validator 期望字段：page 优先 current_page
             screen_info.setdefault("page", screen_info["current_page"])
             
-            # 在分析前，按默认参数尝试自动连续关闭广告（支持开关）
-            if auto_close_ads:
+            # 在分析前，按默认参数尝试自动连续关闭广告（仅限前N轮；可关闭）
+            if should_auto_close:
                 try:
                     _ = await self.close_ads(mode="continuous", consecutive_no_ad=3, max_duration=10.0)
                 except Exception as _e:
@@ -259,8 +293,8 @@ class DeviceInspector:
             
             # 二次检测：基于当前元素再计算一次广告信息（记录purpose）
             all_elements = elements if not clickable_only else await get_all_elements(clickable_only=False)
-            ads_info = await self._auto_handle_ads(all_elements)
-            if ads_info.get("auto_close_attempts", 0) > 0:
+            ads_info = await self._auto_handle_ads(all_elements, allow_click=should_auto_close)
+            if should_auto_close and ads_info.get("auto_close_attempts", 0) > 0:
                 elements = await get_all_elements(clickable_only=clickable_only)
 
             # 播放状态检测
@@ -275,6 +309,8 @@ class DeviceInspector:
                     {
                         "text": elem.get("text", "")[:50],  # 限制文本长度
                         "resource_id": elem.get("resource_id", ""),
+                        "content_desc": elem.get("content_desc", ""),
+                        "package": elem.get("package", ""),
                         "class_name": elem.get("class_name", ""),
                         "clickable": elem.get("clickable", False),
                         "source": elem.get("source", ""),
@@ -378,10 +414,30 @@ class DeviceInspector:
             # 通过 YAML 解析，支持 app_id / package
             ym = YamlMonitor()
             pkg = ym.get_package_name(application) or application
+            # 记录目标应用，用于后续操作范围限制
+            try:
+                self.target_app_package = pkg
+            except Exception:
+                pass
             result = unified_start_app(application=pkg, device_id=self.device_id, force_restart=force_restart)
             return result
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def _belongs_to_scope(self, elem: Dict[str, Any]) -> bool:
+        try:
+            rid = (elem.get('resource_id') or '').strip()
+            pkg = (elem.get('package') or '').strip()
+            # 未设置目标包时，默认放宽（保持向后兼容）
+            if not self.target_app_package:
+                return True
+            if rid and rid.startswith(self.target_app_package + ":"):
+                return True
+            if pkg and (pkg == self.target_app_package or pkg in getattr(self, 'allowed_external_packages', set())):
+                return True
+            return False
+        except Exception:
+            return True
 
     # === 广告自动处理相关 ===
     def _elem_center(self, bounds: list) -> tuple:
@@ -391,7 +447,7 @@ class DeviceInspector:
         except Exception:
             return (0.5, 0.5)
 
-    async def _auto_handle_ads(self, elements: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _auto_handle_ads(self, elements: List[Dict[str, Any]], allow_click: bool = True) -> Dict[str, Any]:
         """检测广告并尝试自动关闭。最多尝试3次。
 
         置信度计算因子：
@@ -413,6 +469,12 @@ class DeviceInspector:
                 'cls': (elem.get('class_name') or '').lower(),
             }
 
+        def _belongs_to_target(elem: Dict[str, Any]) -> bool:
+            try:
+                return self._belongs_to_scope(elem)
+            except Exception:
+                return True
+
         def detect_conf(elements: List[Dict[str, Any]]):
             n = len(elements)
             score = 0.0
@@ -422,6 +484,9 @@ class DeviceInspector:
             # 使用统一常量
             
             for e in elements:
+                # 仅处理目标应用元素，避免误点系统桌面等其他APK
+                if not _belongs_to_target(e):
+                    continue
                 kw = keywords(e)
                 
                 # 首先检查是否在排除列表中
@@ -476,6 +541,14 @@ class DeviceInspector:
                     pass
             logger.debug(f"  📊 置信度计算: 总分={score:.2f}, 广告元素={len(ad_elems)}, 关闭元素={len(close_elems)}")
             return min(1.0, score), ad_elems, close_elems
+
+        # 若仅做检测，不进行任何点击尝试
+        if allow_click is False:
+            conf_only, _, _ = detect_conf(elements)
+            info['confidence'] = conf_only
+            if conf_only >= 0.70:
+                info['warnings'].append('可能存在未关闭的广告')
+            return info
 
         async def try_close(close_elems: List[Dict[str, Any]]) -> bool:
             # 使用poco直接关闭广告 - 采用正确的 resourceId 关键字参数
@@ -596,6 +669,9 @@ class DeviceInspector:
                 # 优先点击优先级高的关闭元素
                 tried = 0
                 for e in close_elems:
+                    # 仅处理目标应用元素
+                    if not _belongs_to_target(e):
+                        continue
                     b = e.get('bounds') or []
                     if not (isinstance(b, (list, tuple)) and len(b) == 4):
                         continue
@@ -669,10 +745,13 @@ class DeviceInspector:
         }
     )
     async def perform_ui_action(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.5) -> Dict[str, Any]:
-        """执行单步UI动作。优先 resource_id > content_desc > text；若给定 bounds_px 则直接坐标点击。"""
+        """执行单步UI动作。
+        策略：优先使用选择器（resource_id > content_desc > text）；仅当选择器失败时再使用 bounds_px。
+        同时内置“容器→子输入框”启发式：若点击容器失败，尝试点击其子 EditText。
+        """
         if not self._initialized:
             await self.initialize()
-        import subprocess, time
+        import subprocess, time as _time
         used_selector = None
         try:
             # 解出选择器
@@ -699,18 +778,12 @@ class DeviceInspector:
                         return 'text', s['text']
                 return None, None
 
-            # 坐标点击兜底
-            bounds_px = target.get('bounds_px') if isinstance(target, dict) else None
-            if action == 'click' and bounds_px and isinstance(bounds_px, (list, tuple)) and len(bounds_px) == 4:
-                x = (bounds_px[0] + bounds_px[2]) // 2
-                y = (bounds_px[1] + bounds_px[3]) // 2
-                cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
-                subprocess.run(cmd.split(), capture_output=True, text=True)
-                time.sleep(max(0.0, float(wait_after)))
-                return {"success": True, "used": {"type": "bounds_px", "value": bounds_px}}
-
             sel_type, sel_value = pick_selector(target)
             used_selector = {"type": sel_type, "value": sel_value}
+            # 选择器包名限制：若提供 resource_id 但不属于目标包，直接判为无效选择器
+            if sel_type == 'resource_id' and sel_value and self.target_app_package:
+                if not str(sel_value).startswith(self.target_app_package + ":"):
+                    return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
 
             # 通过 ElementRecognizer 执行动作
             if not self.visual_integration:
@@ -718,33 +791,169 @@ class DeviceInspector:
                 await self.visual_integration.initialize()
 
             if action == 'click':
-                ok = await self.visual_integration.find_and_tap(
-                    text=sel_value if sel_type == 'text' else None,
-                    resource_id=sel_value if sel_type == 'resource_id' else None,
-                    content_desc=sel_value if sel_type == 'content_desc' else None,
-                    timeout=10.0
-                )
-                time.sleep(max(0.0, float(wait_after)))
-                return {"success": bool(ok), "used": used_selector}
+                # 1) 首选按选择器点击
+                ok = False
+                # 内容/文本选择器：先验证属于目标包
+                if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
+                    try:
+                        elems = await get_all_elements(clickable_only=False)
+                        found_in_target = False
+                        for e in elems:
+                            if sel_type == 'content_desc' and (e.get('content_desc') == sel_value):
+                                if self._belongs_to_scope(e):
+                                    found_in_target = True; break
+                            if sel_type == 'text' and (e.get('text') == sel_value):
+                                if self._belongs_to_scope(e):
+                                    found_in_target = True; break
+                        if not found_in_target:
+                            return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
+                    except Exception:
+                        pass
+                if sel_type in ('resource_id', 'content_desc', 'text') and sel_value:
+                    ok = await self.visual_integration.find_and_tap(
+                        text=sel_value if sel_type == 'text' else None,
+                        resource_id=sel_value if sel_type == 'resource_id' else None,
+                        content_desc=sel_value if sel_type == 'content_desc' else None,
+                        timeout=8.0
+                    )
+                # 2) 若失败，尝试“容器→子输入框”启发式
+                if not ok and sel_type == 'resource_id' and sel_value:
+                    try:
+                        elems = await get_all_elements(clickable_only=False)
+                        container = None
+                        for e in elems:
+                            if e.get('resource_id') == sel_value:
+                                container = e; break
+                        if container and isinstance(container.get('bounds'), (list, tuple)) and len(container['bounds']) == 4:
+                            cb = container['bounds']
+                            # 尝试在容器内寻找 EditText 类或带 'searchEt' 的输入框
+                            child = None
+                            for e in elems:
+                                cls = (e.get('class_name') or '').lower()
+                                rid = (e.get('resource_id') or '').lower()
+                                eb = e.get('bounds') or []
+                                def _inside(inner, outer):
+                                    try:
+                                        return inner[0] >= outer[0] and inner[1] >= outer[1] and inner[2] <= outer[2] and inner[3] <= outer[3]
+                                    except Exception:
+                                        return False
+                                if _inside(eb, cb) and ('edittext' in cls or 'searchet' in rid):
+                                    child = e; break
+                            if child and isinstance(child.get('bounds'), (list, tuple)) and len(child['bounds']) == 4:
+                                # 点击子输入框中心
+                                b = child['bounds']
+                                # 转换归一化->像素（如有必要）。尝试获取屏幕尺寸
+                                def _screen_size():
+                                    out = subprocess.run(
+                                        f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(), capture_output=True, text=True
+                                    )
+                                    if out.returncode == 0 and 'Physical size:' in out.stdout:
+                                        sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
+                                        w, h = sz.split('x')
+                                        return int(w), int(h)
+                                    return 1080, 1920
+                                sw, sh = _screen_size()
+                                if max(b) <= 1.0:
+                                    x = int(((b[0] + b[2]) / 2.0) * sw)
+                                    y = int(((b[1] + b[3]) / 2.0) * sh)
+                                else:
+                                    x = int((b[0] + b[2]) / 2.0)
+                                    y = int((b[1] + b[3]) / 2.0)
+                                cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
+                                subprocess.run(cmd.split(), capture_output=True, text=True)
+                                ok = True
+                    except Exception:
+                        pass
+                # 3) 若仍失败，且给定 bounds_px，则用坐标兜底（需验证属于目标包/白名单）
+                if not ok:
+                    bp = target.get('bounds_px') if isinstance(target, dict) else None
+                    if bp and isinstance(bp, (list, tuple)) and len(bp) == 4:
+                        if self.target_app_package:
+                            try:
+                                elems = await get_all_elements(clickable_only=False)
+                                # 统一为像素坐标进行重叠判断
+                                def _screen_size():
+                                    out = subprocess.run(
+                                        f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(), capture_output=True, text=True
+                                    )
+                                    if out.returncode == 0 and 'Physical size:' in out.stdout:
+                                        sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
+                                        w, h = sz.split('x')
+                                        return int(w), int(h)
+                                    return 1080, 1920
+                                sw, sh = _screen_size()
+                                def _to_px(b):
+                                    if max(b) <= 1.0:
+                                        return [int(b[0]*sw), int(b[1]*sh), int(b[2]*sw), int(b[3]*sh)]
+                                    return [int(b[0]), int(b[1]), int(b[2]), int(b[3])]
+                                bb = _to_px(bp)
+                                def _iou(a, b):
+                                    ax1, ay1, ax2, ay2 = a; bx1, by1, bx2, by2 = b
+                                    inter_w = max(0, min(ax2,bx2) - max(ax1,bx1))
+                                    inter_h = max(0, min(ay2,by2) - max(ay1,by1))
+                                    inter = inter_w * inter_h
+                                    if inter == 0:
+                                        return 0.0
+                                    area_a = max(0, ax2-ax1) * max(0, ay2-ay1)
+                                    area_b = max(0, bx2-bx1) * max(0, by2-by1)
+                                    union = max(1, area_a + area_b - inter)
+                                    return inter / union
+                                found_ok = False
+                                for e in elems:
+                                    eb = e.get('bounds') or []
+                                    if not (isinstance(eb, (list, tuple)) and len(eb) == 4):
+                                        continue
+                                    ebp = _to_px(eb)
+                                    if _iou(bb, ebp) >= 0.5 and self._belongs_to_scope(e):
+                                        found_ok = True
+                                        break
+                                if not found_ok:
+                                    return {"success": False, "error": "bounds_not_in_target_app", "used": used_selector}
+                            except Exception:
+                                pass
+                        x = int((bp[0] + bp[2]) / 2)
+                        y = int((bp[1] + bp[3]) / 2)
+                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
+                        subprocess.run(cmd.split(), capture_output=True, text=True)
+                        ok = True
+                _time.sleep(max(0.0, float(wait_after)))
+                return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector)}
+
             elif action == 'input':
+                # 选择器范围限制
+                if sel_type == 'resource_id' and sel_value and self.target_app_package:
+                    if not str(sel_value).startswith(self.target_app_package + ":"):
+                        return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
+                if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
+                    try:
+                        elems = await get_all_elements(clickable_only=False)
+                        found_in_target = False
+                        for e in elems:
+                            if sel_type == 'content_desc' and (e.get('content_desc') == sel_value) and self._belongs_to_scope(e):
+                                found_in_target = True; break
+                            if sel_type == 'text' and (e.get('text') == sel_value) and self._belongs_to_scope(e):
+                                found_in_target = True; break
+                        if not found_in_target:
+                            return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
+                    except Exception:
+                        pass
                 # 聚焦输入框
                 _ = await self.visual_integration.find_and_tap(
                     text=sel_value if sel_type == 'text' else None,
                     resource_id=sel_value if sel_type == 'resource_id' else None,
                     content_desc=sel_value if sel_type == 'content_desc' else None,
-                    timeout=10.0
+                    timeout=8.0
                 )
                 # ADB 输入（空格替换为% s以兼容input）
                 safe = (data or '').replace(' ', '%s')
                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
                 subprocess.run(cmd.split(), capture_output=True, text=True)
-                time.sleep(max(0.0, float(wait_after)))
+                _time.sleep(max(0.0, float(wait_after)))
                 return {"success": True, "used": used_selector}
             elif action == 'swipe':
                 # 支持 target.swipe.start_px/end_px 或通过 bounds_px 推导方向
                 swipe = target.get('swipe', {}) if isinstance(target, dict) else {}
                 def _screen_size():
-                    import subprocess
                     out = subprocess.run(f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(), capture_output=True, text=True)
                     if out.returncode == 0 and 'Physical size:' in out.stdout:
                         sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
@@ -766,7 +975,7 @@ class DeviceInspector:
                     dur = int((swipe.get('duration_ms') or 300))
                     cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input swipe {int(start_px[0])} {int(start_px[1])} {int(end_px[0])} {int(end_px[1])} {dur}"
                     subprocess.run(cmd.split(), capture_output=True, text=True)
-                    time.sleep(max(0.0, float(wait_after)))
+                    _time.sleep(max(0.0, float(wait_after)))
                     return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur}}
                 return {"success": False, "error": "invalid swipe parameters"}
             else:
@@ -787,12 +996,31 @@ class DeviceInspector:
         }
     )
     async def perform_and_verify(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.8, wait_for: Dict[str, Any] = None) -> Dict[str, Any]:
-        """执行动作并通过前后两次 get_current_screen_info 对比是否变化。"""
+        """执行动作并通过前后两次 get_current_screen_info 和截图相似度对比验证是否变化。
+        规则：仅当 XML 未变化 且 屏幕相似度>=98% 时，判定为无效操作。
+        """
         from hashlib import md5
         import json as _json
+        import tempfile, os as _os
+        # 截图工具
+        from only_test.lib.screen_capture import ScreenCapture
+        _sc = ScreenCapture(device_id=self.device_id)
+        # 前置：获取 UI 与截图
         pre = await self.get_current_screen_info(include_elements=True, clickable_only=True)
+        pre_shot = None
+        try:
+            pre_shot = _sc.take_screenshot(save_path=str(_os.path.join(tempfile.gettempdir(), f"pre_{self.device_id or 'default'}.png")))
+        except Exception:
+            pre_shot = None
+        # 执行动作
         r = await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after)
+        # 后置：获取 UI 与截图
         post = await self.get_current_screen_info(include_elements=True, clickable_only=True)
+        post_shot = None
+        try:
+            post_shot = _sc.take_screenshot(save_path=str(_os.path.join(tempfile.gettempdir(), f"post_{self.device_id or 'default'}.png")))
+        except Exception:
+            post_shot = None
         # Optional wait condition
         waited = None
         if isinstance(wait_for, dict) and wait_for.get('type') in ('appearance', 'disappearance'):
@@ -803,11 +1031,11 @@ class DeviceInspector:
                 for s in sels:
                     rid = s.get('resource_id'); txt = s.get('text'); desc = s.get('content_desc') or s.get('desc')
                     for ee in el_list:
-                        if rid and ee.get('resource_id') == rid:
+                        if rid and ee.get('resource_id') == rid and self._belongs_to_scope(ee):
                             return True
-                        if txt and ee.get('text') == txt:
+                        if txt and ee.get('text') == txt and self._belongs_to_scope(ee):
                             return True
-                        if desc and ee.get('content_desc') == desc:
+                        if desc and ee.get('content_desc') == desc and self._belongs_to_scope(ee):
                             return True
                 return False
             desired = (wait_for['type'] == 'appearance')
@@ -820,6 +1048,7 @@ class DeviceInspector:
                     break
             if waited is None:
                 waited = False
+        # XML 变化签名
         def signature(d: Dict[str, Any]) -> str:
             els = d.get('elements', []) if isinstance(d, dict) else []
             sig = [f"{e.get('resource_id','')}|{e.get('text','')}|{e.get('clickable',False)}" for e in els]
@@ -827,11 +1056,44 @@ class DeviceInspector:
             return md5(payload.encode('utf-8', errors='ignore')).hexdigest()
         pre_sig = signature(pre)
         post_sig = signature(post)
-        changed = (pre_sig != post_sig)
+        xml_changed = (pre_sig != post_sig)
+        # 图像相似度（0~1，越大越相似）
+        def _image_similarity(p1: str, p2: str) -> float:
+            try:
+                from PIL import Image  # type: ignore
+                im1 = Image.open(p1).convert('L').resize((64,64))
+                im2 = Image.open(p2).convert('L').resize((64,64))
+                # 计算均方差并映射到相似度
+                import numpy as _np  # type: ignore
+                a1 = _np.array(im1, dtype=_np.float32)
+                a2 = _np.array(im2, dtype=_np.float32)
+                mse = ((a1 - a2) ** 2).mean()
+                # 像素值范围0-255，归一化；简单映射到[0,1]
+                sim = max(0.0, 1.0 - (mse / (255.0**2)))
+                return float(sim)
+            except Exception:
+                # 回退：MD5 完全一致视为1.0，否则0.0
+                try:
+                    import hashlib
+                    def _md5(fp):
+                        with open(fp, 'rb') as f:
+                            return hashlib.md5(f.read()).hexdigest()
+                    return 1.0 if (_md5(p1) == _md5(p2)) else 0.0
+                except Exception:
+                    return 0.0
+        visual_similarity = None
+        if pre_shot and post_shot:
+            visual_similarity = _image_similarity(pre_shot, post_shot)
+        visual_changed = (visual_similarity is not None and visual_similarity < 0.98)
+        invalid_action = (not xml_changed) and (visual_changed is False)
         return {
             "success": r.get("success", False),
             "used": r.get("used"),
-            "changed": changed,
+            "changed": xml_changed,
+            "xml_changed": xml_changed,
+            "visual_similarity": visual_similarity,
+            "visual_changed": visual_changed,
+            "invalid_action": invalid_action,
             "wait_result": waited,
             "pre_signature": pre_sig,
             "post_signature": post_sig,

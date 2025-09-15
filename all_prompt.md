@@ -304,6 +304,16 @@ now pls generate a real case, the devices and omniparser server and the LLM serv
 
 
 
+----------
+
+改写自动关闭广告逻辑, 加一个 round 标识或者采用已有标识, 限制只有前三次(可配置) 调用 MCP 分析屏幕时才自动 close ad, round 主要用于判断这个, 避免每次都进行不必要的关闭, 
+
+---
+
+除此外我希望你添加 执行 UI 操作完成后自动探测页面元素是否改变, 目前两种方式, 1.XML 元素无变化 2.屏幕前后的截图变化小于 98%(差距过小代表页面操作无效) 这里确认后反馈给 外部 LLM 让他知道操作无效, 使不进行 无效录制, (相关规则你可自行完善, 相关算法你可自行思考). 两种方式必须同时为 false 时才会反馈给 外部 LLM 操作无效 避免算法上引起的问题导致误认为无效
+---
+
+需求: 关闭 debug 面板,
 
 
 1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
@@ -311,6 +321,11 @@ now pls generate a real case, the devices and omniparser server and the LLM serv
 3.check QA.md WHY current structure.
 4.IN the end pls 结合 MCP 整个工具检查下, 如果是你使用这些 MCP + prompt 驱动, 你能做好用例生成吗, dry run 一下, 目前没有环境给你实际演示
 整个过程不要修改文件, 只是让你了解项目. excute step by step
+
+使用VOLUME_UP + VOLUME_DOWN 组合按键, TV 和 手机应该都能正常监听 缺点是肯定会调起音量bar 调整音量
+VOLUME_UP：adb shell input keyevent 24
+VOLUME_DOWN：adb shell input keyevent 25
+1s 内先 UP 再 DOWN 组合按键关闭 debug 面板
 
 
 
