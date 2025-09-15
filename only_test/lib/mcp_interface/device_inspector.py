@@ -179,19 +179,51 @@ class DeviceInspector:
             adb_cmd = ["adb"] + (["-s", self.device_id] if self.device_id else []) + ["shell", "dumpsys", "window", "windows"]
             result = subprocess.run(adb_cmd, capture_output=True, text=True)
             current_pkg = "Unknown"
+            current_activity = "Unknown"
             if result.returncode == 0 and result.stdout:
                 out = result.stdout
-                # 查找 mCurrentFocus=Window{... u0 package/Activity}
-                m = re.search(r"mCurrentFocus=Window\{[^}]*\s([\w\.]+)/", out)
-                if not m:
-                    # 备选: mFocusedApp=AppWindowToken{... package}
-                    m = re.search(r"mFocusedApp=.*?\s([\w\.]+)\/[\w\.]+", out)
-                if not m:
-                    # 更宽松: 任意像包名的片段
-                    m = re.search(r"([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+){1,})", out)
+                # 优先匹配 mCurrentFocus=Window{... u0 package/Activity}
+                m = re.search(r"mCurrentFocus=Window\{[^}]*\s([\w\.]+)/([\w\.]+)\}", out)
                 if m:
                     current_pkg = m.group(1)
+                    current_activity = m.group(2)
+                else:
+                    # 备选: mFocusedApp=AppWindowToken{... package/Activity}
+                    m2 = re.search(r"mFocusedApp=.*?\s([\w\.]+)\/([\w\.]+)", out)
+                    if m2:
+                        current_pkg = m2.group(1)
+                        current_activity = m2.group(2)
+                    else:
+                        # 再备选: 仅提取包名片段
+                        m3 = re.search(r"([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+){1,})", out)
+                        if m3:
+                            current_pkg = m3.group(1)
             screen_info["current_app"] = current_pkg
+            screen_info["current_activity"] = current_activity
+
+            # 业务页面名推断（简单启发式，若无法推断则为 unknown）
+            def _infer_page_from_activity(act: str) -> str:
+                if not act or act.lower() == "unknown":
+                    return "unknown"
+                l = act.lower()
+                if "searchresult" in l or "result" in l:
+                    return "search_result"
+                if "search" in l:
+                    return "search"
+                if ("vod" in l and ("detail" in l or "playing" in l)) or ("play" in l and ("detail" in l or "player" in l)):
+                    return "vod_playing_detail"
+                if "player" in l:
+                    return "vod_playing"
+                if "detail" in l:
+                    return "vod_detail"
+                if "main" in l or "home" in l or "launcher" in l:
+                    return "home"
+                return "unknown"
+
+            screen_info["current_page"] = _infer_page_from_activity(current_activity)
+
+            # 兼容 step_validator 期望字段：page 优先 current_page
+            screen_info.setdefault("page", screen_info["current_page"])
             
             # 在分析前，按默认参数尝试自动连续关闭广告（支持开关）
             if auto_close_ads:

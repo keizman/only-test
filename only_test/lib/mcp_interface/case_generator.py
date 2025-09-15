@@ -425,6 +425,24 @@ class InteractiveCaseGenerator:
 3. 考虑设备性能选择合适的操作间隔
 """
         
+        # Compliance header to enforce ignoring ((...)) and MCP/tooling usage
+        compliance_header = (
+            "ONLY-TEST LLM CASE GENERATION DIRECTIVES\n"
+            "---------------------------------------\n\n"
+            "IMPORTANT COMPLIANCE RULES:\n"
+            "1) Ignore any content enclosed in double parentheses like ((this is ignored)). "
+            "Treat it as non-existent: do not use, quote, or act on it.\n"
+            "2) Use MCP tools to analyze current screen and interact; never hallucinate elements not present in the latest analysis.\n"
+            "3) Output strictly valid JSON as specified; no explanations outside code fences.\n\n"
+        )
+
+        # Refinement header: reiterate ignore rule and schema stability
+        refine_header = (
+            "Refinement Directives:\n"
+            "1) Ignore any content enclosed in double parentheses ((...)).\n"
+            "2) Keep JSON schema stable; only fix issues listed below.\n\n"
+        )
+
         prompt = f"""
 你是Only-Test框架的专业测试用例生成器。请根据以下信息生成高质量的测试用例：
 
@@ -454,7 +472,7 @@ class InteractiveCaseGenerator:
 请输出完整的JSON格式测试用例：
 """
         
-        return prompt
+        return compliance_header + prompt
     
     def _create_refinement_prompt(self, current_case: Dict, issues: List[str], suggestions: str) -> str:
         """创建优化prompt"""
@@ -479,7 +497,7 @@ class InteractiveCaseGenerator:
 
 请输出优化后的完整JSON用例：
 """
-        return prompt
+        return refine_header + prompt
     
     async def _call_llm_for_generation(self, prompt: str) -> Dict[str, Any]:
         """调用LLM进行生成"""

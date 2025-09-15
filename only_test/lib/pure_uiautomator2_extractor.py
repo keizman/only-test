@@ -216,9 +216,11 @@ class OmniparserClient:
 class VisualExtractor:
     """视觉提取器 - 基于Omniparser"""
     
-    def __init__(self, omniparser_client: OmniparserClient, device=None):
+    def __init__(self, omniparser_client: OmniparserClient, device=None, device_id: Optional[str] = None):
         self.client = omniparser_client
         self.device = device
+        # Ensure ADB commands target the intended device when provided
+        self.device_id = device_id
         self.screen_width = 1080
         self.screen_height = 1920
         self._cache = {}
@@ -233,8 +235,10 @@ class VisualExtractor:
                 self.screen_height = info.get('displayHeight', 1920)
             else:
                 # 使用ADB获取
+                # If a device_id is provided, scope wm size to that device
+                adb_cmd = "adb shell wm size" if not self.device_id else f"adb -s {self.device_id} shell wm size"
                 proc = await asyncio.create_subprocess_shell(
-                    "adb shell wm size",
+                    adb_cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -380,7 +384,7 @@ class EnhancedUIAutomator2Extractor:
         
         # 初始化组件
         self.omniparser_client = OmniparserClient(omniparser_url)
-        self.visual_extractor = VisualExtractor(self.omniparser_client)
+        self.visual_extractor = VisualExtractor(self.omniparser_client, device=None, device_id=self.device_id)
         self.playback_detector = PlaybackDetector()
         
         # 缓存

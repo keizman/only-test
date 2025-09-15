@@ -22,7 +22,9 @@ __email__ = "support@only-test.com"
 try:
     from .lib.pure_uiautomator2_extractor import UIAutomationScheduler, EnhancedUIAutomator2Extractor
     from .lib.visual_recognition.element_recognizer import ElementRecognizer
-    from .lib.mcp_interface import WorkflowOrchestrator, MCPServer
+    # NOTE: Avoid importing mcp_interface symbols eagerly to prevent pre-importing
+    # submodules (e.g., device_inspector) before `-m only_test.lib.mcp_interface.device_inspector` runs.
+    # They are exposed lazily via __getattr__ below.
     from .lib.test_generator import TestGenerator
     from .lib.json_to_python import PythonCodeGenerator
 except ImportError as e:
@@ -39,3 +41,10 @@ __all__ = [
     "TestGenerator",
     "PythonCodeGenerator"
 ]
+
+# Lazy attribute access to avoid importing heavy submodules at package import time.
+def __getattr__(name):  # PEP 562 lazy export
+    if name in ("WorkflowOrchestrator", "MCPServer"):
+        from .lib.mcp_interface import WorkflowOrchestrator, MCPServer
+        return {"WorkflowOrchestrator": WorkflowOrchestrator, "MCPServer": MCPServer}[name]
+    raise AttributeError(name)

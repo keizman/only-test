@@ -44,7 +44,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "oneOf": [
                     {"required": ["resource_id"], "properties": {"resource_id": {"type": "string"}}},
                     {"required": ["text"], "properties": {"text": {"type": "string"}}},

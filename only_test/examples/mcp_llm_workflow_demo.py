@@ -32,7 +32,7 @@ except Exception:
 # Local imports
 from only_test.lib.mcp_interface.mcp_server import MCPServer, MCPTool, MCPResponse
 from only_test.lib.llm_integration.llm_client import LLMClient
-from only_test.templates.prompts.generate_cases import TestCaseGenerationPrompts
+# from only_test.templates.prompts.generate_cases import TestCaseGenerationPrompts  # disabled due to template syntax issues
 from only_test.lib.code_generator.json_to_python import JSONToPythonConverter
 from only_test.lib.json_to_python import PythonCodeGenerator
 from only_test.lib.metadata_engine.path_builder import build_step_path
@@ -437,12 +437,31 @@ async def main():
             except Exception:
                 examples = []
 
-            step_prompt = TestCaseGenerationPrompts.get_mcp_step_guidance_prompt(
-                current_step=round_idx,
-                screen_analysis_result=screen.result if screen.success else {},
-                test_objective=requirement,
-                previous_steps=generated_steps,
-                examples=examples,
+            # Build a minimal strict step prompt inline (avoid template import)
+            step_prompt = (
+                "# 仅输出严格JSON。严禁Markdown。\n\n"
+                "请基于以下屏幕元素与测试目标，返回下一步 JSON 或 tool_request：\n\n"
+                "测试目标: {req}\n\n"
+                "当前屏幕: {screen}\n\n"
+                "之前步骤: {prev}\n\n"
+                "返回两种之一：\n"
+                "1) tool_request: {{\"tool_request\": {{\"name\": \"analyze_current_screen\", \"params\": {{}}, \"reason\": \"需要最新/一致的屏幕元素\"}}}}\n"
+                "2) 单步决策: {{\n"
+                "  \"analysis\": {{\"current_page_type\": \"...\", \"available_actions\": [\"click\",\"input\",\"wait_for_elements\",\"wait\",\"restart\",\"launch\",\"assert\",\"swipe\"], \"reason\": \"...\"}},\n"
+                "  \"next_action\": {{\n"
+                "    \"action\": \"click|input|wait_for_elements|wait|restart|launch|assert|swipe\",\n"
+                "    \"target\": {{\n"
+                "      \"priority_selectors\": [{{\"resource_id\": \"...\"}}, {{\"content_desc\": \"...\"}}, {{\"text\": \"...\"}}],\n"
+                "      \"bounds_px\": [100,200,300,260]\n"
+                "    }},\n"
+                "    \"data\": \"可选\", \"wait_after\": 0.8, \"expected_result\": \"...\"\n"
+                "  }},\n"
+                "  \"evidence\": {{\"screen_hash\": \"...\", \"source_element_uuid\": \"...\", \"source_element_snapshot\": {{}}}}\n"
+                "}}\n"
+            ).format(
+                req=requirement,
+                screen=json.dumps(screen.result if screen.success else {}, ensure_ascii=False)[:1000],
+                prev=json.dumps(generated_steps, ensure_ascii=False)[:800]
             )
             dump_text(f"prompt_step_{round_idx}.txt", step_prompt)
             msgs = [
@@ -513,11 +532,13 @@ async def main():
             dump_text("session_summary.json", json.dumps(summary, ensure_ascii=False, indent=2))
         except Exception:
             pass
-        completion_prompt = TestCaseGenerationPrompts.get_mcp_completion_prompt(
-            generated_steps=generated_steps,
-            test_objective=requirement,
-            final_state=final_state
-        )
+        # Build a minimal completion prompt inline (avoid template import)
+        completion_prompt = (
+            "# 仅输出严格JSON，整合所有步骤。严禁Markdown。\n\n"
+            "测试目标: {req}\n\n"
+            "最终状态: {final}\n\n"
+            "请输出完整的 Only-Test JSON 测试用例（每步使用允许原子动作，包含 priority_selectors 或 bounds_px）：\n"
+        ).format(req=requirement, final=json.dumps(final_state, ensure_ascii=False))
         dump_text("prompt_completion.txt", completion_prompt)
         comp_msgs = [
             {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences."},

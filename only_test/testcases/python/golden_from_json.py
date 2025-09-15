@@ -24,7 +24,9 @@ import asyncio
 
 # Optional: 设置设备连接（如需）
 # connect_device("android://127.0.0.1:5037/DEVICE_SERIAL?touch_method=ADBTOUCH&")
+
 poco = get_android_poco()
+
 
 ## [page] app_initialization, [action] restart, [comment] 重启应用清理环境状态(多次关闭)
 

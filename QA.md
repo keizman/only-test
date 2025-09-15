@@ -601,7 +601,7 @@ assets/
 - 业务路径头：可生成 `*_business.py` 做审阅与回放
 - chain：作为结果 JSON 的一部分；截图/日志落到 assets/{pkg}_{device}/
 
-### 10) [QUERY] 未决问题（请确认/答复）
+### 10) [QUERY] 
 - [QUERY] 屏幕“页面字段”统一使用 `current_page` 吗？若使用 Activity 名称，字段名是否约定为 `current_activity`？二者是否同时提供？
 - [QUERY] Poco 对 content_desc 的参数名是否一律使用 `description=`？是否存在机型/驱动差异需要额外适配？
 - [QUERY] assert 步骤的标准实现：
@@ -612,5 +612,112 @@ assets/
 - [QUERY] 示例注入策略默认使用完整代码还是摘要 digest？单轮最大 tokens 预算？
 - [QUERY] 默认超时策略与全局配置：如 restart/launch/wait_for_elements 的缺省 timeout 与 wait_after 是否集中可配？
 - [QUERY] 生成的 chain 是否与测试报告（Allure 等）联动？是否将 chain/截图链接到报告中？
-- [QUERY] 工具步的标准化命名集合：除 close_ads / connect_device / click_center_of 外，还需哪些（如 handle_permission_dialog / wait_ad_countdown）？
 
+
+
+
+  1. 屏幕页面字段统一规范
+
+  ✅ 建议统一使用 current_page
+  # 当前代码已使用current_page作为默认字段
+  PAGE_FIELD_DEFAULT = "current_page"  # step_validator.py:88
+
+  # 同时支持current_activity作为辅助信息
+  screen_info = {
+      "current_page": "home",          # 业务页面(主要)
+      "current_activity": "MainActivity", # 技术Activity(辅助)
+  }
+  决策: 二者同时提供，current_page用于业务逻辑，current_activity用于技术调试
+
+  2. Poco content_desc 参数名规范
+
+  ✅ 统一使用 description=
+  # 基于代码分析，使用标准参数名
+  poco(resourceId="xxx", description="关闭", text="确定").click()
+  决策: 一律使用 description=，如有驱动差异在转换器中适配
+
+  3. Assert 步骤标准实现
+  ✅ 建议混合策略
+  # 位置: only_test/lib/assertions.py
+  def assert_playback_state(expected: bool) -> bool:
+      """播放状态断言 - 使用ADB检测"""
+
+  def assert_ui_element_exists(selector: dict) -> bool:
+      """UI元素存在性断言"""
+
+  def assert_screen_changed(threshold: float = 0.99) -> bool:
+      """屏幕变化断言 - 相似度阈值"""
+  决策: 以播放检测为主(99%相似度)，UI文案检查为辅
+
+  4. connect_device URI规范
+  ✅ 建议配置化注入
+  # 来源: yaml -> variables -> JSON
+  {
+    "variables": {
+      "device_uri": "android://127.0.0.1:5037/192.168.100.112:5555?touch_method=ADBTOUCH&"
+    }
+  }
+  决策: 默认在所有用例开头自动生成，URI从配置注入
+
+  5. path/evidence 最终字段集合
+
+  ✅ 建议精简但完整
+  # path字段 (每步记录)
+  "path": {
+      "mcp_tool_used": "get_current_screen_info",
+      "screen_hash": "abc123",
+      "decision_reason": "选择搜索按钮因为...",
+      "selectors_tried": ["resource_id", "text"]
+  }
+
+  # evidence字段 (单步决策)
+  "evidence": {
+      "screen_hash": "abc123",
+      "source_element_uuid": "elem_001",
+      "source_element_snapshot": {...}
+  }
+
+  # chain字段 (执行后生成)
+  "chain": {
+      "nodes": [...],
+      "edges": [...],
+      "screen_hash_before": "abc123",
+      "screen_hash_after": "def456"
+  }
+  决策: screen_hash_before/after只在chain中，path保持轻量
+
+  6. 示例注入策略
+
+  ✅ 建议智能选择
+  # 策略: 小库全量，大库摘要
+  if len(examples) <= 3:
+      use_full_code(examples)  # 完整代码
+  else:
+      use_digest(examples[:3])  # 前3个摘要
+
+  # tokens预算: 单轮最大8K tokens
+  MAX_EXAMPLES_TOKENS = 8000
+  决策: 默认使用摘要digest，保持prompt简洁高效
+
+  7. 默认超时策略
+
+  ✅ 建议集中配置
+  # yaml
+  timeout_defaults:
+    restart: 5
+    launch: 10
+    click: 5
+    input: 3
+
+  决策: 集中配置，支持运行时覆盖
+
+  8. Chain与测试报告联动
+
+  ✅ 建议深度集成
+  # 生成Allure报告时自动注入
+  @allure.step("执行步骤 {step_num}: {description}")
+  def execute_step_with_chain(step, chain_node):
+      # 自动attach截图和决策过程
+      allure.attach.file(chain_node["screenshot"], "执行前截图")
+      allure.attach(chain_node["decision_reason"], "决策理由", allure.attachment_type.TEXT)
+  决策: 是，chain数据自动生成测试报告附件

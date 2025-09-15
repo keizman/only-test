@@ -131,6 +131,8 @@ If U are captrue a screen on lock screen it's a black, pls check the screen stat
 ▌\Download\git\uni\only_test\testcases\python\example_airtest_record.py , 需要你分析是什么造成了差距,我的 requirement 还不够清晰吗,还是你的prompt 传入的不够, 是否传传入了相似 script (目前样本少, 考虑不过滤直接▌将现有的录制样本传进去) 还需要从源头分析, 我以前让你从 录制的 py 文件中溯源过 json,  你是否尝试过 那个 json 再生成一个 py 文件是否有格式问题, LLM 生成的是 json,  因此要从 json 和 py 两层去考虑  python -X utf8▌only_test/examples/mcp_llm_workflow_demo.py --requirement "测试vod点播播放正常: 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'720'点击第一个节目，3.播放节目，断言:  ▌验证设备是否处于播放状态" --target-app com.mobile.brasiltvmobile --max-rounds 2  
 
 
+
+
 *-----
 
 
@@ -290,12 +292,17 @@ Ok 你已经知道了他们的作用, 那你认为目前的prompt 健壮吗, 有
 
 将最近我的提问和你的回答, 我们选用方案的理由, 更新到 QA.md 让后人知道我们这样设计的原因. 
 
+----
+from now on , our destnation is complete this project last step, try to generate a  case and fix bugs in this journey. now pls generate a real case, the devices and omniparser server and the LLM server already start. the action should be:  requirement "测试 vod 点播播放正常-(h264): 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'英语和西语音轨'点击节目，3.播放节目，断言: 验证设备是否处于播放状态 
+使用这个 project 的 外部 LLM 生成或者用例而不是你自己生成, pls add a prompt let 外部 LLM ignore ((忽略的内容)) 双括号中你的内容, 以便我自定义标注一些东西
 
-
-
-
+python -X utf8 only_test/examples/mcp_llm_workflow_demo.py --requirement "测试vod点播播放正常: 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'720'点击第一个节目，3.播放节目，断言: 验证设备是否处于播放状态" --target-app com.mobile.brasiltvmobile --max-rounds 2 直接请你尝试生成用例观察输出,修复 error , 发现不合理, 最终完成外部 LLM 的用例自主生成
 
 ----
+
+now pls generate a real case, the devices and omniparser server and the LLM server already start. the action should be:  requirement "测试 vod 点播播放正常-(h264): 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'英语和西语音轨'点击节目，3.播放节目，断言: 验证设备是否处于播放状态 . 请使用 python 执行脚本与 外部 LLM 发送指令让其成功生成用例
+
+
 
 
 
