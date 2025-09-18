@@ -334,6 +334,50 @@ now pls generate a real case, the devices and omniparser server and the LLM serv
 
 -----
 
+
+跟我一起看向 C:\Download\git\uni\only_test\testcases\python\example_airtest_record.py 据我对它录制时刻的观察,  好像是卡在了这里 
+'''## [page] search, [action] click, [comment] 点击搜索输入框激活输入状态
+poco(resourceId="com.mobile.brasiltvmobile:id/searchEt").click()
+
+
+## [page] search, [action] input, [comment] 输入搜索关键词
+sleep(0.5)
+text("西语手机端720资源02")''' 它可能并未再次点击 searchEt 进入激活状态旧输入 内容之后点击 searchCancel 直接退出了, 而不是进入了下一步,
+我们先假设这个猜测为真, 
+我们应该如何解决这种细节问题呢, 我之前以为增加 planing 阶段让其总结要做什么, 之后其能完全复刻一个新的用例, 但是目前来看不是, 因此现在我想到的 解决方法就是对 Planning 的prompt 进行优化, 提及要注意这一点, 做好应有的规划, 
+这可能只是一个注意事项, 但是往后的用例呢, 肯定还是会出现这种情况的(因为一些细节导致录制失败). 这意味着这个项目很难登大雅之堂,  因为可能很多东西要一点点自己添加, 不能大范围的全自动, 这让我对这个项目感到失望, 你作为我的助手, 最熟悉这个项目的人, 你有什么思路想法呢, 让我们谈论起来
+-----------+
+分析并解决无法通过 class_name 点击的问题, 兼容它
+
+好的, 我需要你执行 1.修复问题 2.检查其它字段有没有相似问题 3.列出目前支持哪些 字段的操作, 比如 resourceId..  的 click set_text....的操作, 你可找一个Poco 下的文档写入, 3.写入问题分析过程, 结果,
+  与你的心得进入其中, 为什么我第一次提问你没找到问题原因
+
+
+我希望你帮我重写 set_text  for only-test 项目, 改为做多项内容, 1. 当然是根据提供的元素进行设置, 当然你i需要兼容多个方式, 比如 class_name 和 resourceId.. 设置成功后 2.执行 invalidate_cache 刷新,
+  之后使用相同元素 get_text . 最后返回, 这样我旧不用再代码中做多项内容,  poco(class_name="android.widget.EditText").set_text("西语手机端720资源02")
+
+  ## [page] search, [action] get_text, [comment] 确认成功输入内容
+  poco.agent.hierarchy.dumper.invalidate_cache() # 刷新, 避免使用缓存
+  result = poco(class_name="android.widget.EditText").get_text()
+  print(result)
+  
+----
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----
+
 需求: 关闭 debug 面板,
 
 
@@ -361,3 +405,15 @@ next
 
 用例管理, tag 不想重新生成的 PY 文件?  重新生成的策略
 
+
+
+书写测试用心得, 使用哪个方式更简单一目了然, 更重要的是步骤少, LLM 犯错的机会就少,(因此看来 Deeplink 势在必行), 一定要使用最简单的方式实现.
+
+方式1 
+poco(resourceId="com.mobile.brasiltvmobile:id/searchEt", text="Search for content title").set_text("西语手机端720资源02")
+
+方式2
+poco(resourceId="com.mobile.brasiltvmobile:id/searchEt").click()
+## [page] search, [action] input, [comment] 输入搜索关键词
+sleep(0.5)
+text("西语手机端720资源02")

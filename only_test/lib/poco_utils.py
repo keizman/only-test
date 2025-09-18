@@ -61,11 +61,14 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
     """获取AndroidPoco实例，使用与example_airtest_record.py相同的导入方式"""
     try:
         print("正在初始化Poco...")
-        
+
         # 路径已在模块导入时设置，直接导入
         from poco.drivers.android.uiautomation2 import AndroidUiautomator2Poco
         print("✓ 成功导入AndroidUiautomator2Poco类")
-        
+
+        # 应用set_text增强补丁
+        patch_poco_set_text()
+
         # 使用您要求的参数设置: use_airtest_input=False, screenshot_each_action=False
         poco = AndroidUiautomator2Poco(use_airtest_input=use_airtest_input, screenshot_each_action=screenshot_each_action)
         print("✓ 使用本地Poco库成功创建AndroidUiautomator2Poco实例")
@@ -154,6 +157,123 @@ def _get_screen_size_fallback() -> tuple[int, int]:
 
 
 # 原生扩展已加到 Poco/poco/proxy.py: UIObjectProxy.click_with_bias()
+
+
+def force_refresh_ui_cache(poco_instance):
+    """
+    强制刷新Poco/UIAutomator2的UI缓存
+
+    Args:
+        poco_instance: Poco实例
+
+    Returns:
+        bool: 刷新是否成功
+    """
+    try:
+        # 方法1: 尝试刷新dumper缓存（最彻底）
+        if hasattr(poco_instance, 'agent') and hasattr(poco_instance.agent, 'hierarchy'):
+            if hasattr(poco_instance.agent.hierarchy, 'dumper'):
+                if hasattr(poco_instance.agent.hierarchy.dumper, 'invalidate_cache'):
+                    poco_instance.agent.hierarchy.dumper.invalidate_cache()
+                    print("✓ 已刷新dumper缓存")
+                    return True
+                elif hasattr(poco_instance.agent.hierarchy.dumper, '_root_node'):
+                    # 如果没有invalidate_cache方法，直接清除根节点缓存
+                    poco_instance.agent.hierarchy.dumper._root_node = None
+                    print("✓ 已清除根节点缓存")
+                    return True
+
+        print("⚠ 无法访问dumper缓存，刷新可能不完整")
+        return False
+
+    except Exception as e:
+        print(f"❌ 缓存刷新失败: {e}")
+        return False
+
+
+def get_text_with_refresh(selector, max_retries=2):
+    """
+    获取文本时自动处理缓存刷新
+
+    Args:
+        selector: Poco选择器
+        max_retries: 最大重试次数
+
+    Returns:
+        str: 元素文本
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            if attempt > 0:
+                print(f"尝试第{attempt}次刷新...")
+                selector.refresh()  # 使用Poco内置刷新
+
+            return selector.get_text()
+
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"获取文本失败，重试中... ({e})")
+                continue
+            else:
+                raise
+
+
+# 重写UIObjectProxy的set_text方法，让它自动刷新缓存并返回实际文本
+def enhanced_set_text_method(self, text):
+    """
+    增强版的set_text方法 - 自动刷新缓存并返回实际文本
+
+    Args:
+        text: 要设置的文本
+
+    Returns:
+        str: 实际设置后的文本内容
+    """
+    # 1. 执行原始的文本设置
+    self.setattr('text', text)
+
+    # 2. 强制刷新缓存
+    try:
+        # 刷新当前元素
+        self.refresh()
+
+        # 刷新dumper缓存
+        if hasattr(self, 'poco') and hasattr(self.poco, 'agent'):
+            if hasattr(self.poco.agent, 'hierarchy') and hasattr(self.poco.agent.hierarchy, 'dumper'):
+                if hasattr(self.poco.agent.hierarchy.dumper, 'invalidate_cache'):
+                    self.poco.agent.hierarchy.dumper.invalidate_cache()
+                elif hasattr(self.poco.agent.hierarchy.dumper, '_root_node'):
+                    self.poco.agent.hierarchy.dumper._root_node = None
+    except:
+        # 刷新失败不影响主流程
+        pass
+    
+    # 验证是否输入成功
+    if self.get_text() == text:
+        return text
+    else:
+        print(f"Warning: 输入可能失败: 期望'{text}', 实际'{self.get_text()}'")
+        return f"Warning: 输入可能失败: 期望'{text}', 实际'{self.get_text()}'"
+    
+
+
+def patch_poco_set_text():
+    """
+    替换Poco的set_text方法为增强版本
+    """
+    try:
+        from poco.proxy import UIObjectProxy
+        # 备份原始方法
+        if not hasattr(UIObjectProxy, '_original_set_text'):
+            UIObjectProxy._original_set_text = UIObjectProxy.set_text
+
+        # 替换为增强版本
+        UIObjectProxy.set_text = enhanced_set_text_method
+        # print("✓ Poco set_text方法已增强 (自动刷新缓存并返回实际文本)")
+        return True
+    except Exception as e:
+        print(f"⚠ 增强set_text方法失败: {e}")
+        return False
 
 
 if __name__ == "__main__":
