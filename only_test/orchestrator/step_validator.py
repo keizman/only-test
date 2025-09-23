@@ -247,28 +247,38 @@ def validate_step(
         if not bounds_px:
             errors.append("当没有选择器可用时，必须提供 bounds_px")
     
-    # If bounds provided, must match the chosen element's bbox exactly
+    # If bounds provided, must match the chosen element's bbox/bounds exactly
     if bounds_px is not None:
         nb = _normalize_bounds(bounds_px)
         if nb is None:
             errors.append("bounds_px 必须是包含4个整数的数组 [left, top, right, bottom]")
         else:
+            def _elem_box(e: Dict[str, Any]) -> Optional[List[int]]:
+                # Prefer bounds, fallback to bbox
+                b = e.get("bounds")
+                if b is not None:
+                    nb2 = _normalize_bounds(b)
+                    if nb2 is not None:
+                        return nb2
+                bb = e.get("bbox")
+                if bb is not None:
+                    return _normalize_bounds(bb)
+                return None
             if chosen is None:
-                # Try to find by bbox when no selectors
-                # Accept exact bbox match from any element
+                # Try to find by bounds/bbox when no selectors
                 found = False
                 for e in elements:
-                    eb = _normalize_bounds(e.get("bbox"))
+                    eb = _elem_box(e)
                     if eb == nb:
                         chosen = e
                         found = True
                         break
                 if not found:
-                    errors.append("提供了 bounds_px，但无法在 elements 中找到完全相同 bbox 的元素")
+                    errors.append("提供了 bounds_px，但无法在 elements 中找到完全相同边界的元素")
             else:
-                eb = _normalize_bounds(chosen.get("bbox"))
+                eb = _elem_box(chosen)
                 if eb != nb:
-                    errors.append("bounds_px 必须与所选元素的 bbox 完全一致")
+                    errors.append("bounds_px 必须与所选元素的边界完全一致")
 
     # Evidence checks
     if screen_hash is not None and evidence.get("screen_hash") not in (None, screen_hash):

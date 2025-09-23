@@ -33,26 +33,14 @@
           "page": {"type": "string"},
           "type": {"type": "string", "enum": ["ui", "tool"]},
           "description": {"type": "string"},
-
           "action": {"type": "string", "enum": [
             "launch", "restart", "click", "input", "wait", "wait_for_elements", "assert", "swipe"
           ]},
           "target": {
             "type": "object",
             "properties": {
-              "priority_selectors": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "oneOf": [
-                    {"required": ["resource_id"], "properties": {"resource_id": {"type": "string"}}},
-                    {"required": ["text"], "properties": {"text": {"type": "string"}}},
-                    {"required": ["content_desc"], "properties": {"content_desc": {"type": "string"}}}
-                  ]
-                }
-              },
-              "bounds_px": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4},
+              "priority_selectors": {"$ref": "#/$defs/selectorList"},
+              "bounds_px": {"$ref": "#/$defs/boundsPx"},
               "bias": {
                 "type": "object",
                 "properties": {
@@ -62,27 +50,24 @@
                 "additionalProperties": false
               },
               "disappearance": {"type": "boolean"},
-              "swipe": {
-                "type": "object",
-                "properties": {
-                  "start_px": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
-                  "end_px": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
-                  "duration_ms": {"type": "integer", "minimum": 0}
-                },
-                "required": ["start_px", "end_px"],
-                "additionalProperties": false
-              }
+              "swipe": {"$ref": "#/$defs/swipe"}
             },
             "additionalProperties": true
           },
-          "data": {},
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "text": {"type": "string"},
+              "submit_method": {"type": "string", "enum": ["enter", "click_search_button", "click_search_cancel_when_focused"]}
+            }
+          },
           "timeout": {"type": ["number", "integer"]},
           "wait_after": {"type": ["number", "integer"]},
-          "expected_result": {"type": "string"},
-
+          "expected_result": {"type": ["string", "object", "null"]},
+          "validators": {"$ref": "#/$defs/validators"},
           "tool_name": {"type": "string"},
           "params": {"type": "object", "additionalProperties": true},
-
           "evidence": {
             "type": "object",
             "properties": {
@@ -92,23 +77,84 @@
             },
             "additionalProperties": true
           },
-          "path": {"type": "object", "additionalProperties": true}
+          "path": {"type": "object", "additionalProperties": true},
+          "on_fail": {"$ref": "#/$defs/onFail"}
         },
         "allOf": [
-          {
-            "if": {"properties": {"type": {"const": "ui"}}},
-            "then": {"required": ["action"]}
-          },
-          {
-            "if": {"properties": {"type": {"const": "tool"}}},
-            "then": {"required": ["tool_name"]}
-          }
+          { "if": {"properties": {"type": {"const": "ui"}}}, "then": {"required": ["action"]} },
+          { "if": {"properties": {"type": {"const": "tool"}}}, "then": {"required": ["tool_name"]} },
+          { "if": {"properties": {"action": {"const": "input"}}}, "then": {"properties": {"data": {"required": ["text"]}, "target": {"required": ["priority_selectors"]}}} },
+          { "if": {"properties": {"action": {"const": "swipe"}}}, "then": {"properties": {"target": {"required": ["swipe"]}}} },
+          { "if": {"properties": {"action": {"const": "wait_for_elements"}}}, "then": {"properties": {"target": {"required": ["priority_selectors"]}}} }
         ]
       }
     },
     "assertions": {"type": "array", "items": {"type": "object"}},
     "chain": {"type": "object"}
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "selector": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        {"required": ["resource_id"], "properties": {"resource_id": {"type": "string"}}},
+        {"required": ["text"], "properties": {"text": {"type": "string"}}},
+        {"required": ["content_desc"], "properties": {"content_desc": {"type": "string"}}}
+      ]
+    },
+    "selectorList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/selector"},
+      "minItems": 1
+    },
+    "boundsPx": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4},
+    "swipe": {
+      "type": "object",
+      "properties": {
+        "start_px": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+        "end_px": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+        "duration_ms": {"type": "integer", "minimum": 0}
+      },
+      "required": ["start_px", "end_px"],
+      "additionalProperties": false
+    },
+    "validators": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {"type": "object", "properties": {"type": {"const": "element_exists"}, "selector": {"$ref": "#/$defs/selector"}, "timeout_s": {"type": "number"}}, "required": ["type", "selector"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "text_equals"}, "selector": {"$ref": "#/$defs/selector"}, "value": {"type": "string"}, "timeout_s": {"type": "number"}}, "required": ["type", "selector", "value"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "wait_disappear"}, "selector": {"$ref": "#/$defs/selector"}, "timeout_s": {"type": "number"}}, "required": ["type", "selector"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "playback_state"}, "value": {"type": "string", "enum": ["playing", "paused", "buffering", "stopped", "unknown"]}}, "required": ["type", "value"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "page_signature"}, "name": {"type": "string"}}, "required": ["type", "name"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "image_similarity"}, "threshold": {"type": "number", "minimum": 0, "maximum": 1}, "roi": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4}}, "required": ["type", "threshold"], "additionalProperties": false},
+          {"type": "object", "properties": {"type": {"const": "app_state"}, "checks": {"type": "object", "properties": {"playback": {"type": "string", "enum": ["playing", "paused", "buffering", "stopped"]}, "ads": {"type": "string", "enum": ["absent", "present"]}, "fullscreen": {"type": "boolean"}}, "additionalProperties": false}, "timeout_s": {"type": "number"}, "poll_interval_s": {"type": "number"}}, "required": ["type", "checks"], "additionalProperties": false}
+        ]
+      }
+    },
+    "onFail": {
+      "type": "object",
+      "properties": {
+        "retries": {"type": "integer", "minimum": 0, "default": 0},
+        "retry_delay_s": {"type": "number", "minimum": 0, "default": 0.3},
+        "re_focus": {"type": "boolean", "default": false},
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"type": "object", "properties": {"type": {"const": "ime_text"}}, "required": ["type"], "additionalProperties": false},
+              {"type": "object", "properties": {"type": {"const": "press_enter"}}, "required": ["type"], "additionalProperties": false},
+              {"type": "object", "properties": {"type": {"const": "alt_selector"}, "selector": {"$ref": "#/$defs/selector"}}, "required": ["type", "selector"], "additionalProperties": false},
+              {"type": "object", "properties": {"type": {"const": "click_selector"}, "selector": {"$ref": "#/$defs/selector"}}, "required": ["type", "selector"], "additionalProperties": false},
+              {"type": "object", "properties": {"type": {"const": "swipe"}, "direction": {"type": "string", "enum": ["up", "down", "left", "right"]}, "distance_px": {"type": "integer", "minimum": 1}}, "required": ["type", "direction"], "additionalProperties": false}
+            ]
+          }
+        },
+        "diagnostics": {"type": "array", "items": {"type": "string", "enum": ["screenshot", "dump_hierarchy", "logcat_snippet"]}}
+      },
+      "additionalProperties": false
+    }
+  }
 }
 

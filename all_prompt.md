@@ -363,17 +363,140 @@ text("西语手机端720资源02")''' 它可能并未再次点击 searchEt 进�
   
 ----
 
+看向这里 C:\Download\git\uni\only_test\testcases\python\example_airtest_record.py
+我已经按你的指导和我的想法, 将用例文件重新整改, 
+1.请你重新根据用例推出 json 内容, 之后再规划一下它的方案 Prompt 和用例结构的约束: 失败恢复
+2.对“能否大规模自动化”的看法- 你的想法很不错,  请你想办法记录下这些想法, 让后人能清晰的看到. 
+3.我目前对这个项目无信心, 请谈论一下, 让我对项目与自己有更清晰的认知: 想法: 起初做这个项目是因为我们公司有很多 APK, 操作方式基本相同, 都是这一类的 APK, 这个项目能很好的将一份用例扩展为多个 APK 都可执行的用例, 利用 LLM 的泛化能力与项目的约束一起工作, 提升用例的可复现能力, 但是我页经常看到别人说不要向领导推荐提升生产力工具, AI 类工具, 并且我之前页提过一些 LLM 在 客服, 运维, 开发上的一些应用方向, 领导也只是含糊其辞. 你说 我该何去何从 
+------
+
+
+评审一下他人对这个项目的建议, 有哪些你认为可以采纳,  哪些毫无用处
+  - 规范与校验
+      - 提供正式 JSON Schema（含枚举、必填、互斥/依赖、选择器模型），并在生成/执行前做校验。
+      - 统一“选择器模型”与“策略优先级”的结构定义（如 selector.type/resource_id/text/...，附置信度与降级策略）。
+  - 断言与可机判
+      - 在步骤中引入标准化 validators 数组（如 element_exists/text_equals/image_similarity >= 0.99/playback_state=='playing'），替代/补充 expected_result 的自然语言。
+      - 将播放/广告/全屏等常见判定包装为复用校验器（并暴露 MCP 工具）。
+  - 提示与去重
+      - 将“相似度计算/评分规则/输出 JSON 片段”抽到单独的共享模板或常量模块，避免在多文件中重复与偏差。
+      - 增加少样本示例集（few-shot），构建“坏例/好例”对照，提升稳定性。
+  - 工作流与观测
+      - 对 MCP 工具接口输出定义 OpenAPI/JSON-Schema，供 LLM 端工具反射/自动补全，降低误调用。
+      - 执行轨迹、屏幕快照、选择器命中统计沉淀为“可查询的案例库”，反哺相似检索与策略选择。
+  - 生成质量闭环
+      - 扩展 SimilarTestCasePrompts：将“可复用片段→模板化片段”流水化，自动替换变量/定位策略。
+      - 引入轻量“静态仿真/干跑”器：对生成 JSON 做基本可达性/字段合理性/变量替换模拟校验。
+  - 工具层与鲁棒性
+      - 对 close_ads、detect_playing_state 等常用工具设定“重试/超时/降级”的默认策略与可配置化阈值。
+      - 强化 uiautomator2 与 omniparser 的对齐器（selector/uuid/bounds 统一结构与映射规则），沉淀标准。
+
+
+----------
+
+
+
+经过对你给出更改方向的review, 我决定采取以下修改, 未采取的代表我不太认同, 无需理会. 解释  下方两点可直接实施, 还需谈论的点 需要再详细回答后做 plan. 
+1) 提供正式 JSON Schema（含枚举、必填、互斥/依赖、选择器模型）
+1) 在步骤中引入标准化 validators 数组（element_exists/text_equals/image_similarity>=0.99/playback_state==playing），替代/补充 expected_result
+
+
+还需谈论的点
+1.将播放/广告/全屏等常见判定包装为复用校验器（并暴露 MCP 工具）. 
+可以提供工具, 但重要的是以什么方式, 目前如果一次给太多 MCP 工具, LLM 会模糊概念, 也就是他不知道什么时候该用什么工具, 目前问题很难解决, 除非写多个 MCP 工具应对不同的方面, 比如目前的MCP 只负责用例生成, 再写一个负责用例校验(但是好像也不好解耦). 值得深思
+2.将“相似度计算/评分规则/输出 JSON 片段”抽到单独共享模板，避免多文件重复与偏差
+我还是没有看懂这段内容想做什么 
+3.强化 uiautomator2 与 omniparser 的对齐器（selector/uuid/bounds 统一结构与映射规则）
+•  评审：建议采纳（中/高优先级）
+•  为什么：双源识别一致性是降低误判的基础；也是你“白名单绑定”得以生效的前提。
+•  怎么做：
+•  定义统一元素对象结构（uuid/resource_id/text/content_desc/bbox/center_x/center_y/source/confidence）
+•  选择器解析时优先使用 uiautomator2，播放视觉场景使用 omniparser，并保留来源与分数
+没明白这点想要做什么,  的交点只有一个 bbox 转换出的 position 可以被 click. 其它的如 content 内容也是唯一存在的判定 icon 类别的东西, 其它的都是不存在的 (你可以查看返回, 都是虚拟的东西) 因此我不明白你这是想要做什么 
+
+
+
+未来
+2) 增加 few-shot 示例集，构建“坏例/好例”对照
+•  评审：建议采纳（中优先级）
+•  为什么：实证能够显著减少 LLM 输出结构错误；尤其“坏例→修正”能提升稳态。
+•  怎么做：
+•  sessions 中挑成功/失败样本，脱敏后转为示例片段，纳入 generate_cases 的 examples
+
+
+2) 执行轨迹、屏幕快照、选择器命中统计沉淀为“可查询案例库”，反哺相似检索与策略选择
+•  评审：建议采纳（中优先级）
+•  为什么：这是 R6 数据飞轮的关键；能将失败 Top-N 与成功模板沉淀，减少重复犯错。
+•  怎么做：
+•  将当前 JSONL + 截图组织成可索引（简单可先 SQLite/Parquet + 目录规范）
+•  run_case 结束后写入索引，SimilarTestCasePrompts 检索时可参考这些案例。
+
+
+
+五、生成质量闭环
+1) 扩展 SimilarTestCasePrompts：将“可复用片段→模板化片段”流水化，自动替换变量/定位策略
+•  评审：建议采纳（中优先级）
+•  为什么：适配同类 APK 时收益可观，但属于第二阶段的“效率工具”，优先级略低于“稳定性护栏”。
+•  怎么做：
+•  提供模板参数化占位（包名、搜索词、页面签名、主要 selectors），并定义变量来源与校验
+
+2) 引入轻量“静态仿真/干跑”器：对生成 JSON 做基本可达性/字段合理性/变量替换模拟校验
+•  评审：建议采纳（中优先级）
+•  为什么：能在“连设备前”筛掉明显错误；对大规模批量生成尤为有用。
+•  怎么做：
+•  run_case 加 dry-run 模式：仅做 JSON Schema 校验 + 基础语义检查（互斥/依赖/选择器结构），不连设备
+•  若有历史屏幕白名单缓存，可做“选择器存在性”近似匹配
+
+六、工具层与鲁棒性
+1) 对 close_ads、detect_playing_state 等工具设定“重试/超时/降级”的默认策略与可配置阈值
+•  评审：立即采纳（高优先级）
+•  为什么：这些是高频失败点；默认重试/超时策略是“护栏”的一部分，提升稳态。
+•  怎么做：
+•  统一在 tools 层加入默认参数（max_duration、interval、consecutive_no_ad 等），并允许 case 层覆盖
+•  失败时写入原因码，便于统计 Top-N
+
+
+---------
+我同意你的方案, 但我有一些附加描述希望你再coding时记得, 1.执行器通道（内部探针） 直接以一个 valiator 方式实现, 调用方式为增加 参数, 比如希望获取 playback 直接传参即可,  2.uiautomator2 与 omniparser 点修改, 我需要你再开始之前先获取 omniparser 返回的内容确认数据结构, 根据当前代码确认合并逻辑, 阅读两者 XML+ omniparser 后才能更好的工作, 才不会错漏, 或者给出错误的逻辑. 
+
+-----
+
+@pure_ui2_dump_extractor_with_image_tag.py 我希望增加功能,  1.在获取 XML 树同时截图, 之后根据获取的 XML 树将所有元素以红框标记出来,框住这个元素, 规则为 1.size pos 不为原点(原点代表可能不是有效元素) 2.若有 text 请在红框右侧写上 text, 若无 text 请使用 resourceId 进行标记, 取值 / 后内容比如 com.android.systemui:id/clock 取 clock  让我指导这个元素是谁, 以此验证是否正常, 请开始coding
+
+---
 
 
 
 
+修正: 新UIAutomator2 相对于旧版 UIAutomator 在播放状态（play state）下支持了更好的元素识别，但存在一个常见缺陷：它只能识别当前可见（displayed）的元素。对于像 seekbar 这样的控件，需要先点击屏幕使其显示，然后才能识别和操作。目前 APK 设置的显示栏（bar）消失时间太短，可能会导致识别失败或点击无效. 因此需要一个 keep 函数确保元素始终展示, 兼容需要长时间显示情况显示
 
+此函数需要支持, 1.再想要点击之前确保播放导航栏icon 全部显示, 也就是需要不断的侦测点击, 他需要是一个单实例的异步函数, 也就是调用后填入持续监测时长, 其需要自动工作, 单实例是因为防止多个函数同时点击, 如果有其他函数再次调用, 需要销毁前一个实例, 使用最新实例进行工作, 
+playing_stat_keep_displayed_button(,detect_interval=0.1(每0.1检测一次是否显示控件))
+  clickable_area = # 需要找一个可点击区域
+  clickable_area = # 需要找一个可点击区域
+  if is_playing_stat:
 
+    if not is_full_screen:
+        returen # 小屏状态
+      
+      if not "Brightness" in json: # 没有相关字段则为
+      click() # 使
+      retun true
+    
 
+----
+def is_full_screen() return true(全屏) false(非全屏)
+1.全屏 2.非全屏, 区别有 mBounds 值颠倒, port in mCurrentConfig 全屏, land in mCurrentConfig 非全屏
 
-
-
-
+crux:/ $ dumpsys activity top | grep -E 'ACTIVITY|mCurrentConfig' | grep com.mobile.brasiltvmobile -A 1
+  ACTIVITY com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.PlayAty 3d27394 pid=26980
+      mCurrentConfig={0.86 ?mcc?mnc [en_US] ldltr sw523dp w523dp h887dp 440dpi lrg long hdr widecg port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1440, 2560) mAppBounds=Rect(0, 75 - 1440, 2516) mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0} s.7 themeChanged=0 themeChangedFlags=0 extraData = Bundle[{}]}
+crux:/ $
+crux:/ $
+crux:/ $ dumpsys activity top | grep -E 'ACTIVITY|mCurrentConfig' | grep com.mobile.brasiltvmobile -A 1
+  ACTIVITY com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.PlayAty 3d27394 pid=26980
+      mCurrentConfig={0.86 ?mcc?mnc [en_US] ldltr sw523dp w903dp h480dp 440dpi lrg long hdr widecg land finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 2560, 1440) mAppBounds=Rect(75, 0 - 2560, 1396) mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_90} s.10 themeChanged=0 themeChangedFlags=0 extraData = Bundle[{}]}
+crux:/ $
 
 
 ----
@@ -384,8 +507,13 @@ text("西语手机端720资源02")''' 它可能并未再次点击 searchEt 进�
 1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
 2.check example_airtest_record.py and golden_example_airtest_record.json to Know more aboout schema constrains
 3.check QA.md WHY current structure.
-4.IN the end pls 结合 MCP 整个工具检查下, 如果是你使用这些 MCP + prompt 驱动, 你能做好用例生成吗, dry run 一下, 目前没有环境给你实际演示
-整个过程不要修改文件, 只是让你了解项目. excute step by step
+4.IN the end pls 结合 MCP 整个工具检查下, 如果是你使用这些 MCP + prompt 驱动, 你能做好用例生成吗, dry run 一下, 目前没有环境给你实际演示 整个过程不要修改文件, 只是让你了解项目. excute step by step 最后根据你的经验, 总结下对这个项目的 judge, 说出你认可可能的改进方向
+
+
+----- 
+
+
+
 
 使用VOLUME_UP + VOLUME_DOWN 组合按键, TV 和 手机应该都能正常监听 缺点是肯定会调起音量bar 调整音量
 VOLUME_UP：adb shell input keyevent 24

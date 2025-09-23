@@ -1,0 +1,6 @@
+mapping:
+  icon:
+    brightness:
+      description: 亮度bar
+      - brightness
+      

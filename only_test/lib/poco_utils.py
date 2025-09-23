@@ -57,7 +57,7 @@ def setup_local_poco_path():
         return False
 
 
-def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
+def get_android_poco(use_airtest_input=False, screenshot_each_action=False, disable_cache=True):
     """获取AndroidPoco实例，使用与example_airtest_record.py相同的导入方式"""
     try:
         print("正在初始化Poco...")
@@ -66,6 +66,11 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
         from poco.drivers.android.uiautomation2 import AndroidUiautomator2Poco
         print("✓ 成功导入AndroidUiautomator2Poco类")
 
+        # 禁用缓存机制 (解决缓存导致的元素定位问题)
+        if disable_cache:
+            disable_poco_cache()
+            disable_dumper_cache()
+
         # 应用set_text增强补丁
         patch_poco_set_text()
 
@@ -73,6 +78,10 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False):
         poco = AndroidUiautomator2Poco(use_airtest_input=use_airtest_input, screenshot_each_action=screenshot_each_action)
         print("✓ 使用本地Poco库成功创建AndroidUiautomator2Poco实例")
         print(f"✓ 设置: use_airtest_input={use_airtest_input}, screenshot_each_action={screenshot_each_action}")
+
+        if disable_cache:
+            print("✓ 缓存已禁用 - 每次查询都获取最新UI状态")
+
         return poco
         
     except ImportError as import_error:
@@ -218,10 +227,12 @@ def get_text_with_refresh(selector, max_retries=2):
                 raise
 
 
-# 重写UIObjectProxy的set_text方法，让它自动刷新缓存并返回实际文本
+# 重写UIObjectProxy的set_text方法，让它返回实际文本
 def enhanced_set_text_method(self, text):
     """
-    增强版的set_text方法 - 自动刷新缓存并返回实际文本
+    增强版的set_text方法 - 返回实际文本内容
+
+    由于缓存已被禁用，不需要手动刷新缓存
 
     Args:
         text: 要设置的文本
@@ -232,29 +243,110 @@ def enhanced_set_text_method(self, text):
     # 1. 执行原始的文本设置
     self.setattr('text', text)
 
-    # 2. 强制刷新缓存
-    try:
-        # 刷新当前元素
-        self.refresh()
+    # 2. 由于缓存已被禁用，get_text()会自动获取最新状态
+    actual_text = self.get_text()
 
-        # 刷新dumper缓存
-        if hasattr(self, 'poco') and hasattr(self.poco, 'agent'):
-            if hasattr(self.poco.agent, 'hierarchy') and hasattr(self.poco.agent.hierarchy, 'dumper'):
-                if hasattr(self.poco.agent.hierarchy.dumper, 'invalidate_cache'):
-                    self.poco.agent.hierarchy.dumper.invalidate_cache()
-                elif hasattr(self.poco.agent.hierarchy.dumper, '_root_node'):
-                    self.poco.agent.hierarchy.dumper._root_node = None
-    except:
-        # 刷新失败不影响主流程
-        pass
-    
-    # 验证是否输入成功
-    if self.get_text() == text:
+    # 3. 验证是否输入成功
+    if actual_text == text:
         return text
     else:
-        print(f"Warning: 输入可能失败: 期望'{text}', 实际'{self.get_text()}'")
-        return f"Warning: 输入可能失败: 期望'{text}', 实际'{self.get_text()}'"
+        print(f"Warning: 输入可能失败: 期望'{text}', 实际'{actual_text}'")
+        return f"Warning: 输入可能失败: 期望'{text}', 实际'{actual_text}'"
     
+
+
+def disable_poco_cache():
+    """
+    彻底禁用Poco的缓存机制，让每次查询都重新获取UI状态
+    """
+    try:
+        from poco.proxy import UIObjectProxy
+
+        # 1. 重写_do_query方法，强制每次都刷新
+        def no_cache_do_query(self, multiple=True, refresh=True):
+            """无缓存的查询方法 - 每次都重新获取"""
+            # 强制refresh=True，忽略_evaluated状态
+            raw = self.poco.agent.hierarchy.select(self.query, multiple)
+            if multiple:
+                self._nodes = raw
+                self._nodes_proxy_is_list = True
+            else:
+                if isinstance(raw, list):
+                    self._nodes = raw[0] if len(raw) > 0 else None
+                else:
+                    self._nodes = raw
+                self._nodes_proxy_is_list = False
+
+            if not self._nodes:
+                self.invalidate()
+                from poco.exceptions import PocoNoSuchNodeException
+                raise PocoNoSuchNodeException(self)
+
+            # 不设置_evaluated=True，让下次查询继续刷新
+            self._query_multiple = multiple
+            return self._nodes
+
+        # 2. 重写exists方法，每次都刷新
+        def no_cache_exists(self):
+            """无缓存的exists检查"""
+            try:
+                self._do_query(multiple=False, refresh=True)
+                return True
+            except:
+                return False
+
+        # 3. 重写get_text方法，每次都刷新
+        def no_cache_get_text(self):
+            """无缓存的get_text"""
+            nodes = self._do_query(multiple=False, refresh=True)
+            return self.poco.agent.hierarchy.getAttr(nodes, 'text') or ''
+
+        # 备份原始方法
+        if not hasattr(UIObjectProxy, '_original_do_query'):
+            UIObjectProxy._original_do_query = UIObjectProxy._do_query
+            UIObjectProxy._original_exists = UIObjectProxy.exists
+            UIObjectProxy._original_get_text = UIObjectProxy.get_text
+
+        # 替换为无缓存版本
+        UIObjectProxy._do_query = no_cache_do_query
+        UIObjectProxy.exists = no_cache_exists
+        UIObjectProxy.get_text = no_cache_get_text
+
+        print("✓ Poco缓存已完全禁用 (每次查询都重新获取UI状态)")
+        return True
+
+    except Exception as e:
+        print(f"⚠ 禁用Poco缓存失败: {e}")
+        return False
+
+
+def disable_dumper_cache():
+    """
+    禁用UIAutomator2Dumper的缓存机制
+    """
+    try:
+        from poco.drivers.android.uiautomation2 import UIAutomator2Dumper
+
+        # 重写getRoot方法，每次都重新获取
+        def no_cache_getRoot(self):
+            """无缓存的getRoot - 每次都刷新"""
+            self._root_node = None  # 强制清除缓存
+            self._update_hierarchy()
+            return self._root_node
+
+        # 备份原始方法
+        if not hasattr(UIAutomator2Dumper, '_original_getRoot'):
+            UIAutomator2Dumper._original_getRoot = UIAutomator2Dumper.getRoot
+
+        # 替换为无缓存版本
+        UIAutomator2Dumper.getRoot = no_cache_getRoot
+
+        print("✓ UIAutomator2Dumper缓存已禁用 (每次都重新获取UI层次)")
+        return True
+
+    except Exception as e:
+        print(f"⚠ 禁用Dumper缓存失败: {e}")
+        return False
 
 
 def patch_poco_set_text():
