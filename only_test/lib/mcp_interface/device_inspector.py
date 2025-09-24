@@ -14,12 +14,15 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import sys
 import os
+import subprocess
+import re
+import xml.etree.ElementTree as ET
 
 # 添加项目路径
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from lib.visual_recognition import VisualIntegration, get_all_elements, is_media_playing
-from lib.visual_recognition.visual_integration import IntegrationConfig
+# XML-only mode: remove visual_recognition dependency
+# Provide local XML extraction helpers and playback detection
 from lib.device_adapter import DeviceAdapter
 from .mcp_server import mcp_tool
 from lib.yaml_monitor import YamlMonitor
@@ -60,7 +63,6 @@ class DeviceInspector:
     def __init__(self, device_id: Optional[str] = None):
         """初始化设备探测器"""
         self.device_id = device_id
-        self.visual_integration: Optional[VisualIntegration] = None
         self.device_adapter: Optional[DeviceAdapter] = None
         self._initialized = False
         # 目标应用包名（用于限制操作范围）
@@ -75,6 +77,8 @@ class DeviceInspector:
         }
         # MCP 屏幕分析轮次计数，用于限制自动关广告次数
         self._analysis_round: int = 0
+        # 屏幕尺寸缓存
+        self._screen_size_cache: Optional[tuple[int,int]] = None
         # 自动关广告最大轮次（可通过 get_current_screen_info 的 auto_close_limit 覆盖）
         self.auto_close_ads_limit: int = 3
         # 从环境变量读取全局覆盖（每会话），例如 ONLY_TEST_AUTO_CLOSE_LIMIT=2
@@ -87,20 +91,155 @@ class DeviceInspector:
         
         logger.info(f"设备探测器初始化 - 设备: {device_id or 'default'}")
     
-    async def initialize(self) -> bool:
-        """初始化所有组件"""
+    # === XML-only 辅助方法 ===
+    def _adb_prefix(self) -> list:
+        return ["adb"] + (["-s", self.device_id] if self.device_id else [])
+
+    def _get_screen_size(self) -> tuple[int, int]:
+        if self._screen_size_cache:
+            return self._screen_size_cache
         try:
-            # 初始化视觉识别系统（带设备ID）
-            self.visual_integration = VisualIntegration(IntegrationConfig(device_id=self.device_id))
-            await self.visual_integration.initialize()
-            
+            out = subprocess.run(self._adb_prefix() + ["shell", "wm", "size"], capture_output=True, text=True)
+            if out.returncode == 0 and "Physical size:" in out.stdout:
+                sz = out.stdout.split("Physical size:")[-1].strip().split("\n")[0].strip()
+                w, h = sz.split("x")
+                self._screen_size_cache = (int(w), int(h))
+                return self._screen_size_cache
+        except Exception:
+            pass
+        self._screen_size_cache = (1080, 1920)
+        return self._screen_size_cache
+
+    async def _dump_current_xml(self) -> str:
+        try:
+            # 尝试 exec-out 直接输出
+            proc = await asyncio.create_subprocess_exec(
+                *self._adb_prefix(), "exec-out", "uiautomator", "dump", "/dev/tty",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0 and stdout:
+                txt = stdout.decode(errors='ignore')
+                # 输出中可能包含路径与提示，提取 <hierarchy ..> 起始
+                idx = txt.find("<hierarchy")
+                if idx >= 0:
+                    return txt[idx:]
+        except Exception:
+            pass
+        try:
+            # 回退：写入 /sdcard/window_dump.xml 再读取
+            _ = subprocess.run(self._adb_prefix() + ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], capture_output=True, text=True)
+            out = subprocess.run(self._adb_prefix() + ["shell", "cat", "/sdcard/window_dump.xml"], capture_output=True, text=True)
+            if out.returncode == 0:
+                return out.stdout
+        except Exception:
+            pass
+        return ""
+
+    def _parse_bounds(self, s: str) -> tuple[int,int,int,int]:
+        try:
+            s = s.replace('[', '').replace(']', ',')
+            xs = [int(x) for x in s.split(',') if x.strip()]
+            if len(xs) >= 4:
+                return xs[0], xs[1], xs[2], xs[3]
+        except Exception:
+            pass
+        return 0,0,0,0
+
+    def _xml_to_elements(self, xml_str: str) -> list[dict]:
+        if not xml_str:
+            return []
+        w, h = self._get_screen_size()
+        try:
+            root = ET.fromstring(xml_str)
+        except Exception:
+            return []
+        elements: list[dict] = []
+        def walk(node):
+            if node is None:
+                return
+            if node.tag != 'hierarchy':
+                attrib = node.attrib
+                bounds_str = attrib.get('bounds', '[0,0][0,0]')
+                x1, y1, x2, y2 = self._parse_bounds(bounds_str)
+                # 归一化
+                if w > 0 and h > 0:
+                    nb = [x1/w, y1/h, x2/w, y2/h]
+                else:
+                    nb = [0,0,0,0]
+                text = attrib.get('text', '')
+                resource_id = attrib.get('resource-id', '')
+                content_desc = attrib.get('content-desc', '')
+                class_name = attrib.get('class', '')
+                package = attrib.get('package', '')
+                visible = (attrib.get('visible', 'true').lower() == 'true')
+                is_clickable = (
+                    (attrib.get('clickable', 'false').lower() == 'true') or
+                    (attrib.get('long-clickable', 'false').lower() == 'true') or
+                    (attrib.get('touchable', 'false').lower() == 'true')
+                ) and visible and (attrib.get('enabled', 'true').lower() == 'true')
+                elements.append({
+                    "uuid": f"xml_{len(elements)}",
+                    "element_type": "xml",
+                    "name": resource_id or (text or class_name),
+                    "text": text,
+                    "package": package,
+                    "resource_id": resource_id,
+                    "content_desc": content_desc,
+                    "class_name": class_name,
+                    "clickable": bool(is_clickable),
+                    "bounds": nb,
+                    "source": "xml_extractor"
+                })
+            for c in list(node):
+                walk(c)
+        walk(root)
+        return elements
+
+    async def _get_elements_xml(self, clickable_only: bool = True) -> list[dict]:
+        xml_str = await self._dump_current_xml()
+        elems = self._xml_to_elements(xml_str)
+        if clickable_only:
+            elems = [e for e in elems if e.get('clickable')]
+        return elems
+
+    async def _is_media_playing(self) -> bool:
+        # 简化策略：检测 audio_flinger 中是否存在 Standby: no
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *self._adb_prefix(), "shell", "dumpsys", "media.audio_flinger",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode == 0 and stdout:
+                txt = stdout.decode(errors='ignore').lower()
+                # 任意输出包含 "standby: no" 视为音频活动
+                if "standby: no" in txt:
+                    return True
+        except Exception:
+            pass
+        # 备选：检查 media_session 状态（存在正在播放会话）
+        try:
+            proc2 = await asyncio.create_subprocess_exec(
+                *self._adb_prefix(), "shell", "dumpsys", "media_session",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout2, _ = await proc2.communicate()
+            if proc2.returncode == 0 and stdout2:
+                if b"state=PlaybackState" in stdout2 or b"state=3" in stdout2:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    async def initialize(self) -> bool:
+        """初始化组件（XML-only）"""
+        try:
             # 初始化设备适配器
             self.device_adapter = DeviceAdapter()
-            
             self._initialized = True
-            logger.info("设备探测器初始化成功")
+            logger.info("设备探测器初始化成功（XML-only）")
             return True
-            
         except Exception as e:
             logger.error(f"设备探测器初始化失败: {e}")
             return False
@@ -266,8 +405,8 @@ class DeviceInspector:
                 except Exception as _e:
                     logger.debug(f"预关闭广告失败（忽略）：{_e}")
 
-            # 获取元素信息
-            elements = await get_all_elements(clickable_only=clickable_only)
+            # 获取元素信息（XML-only）
+            elements = await self._get_elements_xml(clickable_only=clickable_only)
             screen_info["total_elements"] = len(elements)
             
             if clickable_only:
@@ -292,13 +431,13 @@ class DeviceInspector:
                 }
             
             # 二次检测：基于当前元素再计算一次广告信息（记录purpose）
-            all_elements = elements if not clickable_only else await get_all_elements(clickable_only=False)
+            all_elements = elements if not clickable_only else await self._get_elements_xml(clickable_only=False)
             ads_info = await self._auto_handle_ads(all_elements, allow_click=should_auto_close)
             if should_auto_close and ads_info.get("auto_close_attempts", 0) > 0:
-                elements = await get_all_elements(clickable_only=clickable_only)
+                elements = await self._get_elements_xml(clickable_only=clickable_only)
 
-            # 播放状态检测
-            playing = await is_media_playing()
+            # 播放状态检测（音频/会话）
+            playing = await self._is_media_playing()
             screen_info["media_playing"] = playing
             
             # 如果需要包含元素列表
@@ -355,7 +494,7 @@ class DeviceInspector:
 
         # 单次：调用一次自动关闭
         if mode == "single":
-            elements = await get_all_elements(clickable_only=False)
+            elements = await self._get_elements_xml(clickable_only=False)
             info = await self._auto_handle_ads(elements)
             return {"mode": mode, "rounds": 1, "last_ads_info": info}
 
@@ -368,7 +507,7 @@ class DeviceInspector:
         last_info = {}
         while _t.time() < end_t:
             rounds += 1
-            elements = await get_all_elements(clickable_only=False)
+            elements = await self._get_elements_xml(clickable_only=False)
             info = await self._auto_handle_ads(elements)
             last_info = info
 
@@ -717,7 +856,7 @@ class DeviceInspector:
                 if not clicked:
                     break
                 # 刷新元素以便下一轮判断  
-                elements = await get_all_elements(clickable_only=False)
+                elements = await self._get_elements_xml(clickable_only=False)
                 # 若置信度下降则退出
                 conf2, _, _ = detect_conf(elements)
                 if conf2 < 0.70:
@@ -791,12 +930,12 @@ class DeviceInspector:
                 await self.visual_integration.initialize()
 
             if action == 'click':
-                # 1) 首选按选择器点击
+                # 1) 首选按选择器点击（Poco/XML-only）
                 ok = False
                 # 内容/文本选择器：先验证属于目标包
                 if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
                     try:
-                        elems = await get_all_elements(clickable_only=False)
+                        elems = await self._get_elements_xml(clickable_only=False)
                         found_in_target = False
                         for e in elems:
                             if sel_type == 'content_desc' and (e.get('content_desc') == sel_value):
@@ -810,16 +949,46 @@ class DeviceInspector:
                     except Exception:
                         pass
                 if sel_type in ('resource_id', 'content_desc', 'text') and sel_value:
-                    ok = await self.visual_integration.find_and_tap(
-                        text=sel_value if sel_type == 'text' else None,
-                        resource_id=sel_value if sel_type == 'resource_id' else None,
-                        content_desc=sel_value if sel_type == 'content_desc' else None,
-                        timeout=8.0
-                    )
+                    try:
+                        from ..poco_utils import get_android_poco
+                        poco = get_android_poco()
+                        obj = None
+                        if sel_type == 'resource_id':
+                            obj = poco(resourceId=sel_value)
+                            if not obj.exists() and '/' in str(sel_value):
+                                # 后缀匹配（兼容包名前缀差异）
+                                rid_suffix = str(sel_value).split('/')[-1]
+                                try:
+                                    obj = poco(resourceIdMatches=f".*:id/{rid_suffix}$")
+                                except Exception:
+                                    obj = poco(name=rid_suffix)
+                        elif sel_type == 'text':
+                            obj = poco(text=sel_value)
+                        elif sel_type == 'content_desc':
+                            # 多种别名尝试
+                            for key in ('desc', 'description', 'contentDescription', 'name'):
+                                try:
+                                    obj = poco(**{key: sel_value})
+                                    if obj.exists():
+                                        break
+                                except Exception:
+                                    obj = None
+                        if obj and obj.exists():
+                            try:
+                                try:
+                                    obj.wait_for_appearance(timeout=2.0)
+                                except Exception:
+                                    pass
+                                obj.click()
+                                ok = True
+                            except Exception:
+                                ok = False
+                    except Exception:
+                        ok = False
                 # 2) 若失败，尝试“容器→子输入框”启发式
                 if not ok and sel_type == 'resource_id' and sel_value:
                     try:
-                        elems = await get_all_elements(clickable_only=False)
+                        elems = await self._get_elements_xml(clickable_only=False)
                         container = None
                         for e in elems:
                             if e.get('resource_id') == sel_value:
@@ -870,7 +1039,7 @@ class DeviceInspector:
                     if bp and isinstance(bp, (list, tuple)) and len(bp) == 4:
                         if self.target_app_package:
                             try:
-                                elems = await get_all_elements(clickable_only=False)
+                        elems = await self._get_elements_xml(clickable_only=False)
                                 # 统一为像素坐标进行重叠判断
                                 def _screen_size():
                                     out = subprocess.run(
@@ -926,7 +1095,7 @@ class DeviceInspector:
                         return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                 if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
                     try:
-                        elems = await get_all_elements(clickable_only=False)
+                        elems = await self._get_elements_xml(clickable_only=False)
                         found_in_target = False
                         for e in elems:
                             if sel_type == 'content_desc' and (e.get('content_desc') == sel_value) and self._belongs_to_scope(e):
@@ -937,13 +1106,31 @@ class DeviceInspector:
                             return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                     except Exception:
                         pass
-                # 聚焦输入框
-                _ = await self.visual_integration.find_and_tap(
-                    text=sel_value if sel_type == 'text' else None,
-                    resource_id=sel_value if sel_type == 'resource_id' else None,
-                    content_desc=sel_value if sel_type == 'content_desc' else None,
-                    timeout=8.0
-                )
+                # 聚焦输入框（Poco）
+                try:
+                    from ..poco_utils import get_android_poco
+                    poco = get_android_poco()
+                    obj = None
+                    if sel_type == 'resource_id':
+                        obj = poco(resourceId=sel_value)
+                    elif sel_type == 'text':
+                        obj = poco(text=sel_value)
+                    elif sel_type == 'content_desc':
+                        for key in ('desc', 'description', 'contentDescription', 'name'):
+                            try:
+                                obj = poco(**{key: sel_value})
+                                if obj.exists():
+                                    break
+                            except Exception:
+                                obj = None
+                    if obj and obj.exists():
+                        try:
+                            obj.wait_for_appearance(timeout=2.0)
+                        except Exception:
+                            pass
+                        obj.click()
+                except Exception:
+                    pass
                 # ADB 输入（空格替换为% s以兼容input）
                 safe = (data or '').replace(' ', '%s')
                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
@@ -1117,9 +1304,6 @@ class DeviceInspector:
             await self.initialize()
         
         try:
-            if not self.visual_integration:
-                return {"error": "视觉识别系统未初始化"}
-            
             search_results = {
                 "search_text": search_text,
                 "search_type": search_type,
@@ -1128,8 +1312,8 @@ class DeviceInspector:
                 "matches": []
             }
             
-            # 获取所有元素
-            all_elements = await get_all_elements()
+            # 获取所有元素（XML-only）
+            all_elements = await self._get_elements_xml(clickable_only=False)
             
             # 搜索逻辑
             search_term = search_text if case_sensitive else search_text.lower()

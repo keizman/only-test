@@ -4,3 +4,4 @@ mapping:
       description: 亮度bar
       - brightness
       
+      # 暂未想好规划, 暂不处理此文件, 

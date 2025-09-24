@@ -53,6 +53,44 @@ devices:
       confidence_threshold: 0.8      # 视觉识别置信度
       element_wait_timeout: 10       # 元素等待超时
 
+  Pixel_7_Pro:
+    # === 设备连接信息 ===
+    connection:
+      adb_serial: "192.168.8.100"               # ADB设备序列号(null=自动检测)
+      connection_timeout: 10
+    # === 设备基本信息 ===
+    phone_type: "android_phone"  # android_phone, android_tablet, android_tv
+    custom_name: "Pixel 7 Pro"
+    description: "这里时自定义手机信息"
+    
+    # === 设备硬件信息 (可自动探测覆盖) ===
+    android_version: "13"
+    screen_info:
+      resolution: "1080x2340"        # 物理分辨率
+      override_resolution: null      # 覆盖分辨率(如果有)
+      density: 440                   # 屏幕密度
+      orientation: "portrait"        # portrait/landscape
+      
+    hardware_info:
+      brand: "Google"
+      model: "Pixel 7 Pro"
+      cpu_cores: 8
+      memory_gb: 8
+      
+    # === 测试执行配置 ===
+    execution_config:
+      interaction_delay: 0.5         # 操作间隔(秒)
+      screenshot_format: "png"       # 截图格式
+      screenshot_quality: 90         # 截图质量
+      max_wait_time: 20             # 最大等待时间
+      
+    # === 识别配置 ===
+    recognition_config:
+      primary_mode: "xml"            # xml, visual, hybrid
+      fallback_mode: "visual"        # 主模式失败时的备用模式
+      confidence_threshold: 0.8      # 视觉识别置信度
+      element_wait_timeout: 10       # 元素等待超时
+
       
 
 # 应用配置组 - 支持多应用测试

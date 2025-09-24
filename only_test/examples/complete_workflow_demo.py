@@ -95,7 +95,6 @@ class CompleteWorkflowDemo:
         print(f"✅ JSON用例已更新")
         print(f"   资源文件数: {len(self.assets_manager.current_session['assets_saved'])}")
         print(f"   截图数量: {len([a for a in self.assets_manager.current_session['assets_saved'] if a['type'] == 'screenshot'])}")
-        print(f"   识别结果: {len([a for a in self.assets_manager.current_session['assets_saved'] if a['type'] == 'omniparser_result'])}")
         print()
         
         # 步骤6: JSON转Python代码

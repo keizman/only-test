@@ -19,7 +19,7 @@ Only-Test 是一个革命性的移动端UI自动化测试框架，通过 JSON + 
 - ✅ **智能适配**: 自动检测设备信息，动态调整策略
 - ✅ **条件逻辑**: "如果搜索框有内容先清空" → 自动转换为条件分支
 - ✅ **自然语言**: 用户只需描述测试意图，无需编程
-- ✅ **双模识别**: XML+视觉识别智能切换，适应动静态场景
+- ✅ **XML 识别**: 基于 UIAutomator2 的 XML 模式，配合“播放控制栏保活”确保播放场景可操作
 - ✅ **完整追溯**: 每个操作都有完整的执行轨迹记录
 
 ### 🏗️ 核心架构设计思想
@@ -100,9 +100,8 @@ python tools/test_runner.py --file testcase.json
 
 # 资源保存路径规则: assets/{pkg_name}_{device_name}/
 # 示例: assets/com_ss_android_ugc_aweme_Pixel6Pro/
-#   ├── step01_click_before_20241205_143022.png
-#   ├── step02_conditional_action_after_20241205_143035.png  
-#   ├── step02_omni_result_20241205_143032.json
+#   ├── step01_click_before_20241205_143022_123.png
+#   ├── step02_conditional_action_after_20241205_143035.png
 #   └── execution_log.jsonl
 ```
 
@@ -138,19 +137,18 @@ python lib/code_generator/json_to_python.py testcase.json
 }
 ```
 
-### **双模式识别策略**
+#### **播放场景的可见性策略**
 
-**静态界面**: 使用XML识别 (快速、准确)
-```python
-if not is_media_playing():
-    element = poco(resourceId="search_input").click()
-```
+UIAutomator2 只能识别当前可见（displayed）的元素。对播放页的 seekbar/控制栏，先通过“保活点击”在安全区域唤醒控制栏，再执行 XML 定位：
+```python path=null start=null
+# 示例：在屏幕高度 15% 的横向中线点击，唤醒控制栏
+from only_test.lib.playing_state_keep_displayed import start_keep_play_controls, stop_keep_play_controls
 
-**视频播放**: 使用Omniparser视觉识别
-```python 
-if is_media_playing():
-    omni_result = omniparser.recognize(screenshot)
-    click_element_by_visual(omni_result.elements[0])
+# 开始在后台保活（例如 8 秒内每 0.2 秒检测）
+await start_keep_play_controls(duration_s=8, detect_interval=0.2, exist_field_keyword="Brightness")
+# 执行你的点击/输入等操作...
+# 结束保活
+await stop_keep_play_controls()
 ```
 
 ### **资源路径管理规则**
@@ -251,12 +249,12 @@ allure open reports/allure-report
 
 ### **AI集成**
 - **LLM**: 自然语言理解和用例生成
-- **Omniparser**: 视觉识别引擎
+- （已移除）视觉识别引擎：项目已切换为 XML-only 模式
 - **条件逻辑引擎**: 智能分支判断
 
 ### **设备控制**
 - **ADB**: Android调试桥
-- **UIAutomator2**: Android UI自动化
+- **UIAutomator2**: Android UI 自动化（XML 识别）
 - **Phone-Use**: 屏幕控制和信息获取
 
 ## 🎯 核心优势

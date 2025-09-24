@@ -466,25 +466,31 @@ text("西语手机端720资源02")''' 它可能并未再次点击 searchEt 进�
 ---
 
 
-
+- reafactor: XML mode only
 
 修正: 新UIAutomator2 相对于旧版 UIAutomator 在播放状态（play state）下支持了更好的元素识别，但存在一个常见缺陷：它只能识别当前可见（displayed）的元素。对于像 seekbar 这样的控件，需要先点击屏幕使其显示，然后才能识别和操作。目前 APK 设置的显示栏（bar）消失时间太短，可能会导致识别失败或点击无效. 因此需要一个 keep 函数确保元素始终展示, 兼容需要长时间显示情况显示
 
-此函数需要支持, 1.再想要点击之前确保播放导航栏icon 全部显示, 也就是需要不断的侦测点击, 他需要是一个单实例的异步函数, 也就是调用后填入持续监测时长, 其需要自动工作, 单实例是因为防止多个函数同时点击, 如果有其他函数再次调用, 需要销毁前一个实例, 使用最新实例进行工作, 
-playing_stat_keep_displayed_button(,detect_interval=0.1(每0.1检测一次是否显示控件))
-  clickable_area = # 需要找一个可点击区域
-  clickable_area = # 需要找一个可点击区域
-  if is_playing_stat:
+only_test_old 是使用 omniparser 的模式, 这个模式在目前的我看俩已不适用, 我需要 only_test 项目全部使用 XML 模式, 没有回退方案, 请直接删除相关代码, 以及各个文档中关于 omniparser 的描述都删除, 注意只处理 only_test 下方的内容, only_test_old 可保留. 另外下方是新模式的一些必须用品, 在你处理完上述内容后执行
 
-    if not is_full_screen:
-        returen # 小屏状态
-      
-      if not "Brightness" in json: # 没有相关字段则为
-      click() # 使
-      retun true
+此函数需要支持, 1.再想要点击之前确保播放导航栏 icon 全部显示, 也就是需要不断的侦测并点击唤起展示 icon , 他需要是一个单实例的异步函数, 也就是调用后填入持续监测时长, 其需要自动工作, 单实例是因为防止多个函数同时点击, 如果有其他函数再次调用, 需要销毁前一个实例, 使用最新实例进行工作, 请完善这个函数, 写在 lib 目录下
+clickable_area 设计方式, 为了兼容全屏和小屏, 需要找到一个都可点击的区域, 我决定是 当前的高的 15% 处 
+`比如当前是小屏, 设 xy  = 1080x2340  . 那么点击区域为 x=1080/2 (取中心点)  y=2340*0.15=`
+`现在切换到全屏 = 2340*1080 . x = 2340/2 = 原点 y= 1080*0.15 = 162`
+动态替换当前设备的像素值即可获知要点击的位置, 以唤起 icon. 注意我的设计也许并不是全然正确, 你可思考不合理之处进行改正
+
+
+
+playing_stat_keep_displayed_button(,detect_interval=0.1(每0.1检测一次是否显示控件), exist_filed_keyword="Brightness"(这里将传入一个播放状态下必然有的 icon , 以此判断是否点击后成功唤起 icon 的展示 , 之后会二次封装, 为每个不同状态传入指定的 keyword))
+  clickable_area = # 需要找一个可点击区域
+  clickable_area_mini_window = clickable_area # 目前的设计兼容了小屏和全屏
+  if is_playing_stat: 播放状态需要特殊处理, 调出 icon 以进行侦测, 但是全屏和小屏点击位置不一样 
+
     
-
-----
+      if  exist_filed_keyword not in cureent_XML_json and len(resourceId ) < 10 : # 没有相关字段则存在于json ,and 字段过少 (代表处于播放状态 icon 不存在则字段很少, 两项都符合时点击唤起所有 icon)
+        click(clickable_area) # 点击以使 icon 出现, 
+      
+    
+播放状态页区分小屏播放状态, 目前没有处理的明显区别, 但写下来方便以后区分
 def is_full_screen() return true(全屏) false(非全屏)
 1.全屏 2.非全屏, 区别有 mBounds 值颠倒, port in mCurrentConfig 全屏, land in mCurrentConfig 非全屏
 
@@ -496,12 +502,11 @@ crux:/ $
 crux:/ $ dumpsys activity top | grep -E 'ACTIVITY|mCurrentConfig' | grep com.mobile.brasiltvmobile -A 1
   ACTIVITY com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.PlayAty 3d27394 pid=26980
       mCurrentConfig={0.86 ?mcc?mnc [en_US] ldltr sw523dp w903dp h480dp 440dpi lrg long hdr widecg land finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 2560, 1440) mAppBounds=Rect(75, 0 - 2560, 1396) mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_90} s.10 themeChanged=0 themeChangedFlags=0 extraData = Bundle[{}]}
-crux:/ $
+
 
 
 ----
 
-需求: 关闭 debug 面板,
 
 
 1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
@@ -513,14 +518,17 @@ crux:/ $
 ----- 
 
 
-
-
+需求: 
+1.支持快捷键关闭 debug 面板
 使用VOLUME_UP + VOLUME_DOWN 组合按键, TV 和 手机应该都能正常监听 缺点是肯定会调起音量bar 调整音量
 VOLUME_UP：adb shell input keyevent 24
 VOLUME_DOWN：adb shell input keyevent 25
 1s 内先 UP 再 DOWN 组合按键关闭 debug 面板
 
-
+2.支持配置项延长 bar 显示时间. 比如 adb 命令? 
+3.配置项允许 H7 盒子截图
+4.支持接口获取 DEBUG 面板所有信息
+5.支持参数配置直接再 debug 包不展示 debug 面板
 
 
 ---

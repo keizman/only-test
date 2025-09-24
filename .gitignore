@@ -1,6 +1,8 @@
 only_test/*/*/__pycache__/
 only_test/*/__pycache__/
 only_test/__pycache__/
+/only_test_old
 *log
+
 
 

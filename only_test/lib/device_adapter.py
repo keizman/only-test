@@ -207,16 +207,11 @@ class DeviceAdapter:
                 }
             },
             "recognition_adaptation": {
-                "preferred_mode": self._get_optimal_recognition_mode(device_info),
+                "preferred_mode": "xml",
                 "xml_recognition": {
                     "enabled": True,
                     "timeout": 10,
                     "retry_count": 3
-                },
-                "visual_recognition": {
-                    "enabled": True,
-                    "confidence_threshold": 0.8,
-                    "template_matching_threshold": 0.7
                 }
             },
             "performance_adaptation": {
@@ -244,18 +239,8 @@ class DeviceAdapter:
             return 40
     
     def _get_optimal_recognition_mode(self, device_info: Dict) -> str:
-        """获取最优识别模式"""
-        android_version = device_info.get("android_version", "13.0")
-        performance_info = device_info.get("performance_info", {})
-        memory_gb = performance_info.get("memory_total_gb", 4)
-        
-        # Android 11+且内存充足时优先使用混合模式
-        if float(android_version) >= 11.0 and memory_gb >= 6:
-            return "hybrid"
-        elif float(android_version) >= 9.0:
-            return "xml_priority" 
-        else:
-            return "visual_fallback"
+        """获取最优识别模式（XML-only）"""
+        return "xml"
     
     def _calculate_action_delay(self, device_info: Dict) -> float:
         """计算操作延迟"""

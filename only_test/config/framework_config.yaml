@@ -52,24 +52,12 @@ execution:
 
 # 元素识别配置
 recognition:
-  # 默认识别模式
-  default_mode: "hybrid"   # xml, visual, hybrid, sdk
+  # 默认识别模式（XML-only）
+  default_mode: "xml"   # 仅使用 xml（UIAutomator2）
   
   # 广告策略
   ads:
     auto_close_limit: 3   # 仅在前N次屏幕分析时自动关闭广告（防止过度干预）
-  
-  # 模式切换策略
-  mode_switching:
-    auto_switch: true      # 自动切换模式
-    fallback_enabled: true # 启用降级策略
-    switch_conditions:
-      - condition: "xml_dump_failed"
-        fallback: "visual"
-      - condition: "media_playing"
-        switch_to: "visual"
-      - condition: "element_not_found"
-        fallback: "visual"
   
   # XML识别配置
   xml_recognition:
@@ -77,16 +65,6 @@ recognition:
     dump_retries: 2
     ignore_invisible: false
     use_cache: false
-  
-  # 视觉识别配置
-  visual_recognition:
-    server_url: "http://100.122.57.128:9333"
-    timeout: 30
-    confidence_threshold: 0.8
-    use_paddleocr: true
-    ocr_languages: ["ch", "en"]
-    cache_enabled: true
-    cache_ttl: 300  # 缓存生存时间（秒）
   
   # 元素匹配策略
   matching:

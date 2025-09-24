@@ -16,9 +16,7 @@ def assert_playback_state(expected: bool) -> bool:
     约定：返回 True/False，不抛异常；由上层统一处理失败。
     """
     try:
-        # TODO: 通过 ADB dumpsys 或集成的 playback_detector 调用
-        # from only_test.lib.visual_recognition.playback_detector import is_playing
-        # playing = is_playing()
+        # TODO: 通过 ADB dumpsys 检查 audio_flinger/media_session，或接入执行器内置探针
         playing = True  # 占位：默认成功
         return bool(playing) is bool(expected)
     except Exception:

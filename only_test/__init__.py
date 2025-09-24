@@ -3,8 +3,8 @@
 Only-Test Framework
 ===================
 
-智能化移动应用自动化测试框架，基于Airtest进行二次开发
-专注于Android应用的UI自动化测试，集成LLM和视觉识别能力
+智能化移动应用自动化测试框架，基于 Airtest 进行二次开发
+专注于 Android 应用的 UI 自动化测试，集成 LLM，使用 XML（UIAutomator2）进行元素识别
 
 主要功能：
 - 基于XML的UI元素识别
@@ -21,7 +21,6 @@ __email__ = "support@only-test.com"
 # 导出主要模块
 try:
     from .lib.pure_uiautomator2_extractor import UIAutomationScheduler, EnhancedUIAutomator2Extractor
-    from .lib.visual_recognition.element_recognizer import ElementRecognizer
     # NOTE: Avoid importing mcp_interface symbols eagerly to prevent pre-importing
     # submodules (e.g., device_inspector) before `-m only_test.lib.mcp_interface.device_inspector` runs.
     # They are exposed lazily via __getattr__ below.
@@ -34,8 +33,7 @@ except ImportError as e:
 
 __all__ = [
     "UIAutomationScheduler",
-    "EnhancedUIAutomator2Extractor", 
-    "ElementRecognizer",
+    "EnhancedUIAutomator2Extractor",
     "WorkflowOrchestrator",
     "MCPServer",
     "TestGenerator",
