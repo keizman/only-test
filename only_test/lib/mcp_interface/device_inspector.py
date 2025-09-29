@@ -1441,7 +1441,9 @@ class DeviceInspector:
             used_selector = {"type": sel_type, "value": sel_value}
             # 选择器包名限制：若提供 resource_id 但不属于目标包，直接判为无效选择器
             if sel_type == 'resource_id' and sel_value and self.target_app_package:
-                if not str(sel_value).startswith(self.target_app_package + ":"):
+                rid = str(sel_value)
+                # Accept fully-qualified Android resource form "<pkg>:id/<name>" or generic "id/<name>"
+                if not (rid.startswith(f"{self.target_app_package}:id/") or rid.startswith("id/")):
                     return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
 
             # 通过 ElementRecognizer 执行动作

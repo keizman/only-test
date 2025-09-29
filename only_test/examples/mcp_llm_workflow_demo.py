@@ -645,6 +645,31 @@ async def main():
                 'texts': _dedup(texts),
             }
 
+        # Helper: build selector pool filtered to target package only
+        def _build_selector_pool_for_pkg(screen_resp, target_pkg: str):
+            els = (screen_resp.result or {}).get('elements', []) if getattr(screen_resp, 'success', False) else []
+            rids, texts = [], []
+            for e in els:
+                pkg = (e.get('package') or '').strip()
+                if not target_pkg or pkg != target_pkg:
+                    continue
+                rid = (e.get('resource_id') or '').strip()
+                if rid:
+                    rids.append(rid)
+                tx = (e.get('text') or '').strip()
+                if tx:
+                    texts.append(tx)
+            def _dedup(seq):
+                seen, out = set(), []
+                for x in seq:
+                    if x not in seen:
+                        seen.add(x); out.append(x)
+                return out
+            return {
+                'resource_ids': _dedup(rids),
+                'texts': _dedup(texts),
+            }
+
         # Helper: format selector pool for prompt (no truncation)
         def _format_selector_pool(pool: dict) -> str:
             def fmt(name: str, vals: list) -> str:
@@ -652,7 +677,6 @@ async def main():
                 return f"- {name}({len(vals)}): " + (", ".join([str(v) for v in vals]) if vals else "[]")
             return "\n".join([
                 fmt('resource_id', pool.get('resource_ids', [])),
-                fmt('content_desc', pool.get('content_descs', [])),
                 fmt('text', pool.get('texts', [])),
             ])
 
@@ -671,7 +695,7 @@ async def main():
                 f"测试目标: {requirement}\n\n"
                 + example_note +
                 "注意：计划阶段禁止编造任何 resource_id/text/content_desc 值；具体selector 由后续步骤从当前XML的可选列表中选择。\n\n"
-                "可用动作类别（后续步骤会用到）：click, input, wait_for_elements, wait, restart, launch, assert, swipe。\n"
+                "可用动作类别（后续步骤会用到）：click, input, press, wait_for_elements, wait, restart, launch, assert, swipe。\n"
                 "可用工具：get_current_screen_info, perform_and_verify, perform_ui_action, close_ads, start_app。\n\n"
                 "输出JSON格式（必须包含 keyword 和 max_rounds）：{\n"
                 "  \"plan_id\": \"plan_YYYYmmdd_HHMMSS\",\n"
@@ -764,6 +788,14 @@ async def main():
                         'metadata': {'tags': ['golden','json'], 'path': ['home','search','result','play']},
                         'content': golden_json_path.read_text(encoding='utf-8')
                     })
+                # v2 JSON demo
+                v2_json_path = Path('only_test/testcases/generated/example_airtest_record.v2.json')
+                if v2_json_path.exists():
+                    examples.append({
+                        'file': str(v2_json_path),
+                        'metadata': {'tags': ['v2','json'], 'path': ['home','search','result','play']},
+                        'content': v2_json_path.read_text(encoding='utf-8')
+                    })
             except Exception:
                 examples = []
 
@@ -776,7 +808,7 @@ async def main():
             except Exception:
                 last_note = ""
             # Build selector pool for THIS round's screen and format it
-            selector_pool_round = _build_selector_pool(screen)
+            selector_pool_round = _build_selector_pool_for_pkg(screen, args.target_app)
             selector_pool_round_str = _format_selector_pool(selector_pool_round)
             try:
                 round_pools.append({
@@ -787,39 +819,46 @@ async def main():
             except Exception:
                 round_pools.append(selector_pool_round)
 
+            # Build example files summary for the prompt (filenames only)
+            example_files = ""
+            try:
+                if examples:
+                    import os as _os
+                    example_files = ", ".join([_os.path.basename(e.get('file','')) for e in examples if isinstance(e, dict)])
+            except Exception:
+                example_files = ""
+
             step_prompt = (
                 "# 仅输出严格JSON。严禁Markdown。只输出一个 JSON 对象。\n\n"
                 + (last_note or "") +
-                "请基于以下屏幕元素与测试目标，返回下一步 JSON 或 tool_request：\n\n"
                 "测试目标: {req}\n\n"
                 "总体计划: {plan}\n\n"
-                "当前屏幕: {screen}\n\n"
                 f"目标应用包: {args.target_app}\n\n"
-                "之前步骤: {prev}\n\n"
-                "可选选择器列表（只能从下列集合中选择，严禁编造新值）：\n"
-                "{pool}\n\n"
                 "选择器范围规则：\n"
-                f"- 仅允许选择器匹配目标应用元素：resource_id 必须以 '{args.target_app}:id/' 开头，或元素 package 必须等于 '{args.target_app}'（content_desc/text 也需满足该条件）；越界的 selector 会被拒绝。\n"
+                f"- 仅允许选择器匹配目标应用元素：resource_id 必须以 '{args.target_app}:id/' 开头，或元素 package 必须等于 '{args.target_app}'（text 也需满足该条件）；越界的 selector 会被拒绝。\n"
                 "- 系统对话白名单允许操作：android, com.android.permissioncontroller, com.google.android.permissioncontroller, com.android.packageinstaller, com.android.systemui。\n\n"
                 "生成规则（防止选择器漂移）：\n"
                 "- priority_selectors 中的 resource_id/content_desc/text 的每个取值，必须 EXACTLY 来自上面的可选列表；否则返回 tool_request。\n"
                 "- 若找不到合适选择器，务必返回 tool_request 请求刷新屏幕或调整流程。\n\n"
                 "无效动作处理规则：\n"
                 "- 如果上一动作被判定为 invalid_action=true（XML 未变化且截图相似度≥98%），你必须给出一个【重试】步骤，而不是重复相同容器点击。\n"
-                "- 重试策略：优先提供更具体的 resource_id 选择器；避免点击容器布局，直接点击可交互控件（例如搜索输入框 searchEt）；必要时添加 wait_for_elements（appearance/disappearance）；若无选择器，提供与元素 bbox 完全一致的 bounds_px；在 expected_result 中写明可观测变化（例如输入框获得焦点/元素消失/元素出现）。\n"
-                "- 使用 bounds_px 仅当该元素属于目标应用或白名单系统对话（需通过 package 或 resource_id 验证）。\n"
+                "- 重试策略：优先提供更具体的 resource_id 或 text 选择器；避免点击容器布局，直接点击可交互控件（例如搜索输入框 searchEt）；必要时添加 wait_for_elements（appearance/disappearance）；并在 expected_result 中写明可观测变化（例如输入框获得焦点/元素消失/元素出现）。\n"
                 "- 仅当认为屏幕元素不一致/过期时才可以返回 tool_request 以刷新屏幕。\n\n"
+                "目标应用可选选择器（仅 {target_app} 包）：\n"
+                "{pool}\n\n"
+                + (f"往期用例示例: {example_files}\n\n" if (example_files or "").strip() else "") +
+                "之前步骤: {prev}\n\n"
                 "返回两种之一（务必只返回一个 JSON 对象）：\n"
                 "1) tool_request 示例: {{\"tool_request\": {{\"name\": \"analyze_current_screen\", \"params\": {{}}, \"reason\": \"需要最新/一致的屏幕元素\"}}}}\n"
                 "2) 单步决策示例: {{\n"
-                "  \"analysis\": {{\"current_page_type\": \"...\", \"available_actions\": [\"click\",\"input\",\"wait_for_elements\",\"wait\",\"restart\",\"launch\",\"assert\",\"swipe\"], \"reason\": \"...\"}},\n"
+                "  \"analysis\": {{\"current_page_type\": \"...\", \"available_actions\": [\"click\",\"input\",\"press\",\"wait_for_elements\",\"wait\",\"restart\",\"launch\",\"assert\",\"swipe\"], \"reason\": \"...\"}},\n"
+.\"}},\n"
                 "  \"next_action\": {{\n"
                 "    \"action\": \"click|input|wait_for_elements|wait|restart|launch|assert|swipe\",\n"
                 "    \"target\": {{\n"
                 "      \"priority_selectors\": [\n"
-                "        {{\"resource_id\": \"...\"}}, {{\"content_desc\": \"...\"}}, {{\"text\": \"...\"}}\n"
-                "      ],\n"
-                "      \"bounds_px\": [100,200,300,260]\n"
+                "        {{\"resource_id\": \"...\"}}, {{\"text\": \"...\"}}\n"
+                "      ]\n"
                 "    }},\n"
                 "    \"data\": \"可选\", \"wait_after\": 0.8, \"expected_result\": \"...\"\n"
                 "  }},\n"
@@ -828,13 +867,13 @@ async def main():
             ).format(
                 req=requirement,
                 plan=json.dumps(plan_json, ensure_ascii=False),
-                screen=json.dumps(screen.result if screen.success else {}, ensure_ascii=False),
                 prev=json.dumps(generated_steps, ensure_ascii=False),
-                pool=selector_pool_round_str
+                pool=selector_pool_round_str,
+                target_app=args.target_app
             )
             dump_text(f"prompt_step_{round_idx}.txt", step_prompt)
             msgs = [
-                {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > content_desc > text."},
+{"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."}
                 {"role": "user", "content": step_prompt}
             ]
             resp = llm.chat_completion(msgs, temperature=0.2, max_tokens=800)
@@ -853,14 +892,14 @@ async def main():
                         new_screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
                         dump_text(f"tool_get_current_screen_info_round_{round_idx}_refresh.json", json.dumps(new_screen.to_dict(), ensure_ascii=False, indent=2))
                         screen = new_screen
-                        selector_pool_round = _build_selector_pool(screen)
+                        selector_pool_round = _build_selector_pool_for_pkg(screen, args.target_app)
                         selector_pool_round_str = _format_selector_pool(selector_pool_round)
                         refresh_used = True
                         # Re-ask step for this refreshed screen
                         refresh_prompt = step_prompt + "\n\n已刷新当前屏幕（仅可从下列可选集合选择）：\n" + selector_pool_round_str
                         dump_text(f"prompt_step_{round_idx}_refresh.txt", refresh_prompt)
                         msgs_r = [
-                            {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > content_desc > text."},
+{"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."}
                             {"role": "user", "content": refresh_prompt}
                         ]
                         resp_r = llm.chat_completion(msgs_r, temperature=0.2, max_tokens=800)
@@ -885,11 +924,8 @@ async def main():
                     t2 = dict(t)
                     if 'resource-id' in t2 and 'resource_id' not in t2:
                         t2['resource_id'] = t2.pop('resource-id')
-                    if 'content-desc' in t2 and 'content_desc' not in t2:
-                        t2['content_desc'] = t2.pop('content-desc')
                     # Build allowed sets from current screen elements
                     allowed_rids = set()
-                    allowed_descs = set()
                     allowed_texts = set()
                     try:
                         allowed_external_pkgs = {
@@ -903,18 +939,15 @@ async def main():
                         for e in els:
                             pkg = (e.get('package') or '')
                             rid = (e.get('resource_id') or '')
-                            cdesc = (e.get('content_desc') or '')
                             txt = (e.get('text') or '')
                             in_target = False
-                            if rid and rid.startswith(f"{args.target_app}:"):
+                            if rid and rid.startswith(f"{args.target_app}:id/"):
                                 in_target = True
                             if pkg == args.target_app or pkg in allowed_external_pkgs:
                                 in_target = True
                             if in_target:
                                 if rid:
                                     allowed_rids.add(rid)
-                                if cdesc:
-                                    allowed_descs.add(cdesc)
                                 if txt:
                                     allowed_texts.add(txt)
                     except Exception:
@@ -928,19 +961,14 @@ async def main():
                             ss = dict(s)
                             if 'resource-id' in ss and 'resource_id' not in ss:
                                 ss['resource_id'] = ss.pop('resource-id')
-                            if 'content-desc' in ss and 'content_desc' not in ss:
-                                ss['content_desc'] = ss.pop('content-desc')
                             # drop unsupported keys
                             for k in list(ss.keys()):
-                                if k not in ('resource_id','content_desc','text'):
+                                if k not in ('resource_id','text'):
                                     del ss[k]
                             # enforce target app scope for each key
                             rid = ss.get('resource_id')
-                            cdesc = ss.get('content_desc')
                             txt = ss.get('text')
                             if rid and rid not in allowed_rids:
-                                continue
-                            if cdesc and cdesc not in allowed_descs:
                                 continue
                             if txt and txt not in allowed_texts:
                                 continue
@@ -952,9 +980,6 @@ async def main():
                         rid = t2.get('resource_id')
                         if rid and rid not in allowed_rids:
                             t2.pop('resource_id', None)
-                        cdesc = t2.get('content_desc')
-                        if cdesc and cdesc not in allowed_descs:
-                            t2.pop('content_desc', None)
                         txt = t2.get('text')
                         if txt and txt not in allowed_texts:
                             t2.pop('text', None)
@@ -1180,26 +1205,34 @@ async def main():
                         def _selector_in_pool(target: dict, pool: dict) -> bool:
                             if not isinstance(target, dict):
                                 return False
-                            sels = []
+                            # v1 priority_selectors
                             if isinstance(target.get('priority_selectors'), list) and target['priority_selectors']:
                                 sels = target['priority_selectors']
-                            else:
-                                tmp = {}
-                                for k in ('resource_id','content_desc','text'):
-                                    if target.get(k): tmp[k] = target.get(k)
-                                if tmp: sels = [tmp]
-                            if not sels:
-                                return True  # allow steps without selectors (e.g., wait with bounds)
-                            pool_r = set((pool.get('resource_ids') or []))
-                            pool_c = set((pool.get('content_descs') or []))
-                            pool_t = set((pool.get('texts') or []))
-                            for s in sels:
-                                rid = (s.get('resource_id') or '').strip()
-                                cd = (s.get('content_desc') or '').strip()
-                                tx = (s.get('text') or '').strip()
-                                if (rid and rid in pool_r) or (cd and cd in pool_c) or (tx and tx in pool_t):
-                                    return True
-                            return False
+                                pool_r = set((pool.get('resource_ids') or []))
+                                pool_t = set((pool.get('texts') or []))
+                                for s in sels:
+                                    rid = (s.get('resource_id') or '').strip()
+                                    tx = (s.get('text') or '').strip()
+                                    if (rid and rid in pool_r) or (tx and tx in pool_t):
+                                        return True
+                                return False
+                            # v2 selectors: [{strategy, value}]
+                            if isinstance(target.get('selectors'), list) and target['selectors']:
+                                sels2 = target['selectors']
+                                pool_r = set((pool.get('resource_ids') or []))
+                                pool_t = set((pool.get('texts') or []))
+                                for s in sels2:
+                                    strat = (s.get('strategy') or '').strip().lower()
+                                    val = (s.get('value') or '').strip()
+                                    if strat == 'resource_id' and val in pool_r:
+                                        return True
+                                    if strat == 'text' and val in pool_t:
+                                        return True
+                                return False
+                            # direct keys (rare)
+                            rid = (target.get('resource_id') or '').strip()
+                            tx = (target.get('text') or '').strip()
+                            return (rid and rid in set(pool.get('resource_ids') or [])) or (tx and tx in set(pool.get('texts') or []))
                         def _count_effective_changes(steps: list) -> int:
                             cnt = 0
                             for gs in steps or []:
@@ -1213,12 +1246,19 @@ async def main():
                         gating_ok = True; gating_reason = []
                         # Check selectors vs pools by round index
                         try:
-                            exec_steps = list(repaired.get('execution_path') or [])
+                            # Prefer v2 test_steps, fallback to v1 execution_path
+                            exec_steps = None
+                            if isinstance(repaired.get('test_steps'), list):
+                                exec_steps = repaired.get('test_steps')
+                            elif isinstance(repaired.get('execution_path'), list):
+                                exec_steps = repaired.get('execution_path')
+                            else:
+                                exec_steps = []
                             for i, st in enumerate(exec_steps):
                                 pool = round_pools[i] if i < len(round_pools) else None
                                 if pool is None:
                                     continue
-                                tgt = st.get('target') or {}
+                                tgt = (st.get('target') or {}) if isinstance(st, dict) else {}
                                 if not _selector_in_pool(tgt, pool):
                                     gating_ok = False; gating_reason.append(f"step {i+1} selector not in round pool")
                         except Exception as e:
@@ -1237,33 +1277,65 @@ async def main():
                             def _assemble_from_generated_steps(plan: dict) -> dict:
                                 from datetime import datetime as _dt
                                 tcid = f"TC_{_dt.now().strftime('%Y%m%d_%H%M%S')}"
-                                exec_path = []
+                                steps_v2 = []
                                 step_no = 0
                                 for gs in generated_steps:
                                     act = (gs.get('action') or '').lower()
-                                    if act not in ('click','input','wait_for_elements'):
+                                    if act not in ('click','input','wait_for_elements','wait','press'):
                                         continue
                                     ver = gs.get('verification') or {}
                                     if isinstance(ver, dict) and (ver.get('success') is False):
                                         continue
                                     step_no += 1
-                                    item = {"step": step_no, "action": act, "target": gs.get('target') or {}}
+                                    # map v1 target to v2 selectors
+                                    tgt = gs.get('target') or {}
+                                    sels = []
+                                    if isinstance(tgt.get('priority_selectors'), list):
+                                        for s in tgt['priority_selectors']:
+                                            if s.get('resource_id'):
+                                                sels.append({"strategy": "resource_id", "value": s['resource_id']})
+                                            elif s.get('text'):
+                                                sels.append({"strategy": "text", "value": s['text']})
+                                    elif tgt.get('selectors'):
+                                        sels = [x for x in tgt.get('selectors') if isinstance(x, dict)]
+                                    item = {
+                                        "step": step_no,
+                                        "page": "unknown",
+                                        "action": act if act != 'wait_for_elements' else ("wait_for_disappearance" if (tgt.get('disappearance') or False) else "wait_for_elements"),
+                                        "comment": "assembled from execution",
+                                        "target": ({"selectors": sels} if sels else {})
+                                    }
                                     if act == 'input' and gs.get('data'):
-                                        item['data'] = gs['data']
-                                    exec_path.append(item)
+                                        # keep simple: wrap into object
+                                        d = gs.get('data')
+                                        if isinstance(d, str):
+                                            item['data'] = {"text": d}
+                                        elif isinstance(d, dict):
+                                            item['data'] = d
+                                    steps_v2.append(item)
+                                kw = (plan.get('keyword') or '').strip() if isinstance(plan, dict) else ''
                                 out = {
                                     "testcase_id": tcid,
+                                    "case_type": "mobile",
                                     "name": f"LLM Assembled: {args.target_app}",
                                     "description": args.requirement,
                                     "target_app": args.target_app,
-                                    "variables": {},
+                                    "device_info": {"adb_serial": "${DEVICE_SERIAL}"},
+                                    "variables": ({"program_name": kw} if kw else {}),
                                     "metadata": {"planning": plan or {}},
-                                    "execution_path": exec_path,
-                                    "assertions": []
+                                    "hooks": {
+                                        "before_all": [
+                                          {"action": "stop_app", "comment": "重启应用清理环境状态", "wait": {"after": 3}},
+                                          {"action": "start_app", "comment": "启动应用并等待加载完成", "wait": {"after": 5}},
+                                          {"action": "tool", "tool_name": "close_ads", "comment": "进入后自动关闭广告", "params": {"mode": "continuous", "consecutive_no_ad": 2, "max_duration": 20.0}}
+                                        ],
+                                        "after_all": []
+                                    },
+                                    "test_steps": steps_v2,
+                                    "assertions": [],
+                                    "execution_path": {"py": f"../python/{tcid}_py.py"},
+                                    "presentation_hints": {"style": "recorded"}
                                 }
-                                kw = (plan.get('keyword') or '').strip() if isinstance(plan, dict) else ''
-                                if kw:
-                                    out['variables']['keyword'] = kw
                                 return out
                             assembled = _assemble_from_generated_steps(plan_json)
                             dump_text("parsed_testcase.json", json.dumps(assembled, ensure_ascii=False, indent=2))

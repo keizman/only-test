@@ -757,12 +757,28 @@ LLM 自动录制依旧需要手动矫正, 并且需要额外维护项目
 
 
 ----------
+目前的设计有些偏离我的规划
+你目前在round 2 附带的是
+1.全局规划
+2.所有 XML
+3.prompt 约束可输出值, invalid_action 等解释
+4....不确定是什么
+ 
+我期望的, 
+1.全局规划
+2.prompt 约束可输出值, invalid_action 等解释
+3.与当前操作的 APK 相同的 package 的 结构化可用 resourceId, text, 内容
+4.往期用例示例(没有就提供黄金示例, 我之前写的那个, 你;来决定是否包含json 和 py 并且)
+5.剩余你的有效内容
 
-
-
-
-
-
+之后确认 content_desc 是否还有作用,我记得他是 omniparser 的产物, 但现在没有这个模式了, 确认其是否可去除
+LLM 操作时只需要提供 resourceId/text 等专属于元素定位的内容即可点击等操作, 其没必要直到坐标等内容, 你这是多此一举, 
+另外 json 已经有了一些结构上的变化, C:\Download\git\uni\only_test\testcases\generated\example_airtest_record.from_py.json. 我觉得 prompt 中的一些内容可适当更新以下, 你认为呢
+最后总结一下当前所有prompt enginerr 的 prompt 作用发我, 我check 一下是否符合预期, 类似这种大纲, 简单而鲜明 1.全局规划
+2.prompt 约束可输出值, invalid_action 等解释
+3.与当前操作的 APK 相同的 package 的 结构化可用 resourceId, text, 内容
+4.往期用例示例
+5....
 
 
 
