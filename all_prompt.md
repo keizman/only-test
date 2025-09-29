@@ -503,11 +503,275 @@ crux:/ $ dumpsys activity top | grep -E 'ACTIVITY|mCurrentConfig' | grep com.mob
   ACTIVITY com.mobile.brasiltvmobile/com.mobile.brasiltv.activity.PlayAty 3d27394 pid=26980
       mCurrentConfig={0.86 ?mcc?mnc [en_US] ldltr sw523dp w903dp h480dp 440dpi lrg long hdr widecg land finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 2560, 1440) mAppBounds=Rect(75, 0 - 2560, 1396) mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_90} s.10 themeChanged=0 themeChangedFlags=0 extraData = Bundle[{}]}
 
+-----------------
 
+
+现在请完善一个规则, 我期望做这个 func 是需要在外部 LLM 点击/ 探测前确保元素存在于界面, 否则 LLM 的探测将无意义,  因此我认为应该是自动触发的, 在 LLM 触发检查元素时自动侦测是否为播放状态, 若是, 则自动触发一次元素唤起(以后统称), 成功唤起(点击后) 重新识别最新元素, 之后返回最新的元素内容给 外部 LLM, 它可以无感这一过程, 
+执行阶段: 刚刚录制阶段可以一步探测一次, 执行阶段遇到播放状态, 应该使用哪种策略, 是走持久化自动唤起(目前好像有点问题, 总有 1s 的间隔, 元素是不存在的) 或者也是自动判断播放状态, 就自动唤起一次,  方便下次操作? 你有什么好的注意, 我们需要规划好
+
+-
+
+其它的流程你规划的都很好, 可以立即实施, 实施完成后检阅你的 plan 确认都已完成. 我需要额外补充两点你需谨记
+1.NO need 判断是否播放页, 目前有了adb命令判断播放状态, 这就是一个标志进入了播放页, 刚刚谈论的一切都是播放之后的操作  2.完善规则: 立刻重新 dump XML，并返回“第二次 dump 的元素列表”给 LLM。 逻辑为: 若已唤起状态, 则直接返回, 不进行任何处理, 
+
+忽略 广告问题, 已经被修复, 现在谈论一下之前新增的逻辑, 你已直到之前新增了 元素唤起逻辑, 因此 C:\Download\git\uni\only_test\testcases\python\example_airtest_record.py 示例文件中的末尾一部分操作,也可更换为新逻辑, 甚至直接不点击 屏幕,因为有元素唤起函数在自动生效, 我只需要自动执行即可, 因此请更新 example 文件适配新逻辑, 并加注释解释
 
 ----
 
+你觉得我的设计如何, 有什么补充的吗
 
+Poco Monkey Patch（在 only_test/lib/poco_utils.py 中注入代理层）
+◦  包装 Poco 的 UIObjectProxy.click / set_text / long_click / swipe 方法：
+◦  调用前：若处于播放状态，唤起一次（点击 top15%）并短暂停顿；随后重 Dump（或强制 invalidate_cache）；
+◦  然后调用原始 Poco 的点击/输入；
+
+
+1.实现一个播放状态检测函数, 监测 频率默认 0.5 可配置再 yaml 中, 作用为自动获取播放状态, 方便其它函数调用, 其作为一个可靠的信息源, 目前所有有检测播放状态的地方都可以使用它的值. 
+2.执行操作时 click / set_text / long_click / swipe 获取 1 的播放状态, 如果播放中, 则继续下述流程, 如果未播放, 自动 click 即可(以 click 为例), 不干扰原始逻辑
+3.如果播放状态并且 wake_keywords all in cureent XML, 自动 click ,else 执行元素唤起, 之后继续回到流程 (click )
+位于  main.yaml: applications --> 应用名称简写(请确认应用名称和应用简写已打通) --> playback_auto_wake -> wake_keywords
+请你确认 playback_auto_wake 的字段都有存在必要, 目前看起来很多, 让人眼花辽乱. 
+
+
+现在谈论一下之前新增的逻辑, 你已直到之前新增了 元素唤起逻辑, 因此 C:\Download\git\uni\only_test\testcases\python\example_airtest_record.py 示例文件中的末尾一部分操作,也可更换为新逻辑, 甚至直接不点击 屏幕,因为有元素唤起函数在自动生效, 我只需要自动执行即可, 因此请更新 example 文件适配新逻辑, 并加注释解释
+
+
+1.这行的作用是什么, 我之前不是说不需要添加全局自动点击功能吗, 还是这只是播放状态点击的开关, 为什么要多此一举 enable_auto_wake_for_poco(poco, device_id="192.168.100.112:5555", app_id="brav_mob")
+ 2.逻辑有问题, 其并没有成功 awake, 请你增加日志, 如果走了点击流程增加日志, 反正我目前看到的事实是未点击导致元素识别不到, 且无任何日志2025-09-25 16:08:41,689 - only_test.lib.mcp_interface.device_inspector - INFO - 设备探测器初始化成功（XML-only）
+
+
+
+
+
+
+
+
+-----------
+
+
+
+•  让注释来自 JSON，而不是模板脑补
+•  在每个步骤中加入 comment 和 notes（数组），例如：
+◦  comment: 主要一句话说明（用于生成“[comment] ...”）
+◦  notes: 额外注释/备用方案（生成器按 recorded 风格以注释形式插入）
+•  把“invalidate_cache 注释”“备用方案 set_text(class_name=...)”等写回 JSON 的 notes。
+•  用 variables.program_name 取代 search_keyword，或保留两者但建立映射规则（优先 program_name，fallback 到 search_keyword）。
+•  显式声明某一步的 text 来自哪个变量：data: {"text_var": "program_name"}，避免写死字符串。
+•  保留/移除模板内置“样式注释”的开关
+•  在 JSON 顶层加入 presentation_hints（或 render_profile）：
+◦  style: recorded | pytest
+•  这样即使是 recorded 风格，也能选择“只输出 JSON 真正提供的注释”。
+•  语义与呈现解耦
+•  JSON 只描述“做什么”：steps（动作+目标+数据+预期），hooks（before_all/before_each/after_*），assertions（类型化），variables，target_app，device_info。
+•  呈现由“渲染配置”来决定（例如在 CLI 或独立 yaml 中选择 recorded 或 pytest 风格、是否注释、是否包含模板惯用注释）。
+•  强化选择器与约束
+•  selector 对象统一模型：{strategy: enum, value: string, package: string?, must_belong: true?}
+•  允许组合：selectors: [{resource_id}, {text}] + policy: combine_into_one_node=true
+•  对 target_app 做白名单校验（resource_id 包前缀或 package 字段一致）。
+•  Hooks/Scaffold 正式化
+•  hooks.before_all: [restart, launch, close_ads] 这样的结构；execution_path 只放“业务主流程”。
+•  生成器把 hooks 渲染到文件开头（或 setup 段），不与步骤混淆。
+•  断言/验证标准化
+•  assertions: [{type: check_playback_state, expected: true, timeout: 10, probe: media_session|surface_refresh, retries: 1}]
+•  失败时的证据策略（截图/日志快照）和降级探针。
+•  稳健性字段
+•  wait: {after: 2, before: 0.5}, 运行用例前 sleep 2s ,运行用例后 sleep 0.5s 
+•  on_fail: [{action: refresh_ui_dump}, {action: reopen_controls}] 用于运行期自愈。
+
+
+{
+  "testcase_id": "TC_example_airtest_record",
+  "case_type": "mobile"
+  "target_app": "com.mobile.brasiltvmobile",
+  "device_info": {  # main.yaml 中此设备的所有信息, 并想办法吧 adb_serial 映射为 py 中的 device_id
+ 
+  },
+  "variables": { "program_name": "西语手机端720资源02" },
+  "hooks": {
+    "before_all": [
+      { "action": "stop_app", "comment": "重启应用清理环境状态", "wait": { "after": 3 } },
+      { "action": "start_app", "comment": "启动应用并等待加载完成", "wait": { "after": 5 } },
+      { "action": "tool", "tool_name": "close_ads", "comment": "进入后自动关闭广告", "params": { "mode": "continuous", "consecutive_no_ad": 2, "max_duration": 20.0 } }
+    ],
+    "after_all": []	
+  },
+  "test_steps": [
+    {
+      "step": 1,
+      "page": "home",
+      "action": "click",
+      "comment": "直接找到 search 相关 btn",
+      "target": { "selectors": [{ "strategy": "resource_id", "value": "com.mobile.brasiltvmobile:id/mVodImageSearch" }] },
+    },
+    {
+      "step": 2,
+      "page": "search",
+      "action": "input",
+      "comment": "使用增强版 set_text, 自动校验是否成功输入, 若非则会日志 + res_for_set 有 warnning 字样",
+      "target": { "selectors": [{ "strategy": "resource_id", "value": "com.mobile.brasiltvmobile:id/searchEt" }] },
+      "data": { "text_var": "program_name" },
+    },    
+	{
+      "step": 2,
+      "page": "search",
+      "action": "press",
+      "comment": "Enter 执行搜索操作",
+      "target": { "keyevent": "Enter" },
+    },
+    {
+      "step": 3,
+      "page": "search_result",
+      "action": "click_with_bias",
+      "comment": "点击目标节目卡片",
+      "target": {
+        "selectors": [
+          { "strategy": "resource_id", "value": "com.mobile.brasiltvmobile:id/mPosterName" },
+          { "strategy": "text", "value": "${program_name}" }
+        ],
+        "bias": { "dy_px": -100 }
+      }
+    },
+    {
+      "step": 4,
+      "page": "vod_playing_detail",
+      "action": "click",
+      "comment": "点击播放按钮开始播放视频",
+      "target": { "selectors": [{ "strategy": "resource_id", "value": "com.mobile.brasiltvmobile:id/mPlayPauseIcon" }] }
+    },
+    {
+      "step": 5,
+      "page": "vod_playing_detail",
+      "action": "wait_for_disappearance",
+      "comment": "通常都有广告，等待 Ads 消失",
+      "target": { "selectors": [{ "strategy": "text", "value": "Ads" }] },
+      "wait": { "after": 2 }
+    },
+    {
+      "step": 6,
+      "page": "vod_playing_detail",
+      "action": "click",
+      "comment": "点击全屏按钮进入全屏播放模式",
+      "target": { "selectors": [{ "strategy": "resource_id", "value": "com.mobile.brasiltvmobile:id/mImageFullScreen" }] }
+    }
+  ],
+  "assertions": [{ "type": "check_playback_state", "expected": true, "comment": "正在正常播放" }],
+  "execution_path": [
+	"py": "../python/{testcase_id}_py.py"
+  ],
+  "presentation_hints": {
+    "style": "recorded",
+
+  } 
+}
+
+
+---------
+
+思考一个问题, 假如再不考虑多 APK 情况下,(之前是 多个 APK 可能逻辑相同, 很多借鉴之处, 因此直接给予样品即可生成基本可用的用例), 帮我补全目前只剩 一个 APK + 多设备 情况下
+人工录制(使用 airtest IDE 手写) VS LLM 自动录制 VS 使用 CLI 工具自动生成(claude code类) , 的优缺点进行对比
+
+缺点
+人工录制需要兼容 poco 使用 uiautomator2, 人力花费更多
+LLM 自动录制依旧需要手动矫正, 并且需要额外维护项目
+
+
+优点
+确定性更高
+
+
+
+
+
+
+
+方式一：人工录制（Airtest IDE 手写）
+优点
+•  确定性最高：人手挑选最稳健的 selector、把控显式等待与异常分支（如 close_ads、播放状态断言）。
+•  可解释性强：脚本结构、注释、异常处理都清晰；Debug 成本最低。
+
+缺点
+•  人力成本高
+•  规模化速度较慢：大量相似流程的复制/改造工作单靠人工不经济。
+
+适用
+•  对安全与可控性要求高的场景。
+
+方式二：LLM 自动录制（基于运行时 UI 上下文的自动生成）
+优点
+•  可引导：通过严格 JSON Schema、selector 池白名单、变更验证（XML+图像双验证）等约束，能逐步提升成功率。
+•  有用例库后产出速度快：能根据已有用例很快给出“可跑”的初稿。
+
+缺点
+•  仍需人工矫正与项目维护：需要维护提示词、Schema、执行校验逻辑；遇到容器控件/弱 selector 会出现“无效操作”。
+•  确定性中等：在边界态/弱网/多语言/弹窗状态下，稳定性不如手写。
+•  安全与合规：依赖外部 LLM 服务
+
+适用
+•  为手写用例提供脚手架，再由工程化规则把关；
+
+方式三：CLI 工具自动生成（类似 Claude Code ）
+优点
+•  与上并无本质区别, 只是能做的更多, 但也更不稳定, 比如目前代码生成就是使用的它
+
+适用
+•  备选方案
+
+关键维度对比（单 APK + 多设备）
+•  确定性与稳定性：手写 > CLI 生成（模板成熟后接近手写） > LLM 自动
+•  规模化速度：CLI 生成 > LLM 自动（有人工复核） > 手写
+•  初始成本：手写中等；LLM、CLI 都需要一段管线建设（LLM 需要提示与校验，CLI 需要模板与参数化）
+•  跨设备适配：手写与 CLI 最好（因为有显式适配与条件片段）；LLM 依赖执行期校验与规则
+•  可解释性/调试：手写最好；CLI 次之（模板清晰）；LLM 最弱（但可通过严格日志/差异比对提升）
+•  安全/离线：手写、CLI（本地生成）最佳；LLM 受云端限制
+•  维护成本（长期）：CLI 最低（集中维护模板）；手写次之（分散在各用例）；LLM 取决于提示与执行框架演进
+
+建议的选型与组合
+•  基线策略
+•  用人工手写打造“黄金路径”与关键断言库（播放状态、广告关闭、全屏、返回等），形成稳健可复用的步骤与断言模块。
+•  以 CLI 生成批量扩展：对搜索关键词、清晰度、账号、入口路径等进行参数化，覆盖设备矩阵。
+•  用 LLM 自动录制/补全：快速产出新页面/新功能的初稿，再按模板与规范收敛（selector 池白名单、显式等待、状态变更验证），最终沉淀为 CLI 模板或手写模块。
+•  运行与质量把关
+•  一律禁止坐标点击，优先 resource_id（带包名前缀），再看 content_desc/text；所有 selector 必须来自当前屏的候选池。
+•  必加显式等待与“双通道变更确认”（XML 结构变化 + 图像差异阈值）。
+•  引入标准断言库（播放中/全屏/广告消失/页面切换）与统一报告（如 allure 包装，失败快照与上下文）。
+•  何时优先哪一种
+•  上线门禁、核心回归：手写（或成熟 CLI 模板生成的用例）
+•  大量相似参数/设备扩展：CLI 生成
+•  新功能探路、快速打样：LLM 自动录制 → 人工矫正 → 收敛入模板
+
+这里讲述为什么选用它, 而不是为什么只用它, 多方面的选择与划分好的界限让我们直到如何正确写一个用例
+
+
+
+---
+帮我画图, 生成一个 mermaid 流程图, 从上到下画出来这个项目的逻辑我给你大概方向, 
+比如: 1.Test 输入测试功能点 like, 播放 "720节目", 
+2...
+3..
+*.LLM 完成json 生成, 自动生成了 py 文件
+人工矫正 py 文件, 执行用例确认符合预期, 可添加自定义函数实现特定功能
+将用例列入示例文件, 
+
+
+
+
+
+----------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------
 
 1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
 2.check example_airtest_record.py and golden_example_airtest_record.json to Know more aboout schema constrains
@@ -525,10 +789,18 @@ VOLUME_UP：adb shell input keyevent 24
 VOLUME_DOWN：adb shell input keyevent 25
 1s 内先 UP 再 DOWN 组合按键关闭 debug 面板
 
-2.支持配置项延长 bar 显示时间. 比如 adb 命令? 
+2.支持配置项延长 bar 显示时间. 比如 adb 命令?  / debug 包默认消失时间改为 10s, 不影响测试
 3.配置项允许 H7 盒子截图
 4.支持接口获取 DEBUG 面板所有信息
 5.支持参数配置直接再 debug 包不展示 debug 面板
+
+
+目前
+- adb 设置后此生命周期不展示 debug 面板
+- debug 包默认 10s 元素消失
+- 决定先不管 H7 盒子无法截屏问题, 使用 三方盒子测 brasil, 若考虑需要先确认从 H几开始不支持的. 
+
+
 
 
 ---

@@ -1,0 +1,61 @@
+# {{ testcase_name }}
+# [tag] {{ tags }}
+# [path] {{ path_scope }}
+
+# 统一的导包方案, 其它用例直接复用即可
+# -----
+import sys, os
+# Ensure repository root on sys.path so that 'only_test' package is importable
+_here = os.path.dirname(__file__)
+_repo_root = os.path.abspath(os.path.join(_here, "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from only_test.lib.airtest_compat import *
+# 使用修复后的poco工具函数（已解决所有导入和依赖问题）
+
+# 添加项目路径
+project_root = os.path.join(os.path.dirname(__file__), '../..')
+sys.path.insert(0, project_root)
+
+from lib.poco_utils import get_android_poco
+from only_test.lib.ad_closer import close_ads
+import asyncio
+# -----
+
+# setup_hook()
+# 这里会放置一些测之前的必要条件 
+{% if device_serial %}device_id = "{{ device_serial }}"
+connect_device("android://127.0.0.1:5037/{}?touch_method=ADBTOUCH&".format(device_id))
+{% else %}# device_id = ""
+# connect_device("android://127.0.0.1:5037/{}?touch_method=ADBTOUCH&".format(device_id))
+{% endif %}
+{% if app_id %}poco = get_android_poco(device_id={{ 'device_id' if device_serial else 'None' }}, app_id="{{ app_id }}")
+{% else %}poco = get_android_poco(device_id={{ 'device_id' if device_serial else 'None' }})
+{% endif %}
+{% if variables.get('program_name') or variables.get('search_keyword') %}
+program_name = "{{ variables.get('program_name') or variables.get('search_keyword') }}"
+{% endif %}
+
+{% for step in execution_steps %}{{ step.code }}
+{% endfor %}
+
+{% if assertions and assertions|length > 0 %}
+# [page] playing, [action] assert, [comment] {{ assertions[0].description or '断言验证' }}
+# there is assert program are already playing 
+# ....
+{% else %}
+# [page] playing, [action] assert, [comment] 断言验证节目正在正常播放
+# there is assert program are already playing 
+# ....
+{% endif %}
+
+# teardown_hook()
+# 这里会放置一些测之前的必要条件 
+
+
+# -------------
+# commente to get a position and click
+#x, y = poco("com.mobile.brasiltvmobile:id/mVodImageSearch").get_position()
+# Click at those coordinates 
+#poco.click([x, y])

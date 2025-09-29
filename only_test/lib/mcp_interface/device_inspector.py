@@ -8,14 +8,16 @@ Only-Test Device Inspector
 """
 
 import asyncio
+import asyncio.subprocess as aio_subprocess
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Iterable, Tuple
 from datetime import datetime
 import sys
 import os
 import subprocess
 import re
+import time
 import xml.etree.ElementTree as ET
 
 # 添加项目路径
@@ -36,14 +38,15 @@ PRIORITY_CLOSE_IDS = {
 }
 EXCLUDED_CLOSE_IDS = {
     # 常见需要跳过的关闭按钮（例如优惠券）
-    'imcouponclose1'
+    # 注意：这些ID应该使用小写，因为代码中会转换为小写进行匹配
+    'imcouponclose', 'mivclosenotice', "mtvnotice"
 }
 # GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用“关闭/跳过”语义
 # - resource-id（例如: com.xxx:id/ivClose；会在小写化后匹配 'close' 等子串）
 # - text（控件显示文本，例如 “关闭”/“跳过”/"close"）
 # - content-desc（无障碍描述，可能标注为 close/关闭 等）
 # 检测逻辑会在 kw['rid']、kw['text']、kw['desc'] 三者上进行包含匹配
-GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x'}
+GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x', 'fechar', 'pular'}
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,12 @@ class DeviceInspector:
         self._analysis_round: int = 0
         # 屏幕尺寸缓存
         self._screen_size_cache: Optional[tuple[int,int]] = None
+        # 设备配置缓存（来自 main.yaml）
+        self._device_profile: Optional[Dict[str, Any]] = None
+        # 最近一次UI快照（供快速检测播放控件）
+        self._ui_snapshot_cache: Dict[str, Any] = {"xml": "", "lower": "", "ts": 0.0}
+        # 最近一次播放控件检测结果
+        self._wake_keyword_cache: Dict[str, Any] = {"keywords": tuple(), "visible": False, "ts": 0.0}
         # 自动关广告最大轮次（可通过 get_current_screen_info 的 auto_close_limit 覆盖）
         self.auto_close_ads_limit: int = 3
         # 从环境变量读取全局覆盖（每会话），例如 ONLY_TEST_AUTO_CLOSE_LIMIT=2
@@ -88,7 +97,17 @@ class DeviceInspector:
                 self.auto_close_ads_limit = int(env_limit)
         except Exception:
             pass
-        
+
+        # 预读取 main.yaml 中的设备配置
+        self._device_profile = self._load_device_profile()
+        if self._device_profile:
+            logger.info(
+                "设备配置绑定: device_key=%s serial=%s resolution=%s",
+                self._device_profile.get("device_key"),
+                self._device_profile.get("serial"),
+                self._device_profile.get("resolution"),
+            )
+
         logger.info(f"设备探测器初始化 - 设备: {device_id or 'default'}")
     
     # === XML-only 辅助方法 ===
@@ -110,30 +129,204 @@ class DeviceInspector:
         self._screen_size_cache = (1080, 1920)
         return self._screen_size_cache
 
+    @staticmethod
+    def _normalize_serial(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return text.split(':')[0]
+
+    @staticmethod
+    def _parse_resolution(value: Any) -> Optional[tuple[int, int]]:
+        if not value:
+            return None
+        text = str(value).lower().replace('×', 'x')
+        text = text.replace(' ', '')
+        if 'x' not in text:
+            return None
+        parts = text.split('x', 1)
+        try:
+            w = int(parts[0])
+            h = int(parts[1])
+            if w > 0 and h > 0:
+                return w, h
+        except Exception:
+            return None
+        return None
+
+    def _load_device_profile(self) -> Optional[Dict[str, Any]]:
+        try:
+            from only_test.lib.config_manager import ConfigManager
+
+            cfg = ConfigManager().get_config()
+            devices_cfg = cfg.get('devices') or {}
+            if not devices_cfg:
+                return None
+
+            normalized_target = self._normalize_serial(self.device_id)
+            chosen_key = None
+            chosen_serial = None
+
+            if normalized_target:
+                for dev_key, dev_cfg in devices_cfg.items():
+                    conn = (dev_cfg or {}).get('connection', {}) or {}
+                    candidate = self._normalize_serial(conn.get('adb_serial'))
+                    if candidate and candidate == normalized_target:
+                        chosen_key = dev_key
+                        chosen_serial = conn.get('adb_serial')
+                        break
+
+            if chosen_key is None and len(devices_cfg) == 1:
+                chosen_key = next(iter(devices_cfg))
+                chosen_serial = (devices_cfg[chosen_key] or {}).get('connection', {}).get('adb_serial')
+
+            if chosen_key is None:
+                return None
+
+            dev_cfg = devices_cfg.get(chosen_key) or {}
+            screen_cfg = (dev_cfg.get('screen_info') or {}) if isinstance(dev_cfg, dict) else {}
+            resolution_value = screen_cfg.get('override_resolution') or screen_cfg.get('resolution')
+            resolution_tuple = self._parse_resolution(resolution_value)
+
+            return {
+                'device_key': chosen_key,
+                'serial': chosen_serial,
+                'resolution': resolution_tuple,
+                'raw_resolution': resolution_value,
+            }
+        except Exception as exc:
+            logger.debug(f"设备配置加载失败: {exc}")
+            return None
+
     async def _dump_current_xml(self) -> str:
+        """获取当前UI层级XML，确保每次获取最新状态。"""
+        # 首先清理可能存在的旧文件
         try:
-            # 尝试 exec-out 直接输出
-            proc = await asyncio.create_subprocess_exec(
-                *self._adb_prefix(), "exec-out", "uiautomator", "dump", "/dev/tty",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            subprocess.run(self._adb_prefix() + ["shell", "rm", "-f", "/sdcard/window_dump*.xml"],
+                         capture_output=True, text=True, timeout=5)
+        except Exception:
+            pass
+
+        # 方法1: 直接使用 uiautomator2 库 (最可靠，无缓存)
+        try:
+            import uiautomator2 as u2  # type: ignore
+            ui = u2.connect(self.device_id) if self.device_id else u2.connect()
+
+            if ui:
+                # 强制刷新设备状态，确保获取最新界面
+                try:
+                    ui.app_current()  # 触发状态刷新
+                    import time
+                    time.sleep(0.1)
+                except Exception:
+                    pass
+
+                xml = ui.dump_hierarchy()
+                if xml and "<hierarchy" in xml:
+                    logger.debug(f"uiautomator2获取XML成功，长度: {len(xml)}")
+                    return xml
+                else:
+                    logger.warning("uiautomator2返回空XML或格式错误")
+            else:
+                logger.warning("uiautomator2连接失败")
+        except Exception as e:
+            logger.warning(f"uiautomator2方法失败: {e}")
+
+        # 方法2: 使用带时间戳的唯一文件名避免缓存
+        try:
+            import time
+            timestamp = int(time.time() * 1000000)  # 微秒时间戳确保唯一性
+            unique_filename = f"/sdcard/ui_dump_{timestamp}.xml"
+
+            # dump到唯一文件名
+            dump_result = subprocess.run(
+                self._adb_prefix() + ["shell", "uiautomator", "dump", unique_filename],
+                capture_output=True, text=True, timeout=15
             )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode == 0 and stdout:
-                txt = stdout.decode(errors='ignore')
-                # 输出中可能包含路径与提示，提取 <hierarchy ..> 起始
-                idx = txt.find("<hierarchy")
-                if idx >= 0:
-                    return txt[idx:]
-        except Exception:
-            pass
+
+            if dump_result.returncode == 0:
+                time.sleep(0.3)  # 等待文件写入完成
+
+                # 验证文件存在并读取
+                check_result = subprocess.run(
+                    self._adb_prefix() + ["shell", "test", "-f", unique_filename],
+                    capture_output=True, text=True, timeout=5
+                )
+
+                if check_result.returncode == 0:
+                    out = subprocess.run(
+                        self._adb_prefix() + ["shell", "cat", unique_filename],
+                        capture_output=True, text=True, timeout=15
+                    )
+
+                    # 立即清理临时文件
+                    try:
+                        subprocess.run(self._adb_prefix() + ["shell", "rm", "-f", unique_filename],
+                                     capture_output=True, text=True, timeout=5)
+                    except Exception:
+                        pass
+
+                    if out.returncode == 0 and out.stdout.strip():
+                        content = out.stdout.strip()
+                        if "<hierarchy" in content:
+                            logger.debug("文件dump方法获取XML成功")
+                            return content
+                        else:
+                            logger.warning("文件内容格式错误，未找到hierarchy标签")
+                    else:
+                        logger.warning("文件内容为空或读取失败")
+                else:
+                    logger.warning("dump文件未创建成功")
+            else:
+                logger.warning(f"dump到文件失败: {dump_result.stderr}")
+        except Exception as e:
+            logger.warning(f"文件dump方法异常: {e}")
+
+        # 方法3: exec-out 方法作为最后备选
         try:
-            # 回退：写入 /sdcard/window_dump.xml 再读取
-            _ = subprocess.run(self._adb_prefix() + ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], capture_output=True, text=True)
-            out = subprocess.run(self._adb_prefix() + ["shell", "cat", "/sdcard/window_dump.xml"], capture_output=True, text=True)
-            if out.returncode == 0:
-                return out.stdout
-        except Exception:
-            pass
+            for target in ["/dev/fd/1", "/dev/stdout"]:
+                try:
+                    cmd = self._adb_prefix() + ["exec-out", "uiautomator", "dump", target]
+                    proc = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
+
+                    if stderr:
+                        stderr_text = stderr.decode(errors='ignore')
+                        # 如果是"Killed"错误，尝试下一个目标
+                        if "Killed" in stderr_text:
+                            continue
+
+                    if proc.returncode == 0 and stdout:
+                        txt = stdout.decode(errors='ignore')
+
+                        # 输出中可能包含路径与提示，提取 <hierarchy ..> 起始
+                        idx = txt.find("<hierarchy")
+                        if idx >= 0:
+                            xml_content = txt[idx:]
+
+                            # 查找XML结束标记，清理垃圾内容
+                            end_idx = xml_content.find("</hierarchy>")
+                            if end_idx >= 0:
+                                xml_content = xml_content[:end_idx + len("</hierarchy>")]
+                                logger.debug(f"exec-out方法获取XML成功，长度: {len(xml_content)}")
+                                return xml_content
+                            else:
+                                logger.warning("未找到</hierarchy>结束标签")
+                        else:
+                            logger.warning("未找到<hierarchy标签")
+                except Exception as target_e:
+                    logger.warning(f"exec-out({target})方法失败: {target_e}")
+                    continue
+        except Exception as e:
+            logger.error(f"exec-out方法异常: {e}")
+
+        logger.error("所有XML获取方法均失败，返回空字符串")
         return ""
 
     def _parse_bounds(self, s: str) -> tuple[int,int,int,int]:
@@ -148,11 +341,16 @@ class DeviceInspector:
 
     def _xml_to_elements(self, xml_str: str) -> list[dict]:
         if not xml_str:
+            logger.warning("XML字符串为空，无法解析")
             return []
+
         w, h = self._get_screen_size()
+
         try:
             root = ET.fromstring(xml_str)
-        except Exception:
+        except Exception as e:
+            logger.error(f"XML解析失败: {e}")
+            logger.debug(f"XML前100字符: {xml_str[:100]}")
             return []
         elements: list[dict] = []
         def walk(node):
@@ -198,9 +396,19 @@ class DeviceInspector:
 
     async def _get_elements_xml(self, clickable_only: bool = True) -> list[dict]:
         xml_str = await self._dump_current_xml()
+
+        if not xml_str:
+            logger.warning("XML字符串为空，无法解析元素")
+            return []
+
         elems = self._xml_to_elements(xml_str)
+        logger.debug(f"解析得到 {len(elems)} 个原始元素")
+
         if clickable_only:
-            elems = [e for e in elems if e.get('clickable')]
+            clickable_elems = [e for e in elems if e.get('clickable')]
+            logger.debug(f"过滤后得到 {len(clickable_elems)} 个可点击元素")
+            return clickable_elems
+
         return elems
 
     async def _is_media_playing(self) -> bool:
@@ -231,6 +439,146 @@ class DeviceInspector:
         except Exception:
             pass
         return False
+
+    @staticmethod
+    def _normalize_keyword(keyword: Any) -> str:
+        try:
+            text = str(keyword)
+        except Exception:
+            return ""
+        text = text.strip()
+        return text.casefold() if text else ""
+
+    def _normalize_keywords(self, keywords: Iterable[str]) -> Tuple[str, ...]:
+        normalized: List[str] = []
+        for kw in keywords or []:
+            norm = self._normalize_keyword(kw)
+            if norm:
+                normalized.append(norm)
+        if not normalized:
+            return tuple()
+        return tuple(sorted(set(normalized)))
+
+    def _invalidate_ui_snapshot_cache(self) -> None:
+        self._ui_snapshot_cache = {"xml": "", "lower": "", "ts": 0.0}
+        self._wake_keyword_cache = {"keywords": tuple(), "visible": False, "ts": 0.0}
+
+    async def _get_ui_snapshot(self, max_age: float = 0.0) -> str:
+        if not self._initialized:
+            await self.initialize()
+        reuse_window = max(0.0, float(max_age))
+        cached_xml = self._ui_snapshot_cache.get("xml") or ""
+        now = time.time()
+        if cached_xml and reuse_window > 0.0:
+            cached_ts = float(self._ui_snapshot_cache.get("ts", 0.0))
+            if (now - cached_ts) <= reuse_window:
+                return cached_xml
+        xml = await self._dump_current_xml()
+        lower_xml = xml.lower() if isinstance(xml, str) else ""
+        self._ui_snapshot_cache = {"xml": xml, "lower": lower_xml, "ts": now}
+        return xml
+
+    async def _has_wake_keywords(self, wake_keywords: Iterable[str], max_age: float = 0.5) -> bool:
+        normalized = self._normalize_keywords(wake_keywords)
+        if not normalized:
+            return False
+        reuse_window = max(0.0, float(max_age))
+        now = time.time()
+        cached_keywords = self._wake_keyword_cache.get("keywords", tuple())
+        if cached_keywords == normalized and reuse_window > 0.0:
+            cached_ts = float(self._wake_keyword_cache.get("ts", 0.0))
+            if (now - cached_ts) <= reuse_window:
+                return bool(self._wake_keyword_cache.get("visible", False))
+        await self._get_ui_snapshot(max_age)
+        lower_xml = self._ui_snapshot_cache.get("lower", "") or ""
+        visible = all(kw in lower_xml for kw in normalized)
+        logger.debug(
+            "播放控件关键词检测: keywords=%s visible=%s",
+            list(normalized),
+            visible,
+        )
+        self._wake_keyword_cache = {"keywords": normalized, "visible": visible, "ts": now}
+        return visible
+
+    async def _ensure_controls_visible_once(
+        self,
+        wake_keywords: Optional[Iterable[str]] = None,
+        tap_y_norm: float = 0.15,
+        post_tap_sleep_ms: int = 250,
+    ) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "wake_attempted": False,
+            "tap_performed": False,
+            "controls_visible": False,
+        }
+
+        try:
+            if not self._initialized:
+                await self.initialize()
+
+            normalized = self._normalize_keywords(wake_keywords or [])
+
+            # 若控件已可见，直接返回
+            if normalized and await self._has_wake_keywords(normalized, max_age=0.3):
+                logger.info(
+                    "播放控件唤起: 关键字已可见，跳过唤起 (keywords=%s)",
+                    list(normalized),
+                )
+                result["controls_visible"] = True
+                return result
+
+            width, height = self._get_screen_size()
+            if self._device_profile and self._device_profile.get('resolution'):
+                prof_width, prof_height = self._device_profile['resolution']
+                if prof_width > 0 and prof_height > 0:
+                    width, height = prof_width, prof_height
+                    logger.info(
+                        "播放控件唤起: 使用 main.yaml 分辨率 (%s, %s) device_key=%s",
+                        width,
+                        height,
+                        self._device_profile.get('device_key'),
+                    )
+
+            y_norm = max(0.0, min(1.0, float(tap_y_norm)))
+            tap_x = max(1, int(width / 2))
+            tap_y = max(1, min(height - 1, int(height * y_norm)))
+
+            logger.info(
+                "播放控件唤起: 尝试点击屏幕 (%s, %s) y_norm=%.3f", tap_x, tap_y, y_norm
+            )
+
+            cmd = self._adb_prefix() + ["shell", "input", "tap", str(tap_x), str(tap_y)]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=aio_subprocess.DEVNULL,
+                stderr=aio_subprocess.DEVNULL,
+            )
+            await proc.communicate()
+
+            result["wake_attempted"] = True
+            result["tap_performed"] = True
+
+            if int(post_tap_sleep_ms) > 0:
+                await asyncio.sleep(max(0.0, int(post_tap_sleep_ms) / 1000.0))
+
+            # 清理缓存，确保重新检查是最新状态
+            self._invalidate_ui_snapshot_cache()
+
+            if normalized:
+                result["controls_visible"] = await self._has_wake_keywords(normalized, max_age=0.0)
+            else:
+                result["controls_visible"] = True
+
+            logger.info(
+                "播放控件唤起: tap_performed=%s controls_visible=%s",
+                result.get("tap_performed"),
+                result.get("controls_visible"),
+            )
+
+        except Exception as exc:
+            logger.warning("播放控件唤起失败: %s", exc)
+
+        return result
 
     async def initialize(self) -> bool:
         """初始化组件（XML-only）"""
@@ -403,7 +751,7 @@ class DeviceInspector:
                 try:
                     _ = await self.close_ads(mode="continuous", consecutive_no_ad=3, max_duration=10.0)
                 except Exception as _e:
-                    logger.debug(f"预关闭广告失败（忽略）：{_e}")
+                    logger.info(f"预关闭广告失败（忽略）：{_e}")
 
             # 获取元素信息（XML-only）
             elements = await self._get_elements_xml(clickable_only=clickable_only)
@@ -489,52 +837,122 @@ class DeviceInspector:
     )
     async def close_ads(self, mode: str = "continuous", consecutive_no_ad: int = 3, max_duration: float = 10.0) -> Dict[str, Any]:
         """对外提供的广告关闭入口。返回统计信息。"""
+        logger.info(f"开始广告关闭流程 - 模式: {mode}, 连续无广告阈值: {consecutive_no_ad}, 最大时长: {max_duration}s")
+
         if not self._initialized:
             await self.initialize()
 
         # 单次：调用一次自动关闭
         if mode == "single":
+            logger.info("执行单次广告关闭")
             elements = await self._get_elements_xml(clickable_only=False)
+            logger.info(f"获取到 {len(elements)} 个界面元素")
             info = await self._auto_handle_ads(elements)
+            logger.info(f"单次关闭结果: {info}")
             return {"mode": mode, "rounds": 1, "last_ads_info": info}
 
         # 连续：直到连续N次未检测到广告或达到最大时长
+        logger.info("执行连续广告关闭模式")
         rounds = 0
         closes = 0
         no_ad_streak = 0
         import time as _t
-        end_t = _t.time() + float(max_duration)
+        start_time = _t.time()
+        end_t = start_time + float(max_duration)
         last_info = {}
+
+        no_ad_conf_threshold = 0.35
+
         while _t.time() < end_t:
+            current_time = _t.time()
+            remaining_time = end_t - current_time
             rounds += 1
+
+            logger.info(f"第 {rounds} 轮广告检测开始 (剩余时间: {remaining_time:.1f}s)")
+
             elements = await self._get_elements_xml(clickable_only=False)
+            logger.info(f"第 {rounds} 轮获取到 {len(elements)} 个界面元素")
+
             info = await self._auto_handle_ads(elements)
             last_info = info
 
-            if info.get("auto_closed"):
+            conf = float(info.get("confidence", 0.0) or 0.0)
+            attempts = int(info.get("auto_close_attempts", 0))
+            closed = info.get("auto_closed", False)
+
+            logger.info(f"第 {rounds} 轮结果: 置信度={conf:.2f}, 关闭尝试={attempts}, 成功关闭={closed}")
+
+            if closed:
                 closes += 1
                 no_ad_streak = 0
+                logger.info(f"第 {rounds} 轮成功关闭广告! 总关闭次数: {closes}")
             else:
-                conf = float(info.get("confidence", 0.0) or 0.0)
-                # 低置信度且未尝试关闭，认为当前轮无广告
-                if conf < 0.2 and int(info.get("auto_close_attempts", 0)) == 0:
+                is_no_ad_round = False
+                if len(elements) == 0:
+                    is_no_ad_round = True
+                elif attempts == 0 and conf <= no_ad_conf_threshold:
+                    is_no_ad_round = True
+
+                if is_no_ad_round:
                     no_ad_streak += 1
+                    logger.info(
+                        "第 %s 轮未发现广告 (置信度 %.2f <= %.2f, 尝试=%s), 无广告连续次数: %s",
+                        rounds,
+                        conf,
+                        no_ad_conf_threshold,
+                        attempts,
+                        no_ad_streak,
+                    )
                 else:
                     no_ad_streak = 0
+                    logger.warning(
+                        "第 %s 轮检测到疑似广告 (置信度 %.2f, 尝试=%s) 未能关闭",
+                        rounds,
+                        conf,
+                        attempts,
+                    )
+
+            logger.info(f"当前统计: 轮次={rounds}, 成功关闭={closes}, 连续无广告={no_ad_streak}")
 
             if no_ad_streak >= max(1, int(consecutive_no_ad)):
+                logger.info(f"达到连续无广告阈值 ({no_ad_streak} >= {consecutive_no_ad}), 提前结束")
                 break
 
+            logger.info(f"等待 0.2s 后进入下一轮...")
             await asyncio.sleep(0.2)
 
-        return {
+        elapsed_time = _t.time() - start_time
+        timed_out = _t.time() >= end_t
+
+        result = {
             "mode": mode,
             "rounds": rounds,
             "close_count": closes,
             "no_ad_streak": no_ad_streak,
             "last_ads_info": last_info,
-            "timed_out": (_t.time() >= end_t)
+            "timed_out": timed_out,
+            "elapsed_time": elapsed_time
         }
+
+        # 输出最终统计信息
+        logger.info(f"广告关闭流程结束:")
+        logger.info(f"   模式: {mode}")
+        logger.info(f"   总轮次: {rounds}")
+        logger.info(f"   成功关闭: {closes} 次")
+        logger.info(f"   连续无广告: {no_ad_streak} 次")
+        logger.info(f"   用时: {elapsed_time:.1f}s / {max_duration}s")
+        logger.info(f"   是否超时: {timed_out}")
+
+        if closes > 0:
+            logger.info(f"广告关闭成功! 共关闭了 {closes} 次广告")
+        elif timed_out:
+            logger.warning(f"广告关闭超时! 在 {max_duration}s 内未能连续 {consecutive_no_ad} 次确认无广告")
+            if last_info.get("confidence", 0) > 0.2:
+                logger.warning(f"最后一轮仍检测到疑似广告 (置信度: {last_info.get('confidence', 0):.2f})")
+        else:
+            logger.info(f"未检测到广告，流程正常结束")
+
+        return result
 
     @mcp_tool(
         name="start_app",
@@ -570,8 +988,13 @@ class DeviceInspector:
             # 未设置目标包时，默认放宽（保持向后兼容）
             if not self.target_app_package:
                 return True
-            if rid and rid.startswith(self.target_app_package + ":"):
+            rid_lower = rid.lower() if rid else ''
+            target_prefix = (self.target_app_package + ":") if self.target_app_package else ''
+            if rid and rid_lower.startswith(target_prefix.lower()):
                 return True
+            if rid_lower.startswith('id/'):
+                if not pkg or pkg == self.target_app_package or pkg in getattr(self, 'allowed_external_packages', set()):
+                    return True
             if pkg and (pkg == self.target_app_package or pkg in getattr(self, 'allowed_external_packages', set())):
                 return True
             return False
@@ -596,8 +1019,12 @@ class DeviceInspector:
         - 特征 close id（ivClose/mIvClose）且可点击: +0.30
         - 'ad' 与 'close' 的中心距离较近（<0.2 相对阈值）: +0.20
         """
+        logger.info(f"开始广告检测 - 元素数量: {len(elements)}, 允许点击: {allow_click}")
+        logger.info(f"优先关闭ID模式: {PRIORITY_CLOSE_IDS}")
+        logger.info(f"通用关闭关键词: {GENERIC_CLOSE_KEYWORDS}")
         info = {"auto_close_attempts": 0, "auto_closed": False, "confidence": 0.0, "warnings": []}
         if not elements:
+            logger.info("元素列表为空，跳过广告检测")
             return info
 
         def keywords(elem: Dict[str, Any]) -> Dict[str, str]:
@@ -619,47 +1046,76 @@ class DeviceInspector:
             score = 0.0
             ad_elems = []
             close_elems = []
-            logger.debug(f"🔍 检测广告置信度 - 元素数量: {n}")
+            logger.debug(f"检测广告置信度 - 元素数量: {n}")
             # 使用统一常量
-            
-            for e in elements:
+
+            for i, e in enumerate(elements):
                 # 仅处理目标应用元素，避免误点系统桌面等其他APK
                 if not _belongs_to_target(e):
                     continue
+
                 kw = keywords(e)
-                
+                resource_id = e.get('resource_id', '')
+                text = e.get('text', '')
+
                 # 首先检查是否在排除列表中
                 is_excluded = any(excluded_id in kw['rid'] for excluded_id in EXCLUDED_CLOSE_IDS)
                 if is_excluded:
-                    logger.info(f"跳过排除列表中的广告按钮: {e.get('resource_id')}")
                     continue
-                
-                if any(k in kw['text'] or k in kw['rid'] for k in ['ad', 'ads', '广告', 'sponsor', 'upgrade', 'version', 'update', '升级', '更新']):
+
+                # 检测广告相关元素
+                ad_keywords = ['ad', 'ads', '广告', 'sponsor', 'upgrade', 'version', 'update', '升级', '更新']
+                is_ad = any(k in kw['text'] or k in kw['rid'] for k in ad_keywords)
+                if is_ad:
                     ad_elems.append(e)
-                    logger.debug(f"  📢 发现广告元素: {e.get('text', '')} | {e.get('resource_id', '')}")
-                
-                # 优先检测强制广告关闭按钮
+                    logger.debug(f"发现广告元素: '{text}' [{resource_id}]")
+
+                # 优先检测强制广告关闭按钮（但要确保不在排除列表中）
                 force_close = False
+                matched_priority_id = None
                 for ad_id in PRIORITY_CLOSE_IDS:
                     if ad_id in kw['rid']:
-                        close_elems.append(e)
-                        force_close = True
+                        # 再次确认不在排除列表中（双重检查）
+                        if not is_excluded:
+                            close_elems.append(e)
+                            force_close = True
+                            matched_priority_id = ad_id
+                            logger.info(f"发现优先关闭按钮: [{resource_id}] - 匹配: {ad_id}")
+                        else:
+                            logger.info(f"跳过排除的优先按钮: [{resource_id}] - 匹配: {ad_id} (在EXCLUDED_CLOSE_IDS中)")
                         break
-                
-                # 常规关闭按钮检测
-                if not force_close and (
-                    any(k in kw['text'] or k in kw['rid'] or k in kw['desc'] for k in GENERIC_CLOSE_KEYWORDS)
-                ):
-                    close_elems.append(e)
-                    logger.debug(f"  🔘 发现关闭元素: {e.get('text', '')} | {e.get('resource_id', '')}")
+
+
+                # 常规关闭按钮检测（同样需要确保不在排除列表中）
+                if not force_close:
+                    generic_matches = [k for k in GENERIC_CLOSE_KEYWORDS if k in kw['text'] or k in kw['rid'] or k in kw['desc']]
+                    if generic_matches:
+                        # 再次确认不在排除列表中
+                        if not is_excluded:
+                            close_elems.append(e)
+                            logger.debug(f"发现通用关闭元素: '{text}' [{resource_id}] - 匹配: {generic_matches}")
+                        else:
+                            logger.debug(f"跳过排除的通用按钮: '{text}' [{resource_id}] - 匹配: {generic_matches} (在EXCLUDED_CLOSE_IDS中)")
+            # 置信度评分计算
+            score_details = []
+
             if n <= 20:
                 score += 0.25
+                score_details.append(f"元素较少({n}<=20): +0.25")
+
             if ad_elems:
                 score += 0.35
+                score_details.append(f"发现广告元素({len(ad_elems)}个): +0.35")
+
             if close_elems:
                 score += 0.25
-            if any('ivclose' in keywords(e)['rid'] or 'mivclose' in keywords(e)['rid'] for e in close_elems) and any(e.get('clickable') for e in close_elems):
+                score_details.append(f"发现关闭元素({len(close_elems)}个): +0.25")
+
+            # 检查是否有特征关闭ID且可点击
+            special_close = any('ivclose' in keywords(e)['rid'] or 'mivclose' in keywords(e)['rid'] for e in close_elems) and any(e.get('clickable') for e in close_elems)
+            if special_close:
                 score += 0.30
+                score_details.append("特征关闭ID且可点击: +0.30")
             # 距离
             if ad_elems and close_elems:
                 try:
@@ -676,10 +1132,21 @@ class DeviceInspector:
                             dmin = min(dmin, dist)
                     if dmin < 0.2:
                         score += 0.20
+                        score_details.append(f"广告-关闭距离近({dmin:.3f}): +0.20")
                 except Exception:
                     pass
-            logger.debug(f"  📊 置信度计算: 总分={score:.2f}, 广告元素={len(ad_elems)}, 关闭元素={len(close_elems)}")
-            return min(1.0, score), ad_elems, close_elems
+
+            final_score = min(1.0, score)
+
+            # 仅在检测到广告时输出关键信息
+            if final_score >= 0.5:
+                logger.info(f"广告检测: 置信度={final_score:.2f}, 广告={len(ad_elems)}, 关闭={len(close_elems)}")
+                if close_elems:
+                    logger.info(f"找到关闭按钮: {[elem.get('resource_id', '') for elem in close_elems[:3]]}")
+            else:
+                logger.debug(f"广告检测: 置信度={final_score:.2f} (未检测到明显广告)")
+
+            return final_score, ad_elems, close_elems
 
         # 若仅做检测，不进行任何点击尝试
         if allow_click is False:
@@ -690,18 +1157,22 @@ class DeviceInspector:
             return info
 
         async def try_close(close_elems: List[Dict[str, Any]]) -> bool:
-            # 使用poco直接关闭广告 - 采用正确的 resourceId 关键字参数
+            # 使用poco直接关闭广告
+            logger.debug(f"开始尝试关闭广告 - 候选元素: {len(close_elems)} 个")
             try:
                 # 使用本地自定义的Poco库
                 from ..poco_utils import get_android_poco
                 poco = get_android_poco()
 
                 success_count = 0
+                attempted_count = 0
 
                 # 遍历所有关闭元素，使用poco直接点击
-                for e in close_elems:
+                for i, e in enumerate(close_elems, 1):
                     resource_id = e.get('resource_id', '')
                     text_val = (e.get('text') or '').strip()
+                    clickable = e.get('clickable', False)
+
                     if not resource_id and not text_val:
                         continue
 
@@ -710,17 +1181,20 @@ class DeviceInspector:
                     # 检查是否在排除列表中
                     is_excluded = any(excluded_id in rid_lower for excluded_id in EXCLUDED_CLOSE_IDS)
                     if is_excluded:
-                        logger.info(f"跳过排除列表中的广告按钮: {resource_id}")
                         continue
 
                     # 检查是否是优先级广告按钮或一般关闭按钮
-                    should_click = any(ad_id in rid_lower for ad_id in PRIORITY_CLOSE_IDS) or \
-                                   any(keyword in rid_lower for keyword in GENERIC_CLOSE_KEYWORDS) or \
-                                   any(keyword in (text_val or '').lower() for keyword in GENERIC_CLOSE_KEYWORDS)
+                    is_priority = any(ad_id in rid_lower for ad_id in PRIORITY_CLOSE_IDS)
+                    is_generic = any(keyword in rid_lower for keyword in GENERIC_CLOSE_KEYWORDS) or \
+                                 any(keyword in (text_val or '').lower() for keyword in GENERIC_CLOSE_KEYWORDS)
+                    should_click = is_priority or is_generic
 
                     if should_click:
+                        attempted_count += 1
+                        elem_type = "优先级" if is_priority else "通用"
+                        logger.debug(f"尝试点击 {elem_type} 关闭按钮: [{resource_id}]")
+
                         try:
-                            logger.info(f"尝试使用poco点击广告关闭按钮: {resource_id or text_val}")
 
                             # 1) 优先按 resourceId 精准定位（正确写法：resourceId=...）
                             obj = None
@@ -752,7 +1226,7 @@ class DeviceInspector:
                                         pass
                                     obj.click()
                                     success_count += 1
-                                    logger.info(f"成功点击广告关闭按钮: {resource_id or text_val}")
+                                    logger.info(f"poco点击成功: [{resource_id}]")
 
                                     # 点击后稍等一下让界面更新
                                     try:
@@ -762,20 +1236,26 @@ class DeviceInspector:
                                         pass
                                     continue
                                 except Exception as click_error:
-                                    logger.warning(f"poco点击失败 {resource_id or text_val}: {click_error}")
-                                    # 继续尝试下一个候选
+                                    logger.debug(f"poco点击失败: [{resource_id}] - {click_error}")
                                     continue
+                            else:
+                                logger.debug(f"元素不存在或不可点击: [{resource_id}]")
 
                         except Exception as e:
-                            logger.warning(f"poco点击处理异常 {resource_id or text_val}: {e}")
-                            # 失败了也不要紧，继续尝试其他按钮
+                            logger.debug(f"poco处理异常: [{resource_id}] - {e}")
                             continue
+
+                # 汇总poco点击结果
+                if success_count > 0:
+                    logger.info(f"poco点击成功: {success_count}/{attempted_count} 个")
+                else:
+                    logger.debug(f"poco点击失败: 尝试 {attempted_count} 个, 成功 0 个")
 
                 # 若poco可用但未成功，继续走坐标兜底
                 if success_count > 0:
                     return True
                 else:
-                    logger.info("poco点击未奏效，尝试坐标兜底")
+                    logger.info("poco点击未成功，尝试坐标兜底方案")
                     # fall through to coordinate fallback
             except ImportError as import_error:
                 logger.error(f"poco库导入失败，回退到坐标方式: {import_error}")
@@ -836,40 +1316,79 @@ class DeviceInspector:
 
         # 自动关闭循环
         max_attempts = 3
+        logger.info(f"开始自动关闭循环，最大尝试次数: {max_attempts}")
+
         for attempt in range(1, max_attempts + 1):
+            logger.info(f"第 {attempt} 次尝试关闭广告")
+
+            # 每次尝试前都重新获取最新UI状态
+            if attempt > 1:
+                logger.info(f"第 {attempt} 次: 重新获取最新UI状态")
+                elements = await self._get_elements_xml(clickable_only=False)
+                logger.info(f"重新获取后得到 {len(elements)} 个元素")
+
             conf, ad_es, close_es = detect_conf(elements)
             info['confidence'] = conf
+
             # 如果有广告关闭按钮，直接尝试点击，无视置信度
             # 特别是对于已知的广告关闭按钮ID，但排除不应该关闭的按钮
             excluded_ids = EXCLUDED_CLOSE_IDS
             priority_ids = PRIORITY_CLOSE_IDS
-            
+
             has_priority_close = any(
                 any(ad_id in (e.get('resource_id', '')).lower() for ad_id in priority_ids) and
                 not any(excluded_id in (e.get('resource_id', '')).lower() for excluded_id in excluded_ids)
                 for e in close_es
             )
-            
+
+            logger.info(f"第 {attempt} 次评估: 置信度={conf:.2f}, 优先关闭={has_priority_close}, 关闭元素={len(close_es)}个")
+
             if (has_priority_close or conf >= 0.50) and close_es:
+                logger.info(f"第 {attempt} 次: 满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f}), 开始尝试点击")
                 clicked = await try_close(close_es)
                 info['auto_close_attempts'] += 1
+
                 if not clicked:
+                    logger.warning(f"第 {attempt} 次: 关闭尝试失败，终止循环")
                     break
-                # 刷新元素以便下一轮判断  
+
+                logger.info(f"第 {attempt} 次: 点击成功，等待界面更新")
+                # 点击后等待界面更新
+                try:
+                    import asyncio as _aio
+                    await _aio.sleep(1.0)  # 增加等待时间确保界面完全更新
+                except Exception:
+                    pass
+
+                # 刷新元素以便下一轮判断
                 elements = await self._get_elements_xml(clickable_only=False)
+                logger.info(f"刷新后获得 {len(elements)} 个元素")
+
                 # 若置信度下降则退出
                 conf2, _, _ = detect_conf(elements)
+                logger.info(f"关闭后置信度变化: {conf:.2f} -> {conf2:.2f}")
+
                 if conf2 < 0.70:
                     info['auto_closed'] = True
+                    logger.info(f"置信度降至 {conf2:.2f} < 0.70，广告已成功关闭")
                     break
+                else:
+                    logger.info(f"置信度仍为 {conf2:.2f} >= 0.70，继续下一轮")
             else:
+                logger.info(f"第 {attempt} 次: 不满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f} < 0.50), 跳过")
                 break
 
         # 若多次后仍>=0.70，发出警告
         conf_final, _, _ = detect_conf(elements)
         info['confidence'] = conf_final
+
+        logger.info(f"关闭循环结束: 最终置信度={conf_final:.2f}, 尝试次数={info['auto_close_attempts']}")
+
         if conf_final >= 0.70 and not info.get('auto_closed', False):
-            info['warnings'].append('可能存在未关闭的广告')
+            warning_msg = f'仍检测到疑似广告(置信度={conf_final:.2f})'
+            info['warnings'].append(warning_msg)
+            logger.warning(f"{warning_msg}")
+
         return info
 
     @mcp_tool(
@@ -891,6 +1410,7 @@ class DeviceInspector:
         if not self._initialized:
             await self.initialize()
         import subprocess, time as _time
+        exec_log = []
         used_selector = None
         try:
             # 解出选择器
@@ -959,6 +1479,7 @@ class DeviceInspector:
                                 # 后缀匹配（兼容包名前缀差异）
                                 rid_suffix = str(sel_value).split('/')[-1]
                                 try:
+                                    exec_log.append(f"poco(resourceIdMatches=.*:id/{rid_suffix}$).click()")
                                     obj = poco(resourceIdMatches=f".*:id/{rid_suffix}$")
                                 except Exception:
                                     obj = poco(name=rid_suffix)
@@ -979,6 +1500,7 @@ class DeviceInspector:
                                     obj.wait_for_appearance(timeout=2.0)
                                 except Exception:
                                     pass
+                                exec_log.append(f"poco.click({sel_type}={sel_value})")
                                 obj.click()
                                 ok = True
                             except Exception:
@@ -1029,6 +1551,7 @@ class DeviceInspector:
                                     x = int((b[0] + b[2]) / 2.0)
                                     y = int((b[1] + b[3]) / 2.0)
                                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
+                                exec_log.append(cmd)
                                 subprocess.run(cmd.split(), capture_output=True, text=True)
                                 ok = True
                     except Exception:
@@ -1039,7 +1562,7 @@ class DeviceInspector:
                     if bp and isinstance(bp, (list, tuple)) and len(bp) == 4:
                         if self.target_app_package:
                             try:
-                        elems = await self._get_elements_xml(clickable_only=False)
+                                elems = await self._get_elements_xml(clickable_only=False)
                                 # 统一为像素坐标进行重叠判断
                                 def _screen_size():
                                     out = subprocess.run(
@@ -1080,13 +1603,15 @@ class DeviceInspector:
                                     return {"success": False, "error": "bounds_not_in_target_app", "used": used_selector}
                             except Exception:
                                 pass
+
                         x = int((bp[0] + bp[2]) / 2)
                         y = int((bp[1] + bp[3]) / 2)
                         cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
+                        exec_log.append(cmd)
                         subprocess.run(cmd.split(), capture_output=True, text=True)
                         ok = True
                 _time.sleep(max(0.0, float(wait_after)))
-                return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector)}
+                return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector), "exec_log": exec_log}
 
             elif action == 'input':
                 # 选择器范围限制
@@ -1128,15 +1653,17 @@ class DeviceInspector:
                             obj.wait_for_appearance(timeout=2.0)
                         except Exception:
                             pass
+                        exec_log.append(f"poco.click({sel_type}={sel_value})")
                         obj.click()
                 except Exception:
                     pass
                 # ADB 输入（空格替换为% s以兼容input）
                 safe = (data or '').replace(' ', '%s')
                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
+                exec_log.append(cmd)
                 subprocess.run(cmd.split(), capture_output=True, text=True)
                 _time.sleep(max(0.0, float(wait_after)))
-                return {"success": True, "used": used_selector}
+                return {"success": True, "used": used_selector, "exec_log": exec_log}
             elif action == 'swipe':
                 # 支持 target.swipe.start_px/end_px 或通过 bounds_px 推导方向
                 swipe = target.get('swipe', {}) if isinstance(target, dict) else {}
@@ -1161,14 +1688,15 @@ class DeviceInspector:
                 if start_px and end_px:
                     dur = int((swipe.get('duration_ms') or 300))
                     cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input swipe {int(start_px[0])} {int(start_px[1])} {int(end_px[0])} {int(end_px[1])} {dur}"
+                    exec_log.append(cmd)
                     subprocess.run(cmd.split(), capture_output=True, text=True)
                     _time.sleep(max(0.0, float(wait_after)))
-                    return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur}}
-                return {"success": False, "error": "invalid swipe parameters"}
+                    return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur}, "exec_log": exec_log}
+                return {"success": False, "error": "invalid swipe parameters", "exec_log": exec_log}
             else:
-                return {"success": False, "error": f"unsupported action: {action}"}
+                return {"success": False, "error": f"unsupported action: {action}", "exec_log": exec_log}
         except Exception as e:
-            return {"success": False, "error": str(e), "used": used_selector}
+            return {"success": False, "error": str(e), "used": used_selector, "exec_log": exec_log}
 
     @mcp_tool(
         name="perform_and_verify",
@@ -1276,6 +1804,7 @@ class DeviceInspector:
         return {
             "success": r.get("success", False),
             "used": r.get("used"),
+            "exec_log": r.get("exec_log", []),
             "changed": xml_changed,
             "xml_changed": xml_changed,
             "visual_similarity": visual_similarity,

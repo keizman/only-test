@@ -960,10 +960,45 @@ async def main():
                             t2.pop('text', None)
                     return t2
 
+                # App-specific selector corrections (reduce no-op on wrong targets)
+                def _apply_selector_corrections(app_pkg: str, target: dict, current_screen) -> dict:
+                    try:
+                        els = ((current_screen.result or {}).get('elements') or []) if getattr(current_screen, 'success', False) else []
+                        rids = {e.get('resource_id') for e in els if isinstance(e, dict) and e.get('resource_id')}
+                    except Exception:
+                        rids = set()
+                    t = dict(target) if isinstance(target, dict) else {}
+                    sels = t.get('priority_selectors') if isinstance(t.get('priority_selectors'), list) else []
+                    if app_pkg == 'com.mobile.brasiltvmobile':
+                        # If LLM targeted the label mVodSearch or its text, map to the image search button if present
+                        wants_label = any(isinstance(s, dict) and s.get('resource_id') == 'com.mobile.brasiltvmobile:id/mVodSearch' for s in sels) or \
+                                       any(isinstance(s, dict) and s.get('text') == 'Search for content title' for s in sels)
+                        if wants_label and ('com.mobile.brasiltvmobile:id/mVodImageSearch' in rids):
+                            t['priority_selectors'] = [{'resource_id': 'com.mobile.brasiltvmobile:id/mVodImageSearch'}]
+                            try:
+                                dump_text(f"warning_selector_corrected_round_{round_idx}.txt", "Corrected search target to mVodImageSearch for com.mobile.brasiltvmobile")
+                            except Exception:
+                                pass
+                    return t
+
                 # Execute the action via MCP and verify by diffing screen state and images
                 next_action = step_json.get('next_action', {}) if isinstance(step_json, dict) else {}
                 action = (next_action.get('action') or '').lower()
-                target = _normalize_target(next_action.get('target') or {})
+                orig_target = next_action.get('target') or {}
+                target = _normalize_target(orig_target)
+                # Apply app-specific corrections (e.g., prefer mVodImageSearch over mVodSearch label)
+                corrected_target = _apply_selector_corrections(args.target_app, target, screen)
+                try:
+                    dump_text(f"intent_round_{round_idx}.json", json.dumps({
+                        "round": round_idx,
+                        "action": action,
+                        "orig_target": orig_target,
+                        "normalized_target": target,
+                        "corrected_target": corrected_target
+                    }, ensure_ascii=False, indent=2))
+                except Exception:
+                    pass
+                target = corrected_target
                 data = next_action.get('data') or ''
 
                 # If selectors were invalid (all filtered out), try one corrective retry with explicit pool
@@ -999,6 +1034,13 @@ async def main():
                     except Exception as e:
                         dump_text(f"error_parse_step_{round_idx}_corrective.txt", f"{e}\n\nRAW:\n{resp2.content}")
                 if action in ("click", "input"):
+                    exec_intent = {
+                        "action": action,
+                        "target": target,
+                        "data": data,
+                        "wait_after": next_action.get('wait_after', 0.8)
+                    }
+                    dump_text(f"intent_execute_round_{round_idx}.json", json.dumps(exec_intent, ensure_ascii=False, indent=2))
                     exec_resp = await server.execute_tool("perform_and_verify", {
                         "action": action,
                         "target": target,

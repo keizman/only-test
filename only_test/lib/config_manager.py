@@ -51,6 +51,14 @@ class ApplicationConfig:
     description: str
     app_config: Dict[str, Any]
     common_scenarios: List[str]
+    # 新增字段 - 从 YAML 中实际读取
+    ui_activity: Optional[str] = None
+    playback_auto_wake: Dict[str, Any] = None
+
+    def __post_init__(self):
+        """后处理，确保字段不为None"""
+        if self.playback_auto_wake is None:
+            self.playback_auto_wake = {}
 
 
 @dataclass
@@ -248,8 +256,11 @@ class ConfigManager:
             category=app_data.get('category', 'unknown'),
             version=app_data.get('version', 'latest'),
             description=app_data.get('description', ''),
-            app_config=app_data.get('app_config', {}),
-            common_scenarios=app_data.get('common_scenarios', [])
+            app_config=app_data,  # 保留完整的原始配置
+            common_scenarios=app_data.get('common_scenarios', []),
+            # 新增字段读取
+            ui_activity=app_data.get('ui_activity'),
+            playback_auto_wake=app_data.get('playback_auto_wake', {})
         )
     
     def get_test_suite_config(self, suite_id: str) -> Optional[TestSuiteConfig]:
@@ -283,7 +294,7 @@ class ConfigManager:
         """获取LLM配置"""
         config = self.get_config()
         llm_config = config.get('llm_config', {})
-        
+
         # 从环境变量获取敏感信息
         if os.getenv('LLM_API_KEY'):
             llm_config['api_key'] = os.getenv('LLM_API_KEY')
@@ -291,8 +302,27 @@ class ConfigManager:
             llm_config['api_url'] = os.getenv('LLM_API_URL')
         if os.getenv('LLM_MODEL'):
             llm_config['model'] = os.getenv('LLM_MODEL')
-        
+
         return llm_config
+
+    def get_playback_auto_wake_config(self) -> Dict[str, Any]:
+        """获取全局播放自动唤起配置"""
+        config = self.get_config()
+        global_config = config.get('global_config', {})
+        return global_config.get('playback_auto_wake', {})
+
+    def get_merged_playback_config(self, app_id: str) -> Dict[str, Any]:
+        """获取合并后的播放配置（全局配置 + 应用特定配置）"""
+        # 获取全局配置
+        global_playback = self.get_playback_auto_wake_config()
+
+        # 获取应用特定配置
+        app_config = self.get_application_config(app_id)
+        app_playback = app_config.playback_auto_wake if app_config else {}
+
+        # 深度合并配置，应用配置覆盖全局配置
+        merged = self._deep_merge_dict(global_playback.copy(), app_playback)
+        return merged
     
     def get_path_template(self, template_name: str, **kwargs) -> str:
         """
@@ -446,45 +476,52 @@ class ConfigManager:
 
 
 def main():
-    """测试配置管理器"""
+    """Configuration manager test"""
     config_manager = ConfigManager()
-    
-    print("🔧 Only-Test 配置管理器测试")
+
+    print("Only-Test Configuration Manager Test")
     print("=" * 50)
-    
-    # 测试设备列表
+
     devices = config_manager.list_devices()
-    print(f"📱 可用设备: {devices}")
-    
-    # 测试应用列表
+    print(f"Available devices: {devices}")
+
     applications = config_manager.list_applications()
-    print(f"📦 可用应用: {applications}")
-    
-    # 测试设备配置获取
+    print(f"Available applications: {applications}")
+
     if devices:
         device_config = config_manager.get_device_config(devices[0])
-        print(f"🔍 设备配置示例: {device_config.custom_name}")
-        print(f"   分辨率: {device_config.screen_info.get('resolution', 'Unknown')}")
-        print(f"   密度: {device_config.screen_info.get('density', 'Unknown')}")
-    
-    # 测试应用配置获取
+        print(f"Device config example:")
+        print(f"  device_id: {device_config.device_id}")
+        print(f"  custom_name: {device_config.custom_name}")
+        print(f"  resolution: {device_config.screen_info.get('resolution', 'Unknown')}")
+        print(f"  density: {device_config.screen_info.get('density', 'Unknown')}")
+
     if applications:
         app_config = config_manager.get_application_config(applications[0])
-        print(f"📱 应用配置示例: {app_config.app_name}")
-        print(f"   包名: {app_config.package_name}")
-    
-    # 测试路径模板
+        print(f"Application config example:")
+        print(f"  app_id: {app_config.app_id}")
+        print(f"  app_name: {app_config.app_name}")
+        print(f"  package_name: {app_config.package_name}")
+        print(f"  ui_activity: {app_config.ui_activity}")
+        print(f"  playback_auto_wake: {app_config.playback_auto_wake}")
+        print(f"  app_config_fields: {len(app_config.app_config)}")
+
+        merged_playback = config_manager.get_merged_playback_config(applications[0])
+        print(f"Merged playback config: {merged_playback}")
+
+    global_playback = config_manager.get_playback_auto_wake_config()
+    print(f"Global playback config: {global_playback}")
+
     if devices and applications:
         path = config_manager.get_path_template(
             'assets_path',
             app_package='com_example_app',
             device_model='Test_Device'
         )
-        print(f"🗂️  资源路径示例: {path}")
-    
-    # 测试LLM配置
+        print(f"Assets path example: {path}")
+
     llm_config = config_manager.get_llm_config()
-    print(f"🤖 LLM配置: {llm_config.get('provider', 'None')}")
+    print(f"LLM config provider: {llm_config.get('provider', 'None')}")
 
 
 if __name__ == "__main__":

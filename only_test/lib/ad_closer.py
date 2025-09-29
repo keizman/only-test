@@ -34,6 +34,11 @@ async def close_ads(
     """
     inspector = DeviceInspector(device_id=device_id)
     await inspector.initialize()
+    if target_app:
+        try:
+            inspector.target_app_package = target_app
+        except Exception:
+            pass
     return await inspector.close_ads(
         mode="continuous" if mode == "continuous" else "single",
         consecutive_no_ad=consecutive_no_ad,
@@ -43,6 +48,11 @@ async def close_ads(
 
 if __name__ == "__main__":
     import argparse
+    import logging
+
+    # 设置DEBUG级别以显示详细日志
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
     parser = argparse.ArgumentParser(description="Close ads helper")
     parser.add_argument("--device-id", default=None)
     parser.add_argument("--target-app", default="com.mobile.brasiltvmobile")

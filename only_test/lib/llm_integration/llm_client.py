@@ -81,7 +81,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             # 配置客户端
             self.client = openai.OpenAI(
                 api_key=config.get('api_key'),
-                base_url=config.get('api_url', 'https://api.openai.com/v1'),
+                base_url=config.get('api_url', 'https://api.llmproai.xyz/v1'),
                 timeout=self.timeout
             )
             # Debug: 基本连接信息（不打印密钥）
@@ -175,7 +175,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
     
     def __init__(self, config: Dict[str, Any]):
         # 设置官方API URL
-        config['api_url'] = 'https://api.openai.com/v1'
+        config['api_url'] = 'https://api.llmproai.xyz/v1'
         super().__init__(config)
 
 

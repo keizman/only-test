@@ -7,7 +7,13 @@ Poco工具函数 - 统一管理本地Poco库的导入
 import sys
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable, Iterable, Awaitable
+import time
+import asyncio
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 立即设置Poco路径，在模块导入时就执行
 def _find_repo_root(start: Path) -> Path:
@@ -57,8 +63,14 @@ def setup_local_poco_path():
         return False
 
 
-def get_android_poco(use_airtest_input=False, screenshot_each_action=False, disable_cache=True):
-    """获取AndroidPoco实例，使用与example_airtest_record.py相同的导入方式"""
+def get_android_poco(
+    use_airtest_input: bool = False,
+    screenshot_each_action: bool = False,
+    disable_cache: bool = True,
+    device_id: Optional[str] = None,
+    app_id: Optional[str] = None,
+):
+    """获取AndroidPoco实例，并在创建成功后注入播放态自动唤起 Hook。"""
     try:
         print("正在初始化Poco...")
 
@@ -81,6 +93,11 @@ def get_android_poco(use_airtest_input=False, screenshot_each_action=False, disa
 
         if disable_cache:
             print("✓ 缓存已禁用 - 每次查询都获取最新UI状态")
+
+        try:
+            enable_auto_wake_for_poco(poco, device_id=device_id, app_id=app_id)
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("自动注入播放态Hook失败: %s", exc)
 
         return poco
         
@@ -197,6 +214,615 @@ def force_refresh_ui_cache(poco_instance):
 
     except Exception as e:
         print(f"❌ 缓存刷新失败: {e}")
+        return False
+
+
+# === 自动唤起（播放态）- Poco Monkey Patch 支持 ===
+_auto_wake_state: Dict[str, Dict[str, Any]] = {}
+_auto_wake_poco_contexts: Dict[int, Dict[str, Any]] = {}
+_auto_wake_context_lock = threading.Lock()
+
+
+def _normalize_device_id(value: Optional[str]) -> str:
+    if not value:
+        return "default"
+    text = str(value).strip()
+    return text or "default"
+
+
+def _extract_serial_from_object(obj: Any, visited: Optional[set[int]] = None) -> Optional[str]:
+    if obj is None:
+        return None
+    if visited is None:
+        visited = set()
+    obj_id = id(obj)
+    if obj_id in visited:
+        return None
+    visited.add(obj_id)
+    attr_names = (
+        "serial",
+        "serialno",
+        "serial_no",
+        "serialnumber",
+        "device_id",
+        "adb_serial",
+        "_serial",
+        "_serialno",
+    )
+    for attr in attr_names:
+        if hasattr(obj, attr):
+            value = getattr(obj, attr)
+            if callable(value):
+                try:
+                    value = value()
+                except Exception:
+                    continue
+            if value:
+                return str(value)
+    nested_attrs = (
+        "adb",
+        "adb_device",
+        "device",
+        "_device",
+        "u2",
+        "client",
+    )
+    for attr in nested_attrs:
+        if hasattr(obj, attr):
+            serial = _extract_serial_from_object(getattr(obj, attr), visited)
+            if serial:
+                return serial
+    return None
+
+
+def _infer_device_id_from_poco(poco_instance) -> Optional[str]:
+    serial = _extract_serial_from_object(poco_instance)
+    if serial:
+        return serial
+    try:
+        from airtest.core.api import device as current_device
+
+        dev = current_device()
+        if dev:
+            serial = _extract_serial_from_object(dev)
+            if not serial:
+                for candidate in ("uuid", "serialno", "serial", "adb_serial"):
+                    value = getattr(dev, candidate, None)
+                    if value:
+                        serial = str(value)
+                        break
+            if serial:
+                return serial
+    except Exception:
+        pass
+    try:
+        from only_test.lib.config_manager import ConfigManager
+
+        cfg = ConfigManager().get_config()
+        devices_cfg = cfg.get("devices") or {}
+        if len(devices_cfg) == 1:
+            first = next(iter(devices_cfg.values()))
+            connection = (first or {}).get("connection", {}) or {}
+            serial = connection.get("adb_serial")
+            if serial:
+                return str(serial)
+    except Exception:
+        pass
+    env_serial = os.getenv("ANDROID_SERIAL")
+    if env_serial:
+        return env_serial
+    return None
+
+
+def _register_poco_context(poco_instance, device_id: Optional[str], app_id: Optional[str]) -> Dict[str, Any]:
+    resolved_device_id = _normalize_device_id(device_id or _infer_device_id_from_poco(poco_instance))
+    context = {
+        "device_id": resolved_device_id,
+        "app_id": app_id,
+    }
+    with _auto_wake_context_lock:
+        _auto_wake_poco_contexts[id(poco_instance)] = context
+    logger.info(
+        "播放态自动唤起: 绑定 Poco 实例 context=%s", context
+    )
+    entry = _get_state_entry(resolved_device_id)
+    with entry["lock"]:
+        entry["poco_instance"] = poco_instance
+        if app_id:
+            entry.setdefault("app_id", app_id)
+    return context
+
+
+def _resolve_poco_context(proxy, default_poco=None) -> Optional[Dict[str, Any]]:
+    poco_obj = getattr(proxy, "poco", None)
+    if poco_obj is not None:
+        ctx = _auto_wake_poco_contexts.get(id(poco_obj))
+        if ctx:
+            return ctx
+    if default_poco is not None:
+        ctx = _auto_wake_poco_contexts.get(id(default_poco))
+        if ctx:
+            return ctx
+    return None
+
+
+def _state_key(device_id: Optional[str]) -> str:
+    return device_id or "default"
+
+
+def _get_state_entry(device_id: Optional[str]) -> Dict[str, Any]:
+    entry = _auto_wake_state.setdefault(_state_key(device_id), {})
+    if entry.get("lock") is None:
+        entry["lock"] = threading.Lock()
+    return entry
+
+
+def _run_async_fn(factory: Callable[[], Awaitable[Any]]) -> Any:
+    try:
+        return asyncio.run(factory())
+    except RuntimeError as exc:
+        if "asyncio.run()" in str(exc) and "running event loop" in str(exc):
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(factory())
+            finally:
+                loop.close()
+        raise
+
+
+def _get_inspector(device_id: Optional[str]):
+    from only_test.lib.mcp_interface.device_inspector import DeviceInspector
+
+    entry = _get_state_entry(device_id)
+    inspector = entry.get("inspector")
+    if inspector:
+        return inspector
+
+    inspector = DeviceInspector(device_id=device_id)
+    _run_async_fn(lambda: inspector.initialize())
+    entry["inspector"] = inspector
+    return inspector
+
+
+def _launch_media_probe(device_id: Optional[str], inspector, entry: Dict[str, Any]) -> None:
+    lock = entry.get("lock")
+    if lock is None:
+        lock = threading.Lock()
+        entry["lock"] = lock
+
+    def _runner():
+        try:
+            result = bool(_run_async_fn(lambda: inspector._is_media_playing()))  # type: ignore[attr-defined]
+            logger.info(
+                "播放态自动唤起: 后台刷新探针 device=%s playing=%s",
+                device_id or "default",
+                result,
+            )
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("播放状态探测失败: %s", exc)
+            result = bool(entry.get("last_playing", False))
+        with lock:
+            entry["last_playing"] = result
+            entry["last_probe_ts"] = time.time()
+            entry["probe_running"] = False
+        if result:
+            _auto_wake_from_probe(device_id, inspector)
+
+    threading.Thread(
+        target=_runner,
+        name=f"onlytest-playback-probe-{_state_key(device_id)}",
+        daemon=True,
+    ).start()
+
+
+def _is_media_playing_cached(device_id: Optional[str], min_interval_s: float) -> bool:
+    entry = _get_state_entry(device_id)
+    min_interval = max(0.05, float(min_interval_s or 0.0))
+    now = time.time()
+
+    need_initial_probe = False
+    should_launch = False
+
+    with entry["lock"]:
+        last_ts = float(entry.get("last_probe_ts", 0.0))
+        last_value = bool(entry.get("last_playing", False))
+        probe_running = bool(entry.get("probe_running", False))
+
+        if last_ts <= 0.0:
+            if not probe_running:
+                entry["probe_running"] = True
+                need_initial_probe = True
+        elif (now - last_ts) < min_interval:
+            logger.debug(
+                "播放态自动唤起: 复用缓存 device=%s last_playing=%s age=%.2fs",
+                device_id or "default",
+                last_value,
+                now - last_ts,
+            )
+            if last_value:
+                _auto_wake_from_probe(device_id, None)
+            return last_value
+        else:
+            if not probe_running:
+                entry["probe_running"] = True
+                should_launch = True
+
+    inspector = None
+    if need_initial_probe or should_launch:
+        inspector = _get_inspector(device_id)
+
+    if need_initial_probe and inspector is not None:
+        try:
+            result = bool(_run_async_fn(lambda: inspector._is_media_playing()))  # type: ignore[attr-defined]
+            logger.info(
+                "播放态自动唤起: 初次探针结果 device=%s playing=%s",
+                device_id or "default",
+                result,
+            )
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("首次播放状态探测失败: %s", exc)
+            result = False
+        with entry["lock"]:
+            entry["last_playing"] = result
+            entry["last_probe_ts"] = time.time()
+            entry["probe_running"] = False
+        if result:
+            _auto_wake_from_probe(device_id, inspector)
+        return result
+
+    if should_launch and inspector is not None:
+        _launch_media_probe(device_id, inspector, entry)
+
+    with entry["lock"]:
+        value = bool(entry.get("last_playing", False))
+    logger.debug(
+        "播放态自动唤起: 返回探针状态 device=%s playing=%s",
+        device_id or "default",
+        value,
+    )
+    if value:
+        _auto_wake_from_probe(device_id, inspector)
+    return value
+
+
+def _auto_wake_from_probe(device_id: Optional[str], inspector) -> None:
+    entry = _get_state_entry(device_id)
+    now = time.time()
+    with entry["lock"]:
+        poco_instance = entry.get("poco_instance")
+        app_id_hint = entry.get("app_id")
+        last_wake_ts = float(entry.get("last_wake_ts", 0.0))
+        last_probe_wake_ts = float(entry.get("last_probe_wake_ts", 0.0))
+        last_wake_success = bool(entry.get("last_wake_success", False))
+
+    if poco_instance is None:
+        logger.debug("播放态自动唤起: 无 Poco 实例，跳过探针唤起 device=%s", device_id or "default")
+        return
+
+    try:
+        inspector_obj = inspector or _get_inspector(device_id)
+    except Exception as exc:  # noqa: BLE001 - logging only
+        logger.debug("播放态自动唤起: 获取探针实例失败: %s", exc)
+        return
+
+    config = _resolve_playback_config(inspector_obj, app_id_hint)
+    throttle = max(0.5, (config.get("post_tap_sleep_ms", 250) / 1000.0) + 0.5)
+
+    if last_wake_success and (now - last_wake_ts) < throttle:
+        logger.info(
+            "播放态自动唤起: 最近%.2fs内唤起成功，跳过探针唤起 device=%s",
+            now - last_wake_ts,
+            device_id or "default",
+        )
+        return
+
+    if (now - last_probe_wake_ts) < max(0.5, config.get("probe_min_interval_s", 0.5)):
+        logger.debug(
+            "播放态自动唤起: 探针唤起节流 %.2fs device=%s",
+            now - last_probe_wake_ts,
+            device_id or "default",
+        )
+        return
+
+    result = _perform_auto_wake(device_id, inspector_obj, poco_instance, None, config)
+    with entry["lock"]:
+        entry["last_probe_wake_ts"] = now
+        if result:
+            entry["last_wake_success"] = bool(result.get("controls_visible"))
+
+
+def _collect_keywords(values: Iterable[Any]) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        text = str(value).strip()
+        if text and text not in seen:
+            keywords.append(text)
+            seen.add(text)
+    return keywords
+
+
+def _resolve_playback_config(inspector, app_id: Optional[str]) -> Dict[str, Any]:
+    defaults = {
+        "ensure_visible_on_playback": True,
+        "probe_min_interval_s": 0.5,
+        "tap_y_norm": 0.15,
+        "post_tap_sleep_ms": 250,
+        "wake_keywords": [],
+        "app_id": app_id,
+    }
+
+    try:
+        from only_test.lib.config_manager import ConfigManager
+
+        cfg = ConfigManager().get_config()
+    except Exception as exc:  # noqa: BLE001 - logging only
+        logger.debug("读取播放自动唤起配置失败: %s", exc)
+        return defaults
+
+    global_cfg = (cfg.get("global_config") or {}).get("playback_auto_wake", {}) or {}
+
+    ensure_visible = bool(global_cfg.get("ensure_visible_on_playback", defaults["ensure_visible_on_playback"]))
+    try:
+        probe_min = float(global_cfg.get("probe_min_interval_s", defaults["probe_min_interval_s"]))
+    except Exception:  # noqa: BLE001 - fallback to default
+        probe_min = defaults["probe_min_interval_s"]
+    try:
+        tap_y_norm = float(global_cfg.get("tap_y_norm", defaults["tap_y_norm"]))
+    except Exception:
+        tap_y_norm = defaults["tap_y_norm"]
+    tap_y_norm = min(1.0, max(0.0, tap_y_norm))
+    try:
+        post_sleep_ms = int(global_cfg.get("post_tap_sleep_ms", defaults["post_tap_sleep_ms"]))
+    except Exception:
+        post_sleep_ms = defaults["post_tap_sleep_ms"]
+    post_sleep_ms = max(0, post_sleep_ms)
+
+    merged_keywords = _collect_keywords(global_cfg.get("wake_keywords", []))
+
+    resolved_app_id = app_id
+    app_cfg: Dict[str, Any] = {}
+    applications = cfg.get("applications") or {}
+
+    if resolved_app_id and resolved_app_id in applications:
+        app_cfg = (applications.get(resolved_app_id) or {}).get("playback_auto_wake", {}) or {}
+    else:
+        target_pkg = getattr(inspector, "target_app_package", None)
+        if target_pkg:
+            for candidate_id, candidate_cfg in applications.items():
+                pkg = (candidate_cfg or {}).get("package_name")
+                if pkg and str(pkg) == str(target_pkg):
+                    resolved_app_id = candidate_id
+                    app_cfg = (candidate_cfg.get("playback_auto_wake") or {}) if candidate_cfg else {}
+                    break
+
+    merged_keywords.extend(_collect_keywords(app_cfg.get("wake_keywords", [])))
+    merged_keywords = list(dict.fromkeys(merged_keywords))
+
+    resolved = {
+        "ensure_visible_on_playback": ensure_visible,
+        "probe_min_interval_s": max(0.05, probe_min),
+        "tap_y_norm": tap_y_norm,
+        "post_tap_sleep_ms": post_sleep_ms,
+        "wake_keywords": merged_keywords,
+        "app_id": resolved_app_id,
+    }
+    logger.debug(
+        "播放态自动唤起: 解析配置 app=%s resolved=%s",
+        resolved_app_id or "",
+        resolved,
+    )
+    return resolved
+
+
+def _perform_auto_wake(
+    device_id: Optional[str],
+    inspector,
+    poco_instance,
+    target_proxy,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    wake_result: Dict[str, Any] = {}
+    try:
+        logger.info(
+            "播放态自动唤起: 执行唤起动作 device=%s app=%s keywords=%s",
+            device_id or "default",
+            config.get("app_id") or "",
+            config.get("wake_keywords", []),
+        )
+        wake_result = _run_async_fn(
+            lambda: inspector._ensure_controls_visible_once(  # type: ignore[attr-defined]
+                config.get("wake_keywords", []),
+                tap_y_norm=config.get("tap_y_norm", 0.15),
+                post_tap_sleep_ms=config.get("post_tap_sleep_ms", 250),
+            )
+        )
+        if not isinstance(wake_result, dict):
+            wake_result = {}
+    except Exception as exc:  # noqa: BLE001 - logging only
+        logger.debug("播放控件唤起失败: %s", exc)
+        wake_result = {}
+
+    if wake_result.get("tap_performed"):
+        try:
+            force_refresh_ui_cache(poco_instance)
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("刷新Poco缓存失败: %s", exc)
+        if target_proxy is not None:
+            try:
+                exists_fn = getattr(target_proxy, "exists", None)
+                if callable(exists_fn):
+                    exists_fn()
+            except Exception:
+                pass
+
+    entry = _get_state_entry(device_id)
+    with entry["lock"]:
+        entry["last_wake_ts"] = time.time()
+        entry["last_wake_success"] = bool(wake_result.get("controls_visible"))
+
+    return wake_result
+
+
+def _wrap_action_with_auto_wake(
+    poco_instance,
+    action: Callable,
+):
+    def wrapper(self, *args, **kwargs):
+        try:
+            context = _resolve_poco_context(self, default_poco=poco_instance)
+            if not context:
+                logger.info(
+                    "播放态自动唤起: 未找到Poco上下文，跳过唤起 proxy=%s poco=%s",
+                    type(self).__name__,
+                    type(getattr(self, "poco", None)).__name__ if hasattr(self, "poco") else "<none>",
+                )
+                return action(self, *args, **kwargs)
+
+            device_id = context.get("device_id")
+            app_hint = context.get("app_id")
+
+            logger.info(
+                "播放态自动唤起: 拦截操作 name=%s device=%s app_hint=%s",
+                getattr(action, "__name__", str(action)),
+                device_id,
+                app_hint or "",
+            )
+
+            inspector = _get_inspector(device_id)
+            config = _resolve_playback_config(inspector, app_hint)
+            if not config.get("app_id"):
+                config["app_id"] = app_hint
+
+            if not config.get("ensure_visible_on_playback", True):
+                logger.debug("播放态自动唤起已禁用(ensure_visible_on_playback=false)，直连原操作")
+                return action(self, *args, **kwargs)
+
+            try:
+                playing = _is_media_playing_cached(device_id, config.get("probe_min_interval_s", 0.5))
+            except Exception as exc:  # noqa: BLE001 - logging only
+                logger.debug("播放状态缓存检测失败: %s", exc)
+                playing = False
+
+            if not playing:
+                logger.info(
+                    "播放态自动唤起: 探针显示未播放，跳过唤起 device=%s app=%s",
+                    device_id,
+                    config.get("app_id") or "",
+                )
+                return action(self, *args, **kwargs)
+
+            keywords = tuple(config.get("wake_keywords", []))
+            entry = _get_state_entry(device_id)
+            now = time.time()
+            throttle_window = max(0.2, (config.get("post_tap_sleep_ms", 250) / 1000.0) + 0.2)
+
+            with entry["lock"]:
+                recent_success = bool(entry.get("last_wake_success", False))
+                recent_ts = float(entry.get("last_wake_ts", 0.0))
+
+            if recent_success and (now - recent_ts) < throttle_window:
+                logger.info(
+                    "播放态自动唤起: 前一轮%.2fs内成功，跳过重复点击 device=%s app=%s",
+                    now - recent_ts,
+                    device_id,
+                    config.get("app_id") or "",
+                )
+                return action(self, *args, **kwargs)
+
+            controls_visible = False
+            if keywords:
+                try:
+                    controls_visible = bool(
+                        _run_async_fn(
+                            lambda: inspector._has_wake_keywords(  # type: ignore[attr-defined]
+                                keywords,
+                                max_age=0.3,
+                            )
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001 - logging only
+                    logger.debug("检测播放控件可见状态失败: %s", exc)
+
+            if not controls_visible:
+                wake_result = _perform_auto_wake(device_id, inspector, poco_instance, self, config)
+                logger.info(
+                    "播放态自动唤起: 结果 wake_attempted=%s controls_visible=%s",
+                    wake_result.get("wake_attempted"),
+                    wake_result.get("controls_visible"),
+                )
+            else:
+                logger.info(
+                    "播放态自动唤起: 播控已可见，跳过唤起 device=%s app=%s",
+                    device_id,
+                    config.get("app_id") or "",
+                )
+
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("播放态自动唤起流程异常: %s", exc)
+
+        return action(self, *args, **kwargs)
+
+    return wrapper
+
+
+def enable_auto_wake_for_poco(
+    poco_instance,
+    device_id: Optional[str] = None,
+    app_id: Optional[str] = None,
+) -> bool:
+    """启用播放态自动唤起 Hook。"""
+
+    if poco_instance is None:
+        logger.debug("未提供 Poco 实例，跳过自动唤起 Hook")
+        return False
+
+    context = _register_poco_context(poco_instance, device_id, app_id)
+    resolved_device_id = context.get("device_id")
+    resolved_app_id = context.get("app_id")
+
+    try:
+        _get_inspector(resolved_device_id)
+    except Exception as exc:  # noqa: BLE001 - logging only
+        logger.debug("初始化 DeviceInspector 失败: %s", exc)
+
+    try:
+        from poco.proxy import UIObjectProxy
+
+        originals = getattr(UIObjectProxy, "__auto_wake_originals__", None)
+        if originals is None:
+            originals = {}
+            for attr in ("click", "long_click", "swipe", "set_text"):
+                method = getattr(UIObjectProxy, attr, None)
+                if callable(method):
+                    originals[attr] = method
+        UIObjectProxy.__auto_wake_originals__ = originals  # type: ignore[attr-defined]
+
+        for name, original in (originals or {}).items():
+            if callable(original):
+                setattr(
+                    UIObjectProxy,
+                    name,
+                    _wrap_action_with_auto_wake(poco_instance, original),
+                )
+
+        UIObjectProxy.__auto_wake_patched__ = True  # type: ignore[attr-defined]
+        UIObjectProxy.__auto_wake_context__ = {  # type: ignore[attr-defined]
+            "device_id": resolved_device_id,
+            "app_id": resolved_app_id,
+        }
+
+        logger.info(
+            "播放态自动唤起: Hook 安装完成 device=%s app=%s",
+            resolved_device_id,
+            resolved_app_id or "",
+        )
+
+        print("✓ 已启用播放态自动唤起（Poco Hook）—— 外部用例与 LLM 无需改动")
+        return True
+    except Exception as exc:  # noqa: BLE001 - keep stdout message
+        print(f"❌ 启用自动唤起失败: {exc}")
+        logger.debug("启用自动唤起失败详情", exc_info=True)
         return False
 
 

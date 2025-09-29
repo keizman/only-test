@@ -45,12 +45,14 @@ def _adb_prefix(device_id: Optional[str]) -> list[str]:
 def _get_screen_size(device_id: Optional[str]) -> tuple[int, int]:
     try:
         out = subprocess.run(
-            _adb_prefix(device_id) + ["shell", "wm", "size"], capture_output=True, text=True
+            _adb_prefix(device_id) + ["shell", "wm", "size"], capture_output=True
         )
-        if out.returncode == 0 and "Physical size:" in out.stdout:
-            sz = out.stdout.split("Physical size:")[-1].strip().split("\n")[0].strip()
-            w, h = sz.split("x")
-            return int(w), int(h)
+        if out.returncode == 0 and out.stdout:
+            txt = out.stdout.decode("utf-8", errors="ignore")
+            if "Physical size:" in txt:
+                sz = txt.split("Physical size:")[-1].strip().split("\n")[0].strip()
+                w, h = sz.split("x")
+                return int(w), int(h)
     except Exception:
         pass
     return 1080, 1920
@@ -106,65 +108,169 @@ def _xml_has_keyword(xml_text: str, keyword: str) -> bool:
     return False
 
 
-async def _dump_current_xml(device_id: Optional[str]) -> str:
-    # 优先 exec-out → /dev/tty，回退到 /sdcard/window_dump.xml
+def _xml_has_keyword_timed(xml_text: str, keyword: str) -> tuple[bool, dict]:
+    """Like _xml_has_keyword, but with timing details: {'parse_ms':..., 'scan_nodes':..., 'total_ms':...} """
+    from time import perf_counter
+    t0 = perf_counter()
     try:
+        t1 = perf_counter()
+        root = ET.fromstring(xml_text)
+        parse_ms = (perf_counter() - t1) * 1000.0
+    except Exception:
+        return False, {'parse_ms': 0.0, 'scan_nodes': 0, 'total_ms': (perf_counter()-t0)*1000.0}
+    k = (keyword or '').strip().lower()
+    scanned = 0
+    found = False
+    for node in root.iter():
+        if node.tag == 'hierarchy':
+            continue
+        scanned += 1
+        attrib = node.attrib
+        blob = (attrib.get('text','') + attrib.get('content-desc','') + attrib.get('resource-id','') + attrib.get('class','')).lower()
+        if k and (k in blob):
+            found = True
+            break
+    return found, {'parse_ms': parse_ms, 'scan_nodes': scanned, 'total_ms': (perf_counter()-t0)*1000.0}
+
+
+async def _dump_current_xml_timed(device_id: Optional[str]) -> tuple[str, str, dict]:
+    """Dump UI XML with timing detail.
+    Returns: (xml_text, mode, timings)
+      - mode: 'sdcard' | 'exec-out' | 'none'
+      - timings: {'dump_ms':..., 'cat_ms':..., 'exec_ms':..., 'total_ms':...}
+    """
+    from time import perf_counter
+    # Try sdcard method first
+    t0 = perf_counter()
+    try:
+        t1 = perf_counter()
+        _ = subprocess.run(_adb_prefix(device_id) + ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], capture_output=True)
+        dump_ms = (perf_counter() - t1) * 1000.0
+        t2 = perf_counter()
+        out = subprocess.run(_adb_prefix(device_id) + ["shell", "cat", "/sdcard/window_dump.xml"], capture_output=True)
+        cat_ms = (perf_counter() - t2) * 1000.0
+        if out.returncode == 0 and out.stdout:
+            txt = out.stdout.decode("utf-8", errors='ignore')
+            return txt, 'sdcard', {'dump_ms': dump_ms, 'cat_ms': cat_ms, 'total_ms': (perf_counter()-t0)*1000.0}
+    except Exception:
+        pass
+    # Fallback to exec-out
+    try:
+        t3 = perf_counter()
         proc = await asyncio.create_subprocess_exec(
             *_adb_prefix(device_id), "exec-out", "uiautomator", "dump", "/dev/tty",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, _ = await proc.communicate()
+        exec_ms = (perf_counter() - t3) * 1000.0
         if proc.returncode == 0 and stdout:
             txt = stdout.decode(errors='ignore')
             idx = txt.find("<hierarchy")
             if idx >= 0:
-                return txt[idx:]
+                return txt[idx:], 'exec-out', {'exec_ms': exec_ms, 'total_ms': (perf_counter()-t0)*1000.0}
     except Exception:
         pass
-    try:
-        _ = subprocess.run(_adb_prefix(device_id) + ["shell", "uiautomator", "dump", "/sdcard/window_dump.xml"], capture_output=True, text=True)
-        out = subprocess.run(_adb_prefix(device_id) + ["shell", "cat", "/sdcard/window_dump.xml"], capture_output=True, text=True)
-        if out.returncode == 0:
-            return out.stdout
-    except Exception:
-        pass
-    return ""
+    return "", 'none', {'total_ms': (perf_counter()-t0)*1000.0}
 
 
-async def _keep_worker(duration_s: float, detect_interval: float, exist_field_keyword: str, device_id: Optional[str]) -> None:
+async def _dump_current_xml(device_id: Optional[str]) -> str:
+    txt, _, _ = await _dump_current_xml_timed(device_id)
+    return txt
+
+
+async def _keep_worker(duration_s: float, detect_interval: float, exist_field_keyword: str, device_id: Optional[str], verbose: bool) -> None:
     try:
-        end_t = time.time() + float(duration_s)
+        start_t = time.time()
+        end_t = start_t + float(duration_s)
         w, h = _get_screen_size(device_id)
         tap_x = int(w / 2)
-        tap_y = max(1, int(h * 0.15))
+        # 点击点默认使用顶部 15%（避免中间点导致控件被再次隐藏）。如需扩展可调整为 [0.15, 0.50, 0.85]
+        y_norm_candidates = [0.15]
+        idx = 0
+        # 反抖与保护：避免短时间内重复点击导致控件被隐藏
+        last_tap_ts = 0.0
+        last_seen_ts = 0.0
+        consecutive_miss = 0
+        tap_cooldown_s = 0.8         # 每次点击后至少冷却 0.8s 再允许下一次点击
+        visible_grace_s = 1.0        # 最近刚看到可见时，给予 1.0s 宽限，不立即点击
+        require_misses = 1           # 连续观察到不可见 Misses 次后才允许点击（加速首次点击）
+        if verbose:
+            print(f"[keep] start: duration={duration_s}s interval={detect_interval}s keyword='{exist_field_keyword}' device={device_id} screen={w}x{h} candidates={y_norm_candidates}")
+        # 主循环：每个 interval 周期获取 XML，若无关键字则点击；有则等待下一个周期
         while time.time() < end_t:
-            xml_text = await _dump_current_xml(device_id)
-            rid_count, _ = _xml_stats(xml_text)
-            has_kw = _xml_has_keyword(xml_text, exist_field_keyword)
-            # 判定：关键字缺失 且 resource-id 数偏少 → 点击唤醒
-            if (not has_kw) and (rid_count < 10):
-                subprocess.run(_adb_prefix(device_id) + ["shell", "input", "tap", str(tap_x), str(tap_y)], capture_output=True, text=True)
-                await asyncio.sleep(0.25)
-            await asyncio.sleep(max(0.05, float(detect_interval)))
+            # 1) dump XML + decode
+            xml_text, mode, dump_t = await _dump_current_xml_timed(device_id)
+            # 2) parse+scan keyword
+            has_kw, parse_t = _xml_has_keyword_timed(xml_text, exist_field_keyword)
+            now = time.time()
+            elapsed = now - start_t
+            if verbose:
+                if mode == 'sdcard':
+                    print(f"[keep] t={elapsed:.1f}s step: dump mode=sdcard dump_ms={dump_t.get('dump_ms',0):.1f} cat_ms={dump_t.get('cat_ms',0):.1f} total={dump_t.get('total_ms',0):.1f} size={len(xml_text)}")
+                elif mode == 'exec-out':
+                    print(f"[keep] t={elapsed:.1f}s step: dump mode=exec-out exec_ms={dump_t.get('exec_ms',0):.1f} total={dump_t.get('total_ms',0):.1f} size={len(xml_text)}")
+                else:
+                    print(f"[keep] t={elapsed:.1f}s step: dump mode=none total={dump_t.get('total_ms',0):.1f} size={len(xml_text)}")
+                print(f"[keep] t={elapsed:.1f}s step: parse parse_ms={parse_t.get('parse_ms',0):.1f} scanned={parse_t.get('scan_nodes',0)} total={parse_t.get('total_ms',0):.1f} has_kw={has_kw}")
+            if has_kw:
+                last_seen_ts = now
+                consecutive_miss = 0
+                if verbose:
+                    print(f"[keep] t={elapsed:.1f}s decision: idle (recently visible)")
+            else:
+                consecutive_miss += 1
+                # 判断是否允许点击
+                if (now - last_tap_ts) < tap_cooldown_s:
+                    if verbose:
+                        print(f"[keep] t={elapsed:.1f}s decision: skip (cooldown {tap_cooldown_s:.1f}s)")
+                elif (now - last_seen_ts) < visible_grace_s:
+                    if verbose:
+                        print(f"[keep] t={elapsed:.1f}s decision: skip (visible grace {visible_grace_s:.1f}s, misses={consecutive_miss})")
+                elif consecutive_miss < require_misses:
+                    if verbose:
+                        print(f"[keep] t={elapsed:.1f}s decision: wait (require_misses={require_misses}, misses={consecutive_miss})")
+                else:
+                    y_norm = y_norm_candidates[idx % len(y_norm_candidates)]
+                    tap_y = max(1, int(h * y_norm))
+                    if verbose:
+                        print(f"[keep] t={elapsed:.1f}s decision: TAP x={tap_x} y={tap_y} (y_norm={y_norm:.2f})")
+                    t_tap0 = time.perf_counter()
+                    subprocess.run(_adb_prefix(device_id) + ["shell", "input", "tap", str(tap_x), str(tap_y)], capture_output=True)
+                    tap_ms = (time.perf_counter() - t_tap0) * 1000.0
+                    if verbose:
+                        print(f"[keep] t={elapsed:.1f}s action: tap_ms={tap_ms:.1f}; post_tap_sleep_ms=250")
+                    last_tap_ts = now
+                    consecutive_miss = 0
+                    idx += 1
+                    await asyncio.sleep(0.25)  # 点击后给 UI 少许时间反应
+            sleep_s = max(0.05, float(detect_interval))
+            if verbose:
+                print(f"[keep] t={elapsed:.1f}s sleep: {sleep_s*1000:.0f}ms to next interval")
+            await asyncio.sleep(sleep_s)
+        if verbose:
+            print("[keep] end: worker finished")
     except asyncio.CancelledError:
-        # 正常取消
+        if verbose:
+            print("[keep] cancelled")
         return
-    except Exception:
+    except Exception as e:
+        if verbose:
+            print(f"[keep] error: {e}")
         return
 
 
 def is_full_screen(device_id: Optional[str] = None) -> bool:
-    """简单基于 dumpsys activity top 的启发式判断：
-    - mCurrentConfig 字段包含 "port" → 视为“全屏”
-    - 包含 "land" → 视为“非全屏/横屏界面”
-    注意：这是一个启发式方法，仅供将来区分使用，当前保活策略与此无关。
+    """Heuristic orientation/fullscreen check based on dumpsys activity top.
+    - If mCurrentConfig contains "port" -> True (portrait)
+    - If contains "land" -> False (landscape)
+    Note: heuristic only; keep-display coordinates are robust in both cases.
     """
     try:
         out = subprocess.run(
-            _adb_prefix(device_id) + ["shell", "dumpsys", "activity", "top"], capture_output=True, text=True, timeout=5
+            _adb_prefix(device_id) + ["shell", "dumpsys", "activity", "top"], capture_output=True, timeout=5
         )
         if out.returncode == 0 and out.stdout:
-            s = out.stdout.lower()
+            s = out.stdout.decode("utf-8", errors="ignore").lower()
             if "mcurrentconfig" in s:
                 if " port " in (" " + s + " "):
                     return True
@@ -172,11 +278,11 @@ def is_full_screen(device_id: Optional[str] = None) -> bool:
                     return False
     except Exception:
         pass
-    # 默认返回 True（不影响保活点击坐标）
+    # Default True
     return True
 
 
-async def start_keep_play_controls(duration_s: float, detect_interval: float = 0.1, exist_field_keyword: str = "Brightness", device_id: Optional[str] = None) -> None:
+async def start_keep_play_controls(duration_s: float, detect_interval: float = 0.1, exist_field_keyword: str = "Brightness", device_id: Optional[str] = None, verbose: bool = False) -> None:
     """
     启动播放页控制栏保活。
 
@@ -197,7 +303,7 @@ async def start_keep_play_controls(duration_s: float, detect_interval: float = 0
                 pass
         # 启动新任务
         loop = asyncio.get_running_loop()
-        _keeper_task = loop.create_task(_keep_worker(duration_s, detect_interval, exist_field_keyword, device_id))
+        _keeper_task = loop.create_task(_keep_worker(duration_s, detect_interval, exist_field_keyword, device_id, verbose))
 
 
 async def stop_keep_play_controls() -> None:
@@ -217,9 +323,11 @@ async def stop_keep_play_controls() -> None:
 async def playing_stat_keep_displayed_button(duration_s: float,
                                             detect_interval: float = 0.1,
                                             exist_filed_keyword: str = "Brightness",
-                                            device_id: Optional[str] = None) -> None:
+                                            device_id: Optional[str] = None,
+                                            verbose: bool = False) -> None:
     return await start_keep_play_controls(duration_s=duration_s,
                                           detect_interval=detect_interval,
                                           exist_field_keyword=exist_filed_keyword,
-                                          device_id=device_id)
+                                          device_id=device_id,
+                                          verbose=verbose)
 

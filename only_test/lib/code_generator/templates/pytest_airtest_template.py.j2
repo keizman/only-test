@@ -14,10 +14,6 @@ import allure
 from only_test.lib.airtest_compat import *
 from airtest.core.android.android import Android
 from airtest.core.cv import Template
-# 使用本地自定义的Poco库
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../Poco'))
 from poco.drivers.android.uiautomation import AndroidUiautomationPoco
 
 # 测试元数据
@@ -78,6 +74,9 @@ class Test{{ testcase_id.replace('-', '_').replace(' ', '_') }}:
     def setup_and_teardown(self):
         """测试前后置处理"""
         # 连接设备
+        {% if device_connection %}
+        connect_device("{{ device_connection }}")
+        {% endif %}
         auto_setup(__file__)
         
         # 启动应用
