@@ -27,7 +27,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("json_to_python")
+logger = logging.getLogger("python_code_generator")
 
 
 class ActionType(Enum):
@@ -73,7 +73,7 @@ class PythonCodeGenerator:
     def __init__(self):
         self.base_dir = Path(__file__).parent.parent.parent
         self.templates_dir = self.base_dir / "templates"
-        self.output_dir = self.base_dir / "only_test" / "testcases" / "python"
+        self.output_dir = self.base_dir / "testcases" / "python"
         
         # 确保目录存在
         self.templates_dir.mkdir(exist_ok=True)
@@ -268,6 +268,7 @@ except Exception as e:
 
             logger.info(f"解析了 {len(steps)} 个动作步骤 (execution_path)")
             return steps
+    
     def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
         """从 priority_selectors/selectors 或直接键选择最优定位（resource_id > content_desc > text）。
         兼容以下情况：
@@ -352,46 +353,6 @@ except Exception as e:
         
         logger.info(f"解析了 {len(steps)} 个动作步骤")
         return steps
-    def _select_best_selector(self, target: Dict[str, Any]) -> Optional[str]:
-        """与上方实现一致：兼容 dict/list 与连字符键名。"""
-        if not isinstance(target, dict):
-            return None
-        direct_keys = [
-            ('resource_id', 'resource_id'),
-            ('content_desc', 'content_desc'),
-            ('desc', 'content_desc'),
-            ('text', 'text'),
-            ('xpath', 'xpath'),
-            ('path', 'xpath'),
-        ]
-        for key, norm in direct_keys:
-            if target.get(key):
-                return target.get(key)
-        selectors = target.get('priority_selectors') or target.get('selectors')
-        if isinstance(selectors, dict):
-            if selectors.get('resource_id') or selectors.get('resource-id'):
-                return selectors.get('resource_id') or selectors.get('resource-id')
-            if selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc'):
-                return selectors.get('content_desc') or selectors.get('content-desc') or selectors.get('desc')
-            if selectors.get('text'):
-                return selectors.get('text')
-            if selectors.get('xpath') or selectors.get('path'):
-                return selectors.get('xpath') or selectors.get('path')
-            return None
-        if isinstance(selectors, list):
-            for sel in selectors:
-                if isinstance(sel, dict) and (sel.get('resource_id') or sel.get('resource-id')):
-                    return sel.get('resource_id') or sel.get('resource-id')
-            for sel in selectors:
-                if isinstance(sel, dict) and (sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')):
-                    return sel.get('content_desc') or sel.get('content-desc') or sel.get('desc')
-            for sel in selectors:
-                if isinstance(sel, dict) and sel.get('text'):
-                    return sel.get('text')
-            for sel in selectors:
-                if isinstance(sel, dict) and (sel.get('xpath') or sel.get('path')):
-                    return sel.get('xpath') or sel.get('path')
-        return None
     
     def _determine_locate_strategy(self, step: ActionStep) -> ElementLocateStrategy:
         """确定元素定位策略"""
@@ -878,4 +839,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -36,9 +36,11 @@ from only_test.templates.prompts.generate_cases import TestCaseGenerationPrompts
 from only_test.lib.code_generator.json_to_python import JSONToPythonConverter
 from only_test.lib.code_generator.python_code_generator import PythonCodeGenerator
 from only_test.lib.utils.path_builder import build_step_path
+from only_test.lib.logging import get_logger, close_logger
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# 注意：不再使用basicConfig，改用统一日志管理器
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logger = logging.getLogger(__name__)
 
 
 def build_mock_llm_testcase(requirement: str, target_app: str) -> dict:
@@ -116,68 +118,102 @@ async def main():
     parser.add_argument("--max-rounds", type=int, default=3, help="Max step-guidance rounds before completion")
     parser.add_argument("--auto-close-limit", type=int, default=None, help="Limit auto close-ad to first N screen analyses (overrides config)")
     parser.add_argument("--execute", action="store_true", help="Execute actions on device (unsafe). Default is dry-run")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose mode (show DEBUG level logs)")
     args = parser.parse_args()
 
-    # Prepare session log directory and file handler
+    # 初始化统一日志管理器 - 支持双重输出（命令行+文件）
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    session_dir = Path(args.logdir) / f"session_{session_id}"
-    session_dir.mkdir(parents=True, exist_ok=True)
-    # Structured subdirectories (kept for backward compatibility; disabled when SINGLE_FILE_LOG=True)
-    prompts_dir = session_dir / "prompts"
-    responses_dir = session_dir / "responses"
-    tools_dir = session_dir / "tools"
-    executions_dir = session_dir / "executions"
-    errors_dir = session_dir / "errors"
-    warnings_dir = session_dir / "warnings"
-    artifacts_dir = session_dir / "artifacts"
-    meta_dir = session_dir / "meta"
-    for d in [prompts_dir, responses_dir, tools_dir, executions_dir, errors_dir, warnings_dir, artifacts_dir, meta_dir]:
-        d.mkdir(exist_ok=True)
-
-    # Unified combined log
-    SINGLE_FILE_LOG = True
-    combined_log_path = session_dir / "session_combined.jsonl"
-    try:
-        fh = logging.FileHandler(session_dir / "session.log", encoding='utf-8')
-        fh.setLevel(logging.INFO)
-        fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-        logger.addHandler(fh)
-    except Exception:
-        pass
+    console_level = logging.DEBUG if args.verbose else logging.INFO
+    logger = get_logger(session_id, args.logdir, console_level)
+    
+    # 记录会话开始
+    session_metadata = {
+        "session_id": session_id,
+        "args": {
+            "requirement": args.requirement,
+            "target_app": args.target_app,
+            "device_id": args.device_id,
+            "max_rounds": args.max_rounds,
+            "execute": args.execute
+        },
+        "env": {
+            "python": sys.version,
+            "platform": os.name
+        },
+        "paths": {
+            "session_dir": str(logger.session_dir)
+        },
+        "timestamps": {
+            "started_at": datetime.now().isoformat()
+        }
+    }
+    logger.log_session_start(session_metadata)
+    
+    # 为了向后兼容，保留一些旧的变量
+    session_dir = logger.session_dir
+    combined_log_path = logger.unified_json_path
 
     def dump_text(name: str, content: str) -> None:
+        """保存文本内容到统一日志系统"""
         try:
-            # Always append to combined log
-            rec = {
-                "name": name,
-                "timestamp": datetime.now().isoformat(),
-                "content": content if isinstance(content, str) else str(content)
-            }
-            with open(combined_log_path, 'a', encoding='utf-8') as cf:
-                cf.write(json.dumps(rec, ensure_ascii=False) + "\n")
-            # Optionally also write discrete files (disabled by default)
-            if not SINGLE_FILE_LOG:
-                if name.startswith("prompt_"):
-                    p = prompts_dir / name
-                elif name.startswith("response_"):
-                    p = responses_dir / name
-                elif name.startswith("tool_"):
-                    p = tools_dir / name
-                elif name.startswith("parsed_") or name.startswith("artifact_"):
-                    p = artifacts_dir / name
-                elif name.startswith("error_"):
-                    p = errors_dir / name
-                elif name.startswith("warning_"):
-                    p = warnings_dir / name
-                elif name.startswith("session") or name.endswith(".log"):
-                    p = session_dir / name
-                else:
-                    p = meta_dir / name
-                with open(p, 'w', encoding='utf-8') as f:
-                    f.write(content if isinstance(content, str) else str(content))
-                logger.info(f"Wrote log artifact: {p}")
+            content_str = content if isinstance(content, str) else str(content)
+            
+            # 提取执行信息（如果是工具执行结果）
+            execution_time = None
+            if name.startswith("tool_"):
+                try:
+                    # 解析JSON内容以提取执行时间
+                    import json
+                    tool_data = json.loads(content_str)
+                    execution_time = tool_data.get("execution_time")
+                except:
+                    pass
+            
+            # 使用新的统一日志系统
+            if name.startswith("prompt_"):
+                logger.info(f"Generated prompt: {name}")
+                logger._log_structured('prompt', f"Prompt generated: {name}", 
+                                     name=name, content=content_str)
+            elif name.startswith("response_"):
+                logger.info(f"Received response: {name}")
+                logger._log_structured('response', f"Response received: {name}", 
+                                     name=name, content=content_str)
+            elif name.startswith("tool_"):
+                tool_name = name.replace("tool_", "").replace(".json", "")
+                logger.info(f"Tool executed: {name}")
+                
+                # 使用专门的工具执行日志方法
+                try:
+                    import json
+                    tool_data = json.loads(content_str)
+                    success = tool_data.get("success", False)
+                    result = tool_data.get("result", {})
+                    error = tool_data.get("error")
+                    exec_time = tool_data.get("execution_time", 0.0)
+                    
+                    logger.log_tool_execution(
+                        tool_name=tool_name,
+                        success=success,
+                        result=result,
+                        execution_time=exec_time,
+                        error=error
+                    )
+                except Exception as parse_error:
+                    # 如果解析失败，使用基础记录方法
+                    logger._log_structured('tool_execution', f"Tool execution: {name}", 
+                                         name=name, content=content_str)
+                    
+            elif name.startswith("error_"):
+                logger.error(f"Error occurred: {name}")
+                logger._log_structured('error', f"Error: {name}", 
+                                     name=name, content=content_str)
+            else:
+                logger.debug(f"Artifact saved: {name}")
+                logger._log_structured('artifact', f"Artifact: {name}", 
+                                     name=name, content=content_str)
+                
         except Exception as e:
-            logger.warning(f"Failed writing {name}: {e}")
+            logger.error(f"Failed saving {name}: {e}")
 
     # Write session meta
     try:
@@ -204,19 +240,23 @@ async def main():
     except Exception:
         pass
 
-    # execution_log.jsonl (append-only)
-    exec_log_path = session_dir / "execution_log.jsonl"
+    # 不再使用execution_log.jsonl，统一使用session_unified.json
+    # exec_log_path = session_dir / "execution_log.jsonl"
     def append_exec_log(record: dict) -> None:
+        """不再使用execution_log.jsonl，改用统一日志系统"""
         try:
-            record = dict(record)
-            record.setdefault("timestamp", datetime.now().isoformat())
-            with open(exec_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            # also add to combined log
-            with open(combined_log_path, 'a', encoding='utf-8') as cf:
-                cf.write(json.dumps({"name": "execution_log", **record}, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+            # 使用统一日志系统记录执行信息
+            phase = record.get("phase", "unknown")
+            round_num = record.get("round", 0)
+            status = record.get("status", "unknown")
+            next_action = record.get("next_action", {})
+            
+            logger.info(f"Execution phase: {phase}, round: {round_num}, status: {status}")
+            logger._log_structured('execution_step', 
+                                 f"Phase {phase} round {round_num}: {status}",
+                                 **record)
+        except Exception as e:
+            logger.warning(f"Failed logging execution step: {e}")
 
     # Resolve session-level auto_close_limit
     def _load_auto_close_limit_from_config() -> int:
@@ -695,7 +735,7 @@ async def main():
                 f"测试目标: {requirement}\n\n"
                 + example_note +
                 "注意：计划阶段禁止编造任何 resource_id/text/content_desc 值；具体selector 由后续步骤从当前XML的可选列表中选择。\n\n"
-                "可用动作类别（后续步骤会用到）：click, input, press, wait_for_elements, wait, restart, launch, assert, swipe。\n"
+                "可用动作类别（后续步骤会用到）：click, input, press, wait_for_elements, wait, restart, launch, assert, swipe, click_with_bias, wait_for_disappearance。\n"
                 "可用工具：get_current_screen_info, perform_and_verify, perform_ui_action, close_ads, start_app。\n\n"
                 "输出JSON格式（必须包含 keyword 和 max_rounds）：{\n"
                 "  \"plan_id\": \"plan_YYYYmmdd_HHMMSS\",\n"
@@ -739,6 +779,7 @@ async def main():
             examples = []
 
         # Build plan via LLM
+        logger.set_phase("plan")
         plan_prompt = _build_plan_prompt(requirement, selector_pool_str, examples) + "\n\n务必：只输出一个 JSON 对象，不要返回多段 JSON 或任何额外文本。"
         dump_text("prompt_plan.txt", plan_prompt)
         plan_msgs = [
@@ -769,6 +810,7 @@ async def main():
         generated_steps = []
         round_pools = []
         for round_idx in range(1, total_rounds + 1):
+            logger.set_phase("execution", current_round=round_idx, max_rounds=total_rounds)
             screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
             dump_text(f"tool_get_current_screen_info_round_{round_idx}.json", json.dumps(screen.to_dict(), ensure_ascii=False, indent=2))
             # Few-shot examples for rounds >=1
@@ -851,16 +893,17 @@ async def main():
                 "返回两种之一（务必只返回一个 JSON 对象）：\n"
                 "1) tool_request 示例: {{\"tool_request\": {{\"name\": \"analyze_current_screen\", \"params\": {{}}, \"reason\": \"需要最新/一致的屏幕元素\"}}}}\n"
                 "2) 单步决策示例: {{\n"
-                "  \"analysis\": {{\"current_page_type\": \"...\", \"available_actions\": [\"click\",\"input\",\"press\",\"wait_for_elements\",\"wait\",\"restart\",\"launch\",\"assert\",\"swipe\"], \"reason\": \"...\"}},\n"
-.\"}},\n"
+                "  \"analysis\": {{\"current_page_type\": \"...\", \"available_actions\": [\"click\",\"input\",\"press\",\"wait_for_elements\",\"wait\",\"restart\",\"launch\",\"assert\",\"swipe\",\"click_with_bias\",\"wait_for_disappearance\"], \"reason\": \"...\"}},\n"
                 "  \"next_action\": {{\n"
-                "    \"action\": \"click|input|wait_for_elements|wait|restart|launch|assert|swipe\",\n"
+                "    \"action\": \"click|input|wait_for_elements|wait|restart|launch|assert|swipe|click_with_bias|wait_for_disappearance|press\",\n"
+                "    \"reason\": \"选用XML resourceId xxx因为这是目前XML中唯一存在的相关元素，并且根据用例示例这是正确的操作步骤\",\n"
                 "    \"target\": {{\n"
-                "      \"priority_selectors\": [\n"
-                "        {{\"resource_id\": \"...\"}}, {{\"text\": \"...\"}}\n"
-                "      ]\n"
+                "      \"selectors\": [\n"
+                "        {{\"strategy\": \"resource_id\", \"value\": \"...\"}}, {{\"strategy\": \"text\", \"value\": \"...\"}}\n"
+                "      ],\n"
+                "      \"bias\": {{\"dy_px\": -100}} # 可选，用于click_with_bias\n"
                 "    }},\n"
-                "    \"data\": \"可选\", \"wait_after\": 0.8, \"expected_result\": \"...\"\n"
+                "    \"data\": {{\"text_var\": \"variable_name\"}} # 或直接文本, \"wait_after\": 0.8, \"expected_result\": \"...\"\n"
                 "  }},\n"
                 "  \"evidence\": {{\"screen_hash\": \"...\", \"source_element_uuid\": \"...\", \"source_element_snapshot\": {{}}}}\n"
                 "}}\n"
@@ -873,7 +916,7 @@ async def main():
             )
             dump_text(f"prompt_step_{round_idx}.txt", step_prompt)
             msgs = [
-{"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."}
+                {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."},
                 {"role": "user", "content": step_prompt}
             ]
             resp = llm.chat_completion(msgs, temperature=0.2, max_tokens=800)
@@ -899,7 +942,7 @@ async def main():
                         refresh_prompt = step_prompt + "\n\n已刷新当前屏幕（仅可从下列可选集合选择）：\n" + selector_pool_round_str
                         dump_text(f"prompt_step_{round_idx}_refresh.txt", refresh_prompt)
                         msgs_r = [
-{"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."}
+                            {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."},
                             {"role": "user", "content": refresh_prompt}
                         ]
                         resp_r = llm.chat_completion(msgs_r, temperature=0.2, max_tokens=800)
@@ -1141,6 +1184,7 @@ async def main():
                 # continue to next round rather than breaking
                 continue
 
+        logger.set_phase("completion")
         final_screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
         dump_text("tool_get_current_screen_info_after.json", json.dumps(final_screen.to_dict(), ensure_ascii=False, indent=2))
         final_state = {
@@ -1159,14 +1203,25 @@ async def main():
         except Exception:
             pass
         # Build a minimal completion prompt inline (avoid template import)
-        completion_prompt = (
-            "# 仅输出严格JSON，整合所有步骤。严禁Markdown。只输出一个 JSON 对象。\n\n"
-            "测试目标: {req}\n\n"
-            "规划输出: {plan}\n\n"
-            "最终状态: {final}\n\n"
-            "要求：\n- 变量 variables.keyword 使用规划中的 keyword（若为空则可省略 variables）。\n- 每步 selector 只能来自各轮提供的 pool（已在前置轮次执行）。\n- 请输出完整的 Only-Test JSON 测试用例（每步使用允许原子动作，包含 priority_selectors 或 bounds_px）。\n\n"
-            "示例(骨架)：{{\n  \"testcase_id\": \"...\", \"target_app\": \"{app}\", \"variables\": {{}}, \n  \"execution_path\": [\n    {{\"step\": 1, \"action\": \"click\", \"target\": {{\"priority_selectors\": [{{\"resource_id\": \"...\"}}]}}}}\n  ]\n}}"
-        ).format(req=requirement, plan=json.dumps(plan_json, ensure_ascii=False), final=json.dumps(final_state, ensure_ascii=False), app=args.target_app)
+            completion_prompt = (
+                "# 仅输出严格JSON，整合所有步骤。严禁Markdown。只输出一个 JSON 对象。\n\n"
+                "测试目标: {req}\n\n"
+                "规划输出: {plan}\n\n"
+                "最终状态: {final}\n\n"
+                "要求：\n- 变量 variables.keyword 使用规划中的 keyword（若为空则可省略 variables）。\n- 每步 selector 只能来自各轮提供的 pool（已在前置轮次执行）。\n- 使用新的JSON格式：hooks, test_steps, selectors数组等。\n- 支持新action类型：click_with_bias, wait_for_disappearance, press等。\n- 每个test_step必须包含reason字段，说明选择该元素/操作的原因，包括XML唯一性和用例关联性。\n\n"
+                "示例(骨架)：{{\n"
+                "  \"testcase_id\": \"TC_...\", \"case_type\": \"mobile\", \"target_app\": \"{app}\",\n"
+                "  \"device_info\": {{\"adb_serial\": \"${{DEVICE_SERIAL}}\"}},\n"
+                "  \"variables\": {{\"keyword\": \"...\"}},\n"
+                "  \"hooks\": {{\"before_all\": [{{\"action\": \"start_app\", \"comment\": \"启动应用\"}}], \"after_all\": []}},\n"
+                "  \"test_steps\": [\n"
+                "    {{\"step\": 1, \"page\": \"home\", \"action\": \"click\", \"comment\": \"...\", \"reason\": \"选用XML resourceId xxx因为这是目前XML中唯一存在的相关元素，符合用例目标\", \"target\": {{\"selectors\": [{{\"strategy\": \"resource_id\", \"value\": \"...\"}}]}}}},\n"
+                "    {{\"step\": 2, \"action\": \"click_with_bias\", \"reason\": \"选择此元素因为需要偏移点击避开遮挡\", \"target\": {{\"selectors\": [...], \"bias\": {{\"dy_px\": -100}}}}}}\n"
+                "  ],\n"
+                "  \"assertions\": [{{\"type\": \"check_playback_state\", \"expected\": true}}],\n"
+                "  \"execution_path\": {{\"py\": \"../python/${{testcase_id}}_py.py\"}}\n"
+                "}}"
+            ).format(req=requirement, plan=json.dumps(plan_json, ensure_ascii=False), final=json.dumps(final_state, ensure_ascii=False), app=args.target_app)
         dump_text("prompt_completion.txt", completion_prompt)
         comp_msgs = [
             {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences."},
@@ -1588,15 +1643,43 @@ async def main():
         py_path = conv.convert_json_to_python(str(json_path))
         logger.info(f"Converted to pytest-style Python: {py_path}")
 
+    # 记录会话结束
+    session_summary = {
+        "session_id": session_id,
+        "status": "completed",
+        "artifacts": {
+            "json_path": str(json_path),
+            "python_path": str(py_path)
+        },
+        "timestamps": {
+            "completed_at": datetime.now().isoformat()
+        }
+    }
+    logger.log_session_end(session_summary)
+    
     print("\n=== Demo Completed ===")
     print(f"Testcase JSON: {json_path}")
     print(f"Python file:  {py_path}")
+    print(f"Session logs: {logger.session_dir}")
     print("Next: run the generated Python with Airtest/Pytest on a device.")
+    
+    # 清理日志资源
+    close_logger()
 
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger = get_logger()
+        logger.error("Session interrupted by user")
+        close_logger()
+    except Exception as e:
+        logger = get_logger()
+        logger.error(f"Session failed with error: {e}")
+        close_logger()
+        raise
 
 
 

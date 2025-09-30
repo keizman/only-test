@@ -28,12 +28,6 @@ device_types:
       - "remote_control_navigation"
       - "voice_commands"
     
-  emulator:
-    name: "Android 模拟器"
-    description: "Android 模拟器设备"
-    touch_type: "mouse"
-    interaction_delay: 0.3
-    screenshot_format: "png"
 
 # 分辨率适配配置
 resolution_adaptation:
@@ -55,12 +49,6 @@ resolution_adaptation:
       - "3840x2160"    # 4K UHD
       - "2560x1440"    # QHD
   
-  # 缩放算法
-  scaling:
-    algorithm: "linear"  # linear, nearest, cubic
-    maintain_aspect_ratio: true
-    min_scale_factor: 0.5
-    max_scale_factor: 2.0
 
 # ADB 连接配置
 adb_connection:
@@ -304,3 +292,39 @@ debugging:
     - "top"
     - "meminfo"
     - "cpuinfo"
+
+# 设备适配配置
+device_adaptation:
+  # 默认设备适配参数
+  default_adaptation:
+    # 状态栏偏移配置 - 设备适配器用于计算触摸坐标偏移
+    status_bar_offset:
+      high_resolution: 60    # >= 2400px (高分辨率设备状态栏高度)
+      standard_resolution: 50  # >= 1920px (标准分辨率状态栏高度)
+      low_resolution: 40     # < 1920px (低分辨率设备状态栏高度)
+    
+    # 性能相关延迟配置 - 设备适配器根据硬件性能调整操作延迟和超时
+    performance_delays:
+      high_performance:
+        cpu_cores: 8          # 高性能设备CPU核心数阈值
+        memory_gb: 8          # 高性能设备内存阈值(GB)
+        action_delay: 0.5     # 操作间隔延迟(秒)
+        wait_timeout_base: 15 # 基础等待超时(秒)
+      
+      medium_performance:
+        cpu_cores: 4          # 中等性能设备CPU核心数阈值
+        memory_gb: 4          # 中等性能设备内存阈值(GB)
+        action_delay: 1.0     # 操作间隔延迟(秒)
+        wait_timeout_base: 20 # 基础等待超时(秒)
+        
+      low_performance:
+        cpu_cores: 2          # 低性能设备CPU核心数阈值
+        memory_gb: 2          # 低性能设备内存阈值(GB)
+        action_delay: 1.5     # 操作间隔延迟(秒)
+        wait_timeout_base: 30 # 基础等待超时(秒)
+    
+    # 截图质量配置 - 用于设备适配器根据屏幕分辨率调整截图质量
+    screenshot_quality:
+      high_resolution: 80    # >= 1440px (2K+屏幕) - 适中质量减少文件大小
+      standard_resolution: 90  # >= 1080px (标准1080p) - 较高质量
+      low_resolution: 95     # < 1080px (低分辨率) - 最高质量补偿

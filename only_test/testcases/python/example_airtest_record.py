@@ -42,7 +42,7 @@ start_app("com.mobile.brasiltvmobile")
 # wait app to start, that may take a few time based on phone performance
 sleep(5) # APP 有启动动画, 需要等待
 
-## [page] home, [action] close_ads, [comment] 进入 APK 后使用统一策略自动关闭广告/弹窗（连续 3 次未检测到广告或20秒内结束）
+## [page] home, [action] close_ads, [comment] 进入 APK 后使用统一策略自动关闭广告/弹窗（连续 3 次未检测到广告或20秒内结束）[reason] 选用 XML resourceId mVodImageSearch 因为这是目前 XML 中唯一存在的 search 元素, 并且根据用例示例, 这是一个正确的查找一个节目的步骤
 asyncio.run(close_ads(target_app="com.mobile.brasiltvmobile", mode="continuous", consecutive_no_ad=3, max_duration=20.0))
 
 ## [page] home, [action] click, [comment] 直接找到 searchbtn, 找到指定的节目名称: 点击搜索按钮进入搜索页面

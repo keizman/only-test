@@ -108,7 +108,7 @@ class ConfigManager:
             return
             
         self.project_root = Path(__file__).parent.parent
-        self.config_dir = self.project_root / "config"
+        self.config_dir = Path(__file__).parent  # 现在就在config目录中
         self.testcases_dir = self.project_root / "testcases"
         
         # 主配置文件

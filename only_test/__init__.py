@@ -25,7 +25,7 @@ try:
     # submodules (e.g., device_inspector) before `-m only_test.lib.mcp_interface.device_inspector` runs.
     # They are exposed lazily via __getattr__ below.
     from .lib.test_generator import TestGenerator
-    from .lib.json_to_python import PythonCodeGenerator
+    from .lib.code_generator.python_code_generator import PythonCodeGenerator
 except ImportError as e:
     # 某些模块可能需要额外的依赖，允许部分导入失败
     import warnings

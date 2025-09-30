@@ -13,7 +13,7 @@ Unified App Launcher
 import subprocess
 from typing import Optional, Dict, Any
 
-from ..config.yaml_monitor import YamlMonitor
+from ...config.yaml_monitor import YamlMonitor
 
 
 def _adb_prefix(device_id: Optional[str]) -> list:

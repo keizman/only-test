@@ -773,19 +773,87 @@ LLM 自动录制依旧需要手动矫正, 并且需要额外维护项目
 
 之后确认 content_desc 是否还有作用,我记得他是 omniparser 的产物, 但现在没有这个模式了, 确认其是否可去除
 LLM 操作时只需要提供 resourceId/text 等专属于元素定位的内容即可点击等操作, 其没必要直到坐标等内容, 你这是多此一举, 
+
 另外 json 已经有了一些结构上的变化, C:\Download\git\uni\only_test\testcases\generated\example_airtest_record.from_py.json. 我觉得 prompt 中的一些内容可适当更新以下, 你认为呢
-最后总结一下当前所有prompt enginerr 的 prompt 作用发我, 我check 一下是否符合预期, 类似这种大纲, 简单而鲜明 1.全局规划
+最后总结一下当前所有prompt enginerr 的 prompt 作用发我, 我check 一下是否符合预期, 类似这种大纲, 简单而鲜明, 不要输出表情符号, 给我的时有时序性的大纲, 确认目前 input 的prompt 主要流程, 你目前输出的都太乱, 请先理解我期望的结果再输出
+1.全局规划
 2.prompt 约束可输出值, invalid_action 等解释
 3.与当前操作的 APK 相同的 package 的 结构化可用 resourceId, text, 内容
 4.往期用例示例
 5....
 
+-------------
+
+尝试执行, 用例生成命令, 确认迁移是否引起错误, 注意文件目录有变化, conda activate orun -- 
+python -u "C:\Download\git\uni\only_test\workflows\llm_workflow_demo.py"  --requirement "播放 VOD 节目 'Peppa Pig: The Golden Boots'：进入首页→关闭广告→打开搜索→输入节目名→点击节目→点击播放→等待广告消失→点击全屏→断言播放状态正常"   --target-app com.mobile.brasiltvmobile   --device-id "192.168.100.112:5555"    --max-rounds 10    --auto-close-limit 2   --outdir "C:\Download\git\uni\only_test\testcases\generated"   --logdir "C:\Download\git\uni\logs\mcp_demo"
+
+yaml_monitor 和 config_manager.py 移动到 config 目录, 记得修改其它引用其的地址, 
+之后确认lib/*py 确人他们是否有可放置的目录, 我们
+
+
+确认当前执行命令的 日志输出, 你认为哪里不够完善, 谈论一下. 之后规划一下 logs 目录的日志放置问题 , 我认为目前日志结构虽然多但是很不易读
+
+
+你的方案也有些不符合期望, 我希望
+问题是分开文件记录无法凸显时许性,  对于分析不方便 ,
+因此还是要保留 XML 等信息. 但是结构化会让日志更易读, 目前命令执行的结果并未保留日志, 这是一份 .log 日志
+之后调整 session_combined.jsonl 日志, 以一个 [] 扩起内容, 让其可被json 解析,  期内包含XML 信息, 
+补充剩余内容, 先只探讨. 你有什么补充
+
+---
+
+添加约束: reason,为选择这一步的原因, 比如: 选用 XML resourceId mVodImageSearch 因为这是目前 XML 中唯一存在的 search 元素, 并且根据用例示例, 这是一个正确的查找一个节目的步骤. . 我们先商谈一下哪里需要更改
+
+-----
 
 
 
+日志创建有问题, 
+1.为什么还有很多无文件的目录, 2.内容很少, 重述我们之前的需求, 以及你要如何更改, 
 
 
+只执行我贴给你的修改点, 记住要级联修改, 避免使用emoji
+  3. Schema vs Metadata Confusion (Already Noted)
 
+  The document identifies this well:
+  - /lib/schema/ - Should focus on validation rules only
+  - /lib/metadata_engine/ - Mix of metadata and path utilities
+  - path_builder.py should move to /lib/utils/ as it's not metadata-specific
+
+  4. Configuration Implementation Gap
+
+  - framework_config.yaml defined but not actively used in code
+  - Should implement timeout, retry policies, and logging configs from this file
+------
+
+prompts\generate_cases.py  内容有些过时, 请充当一个 prompt perfector 优化当前 prompt, 举例 only_test\testcases\generated\example_airtest_record.from_py.json 已经更新了action": "stop_app 等 action
+为更具体的, 而 prompt 中好像还使用launch, restart 等字段, 我不确定这是 MCP tools 的action 吗, 请你先了解 他们之间的关系, 之后告诉我计划如何修改, 并提出你认为目前的 prompt 存在的问题, 注意要从宏观观察, 所有
+ prompt.
+
+-------------
+
+1.check 下方说的 start_app确认 MCP 存在这个 功能吗, 并且json 中定义的start_app 就是用于 在这个 test step 启动 apk 的吧, 请你重新阅读 json 文件确认你理解了内容和设计原因   2.增加 sleep 使用方式, 说明 before 和 after 使用区别, 以及使用场景
+
+"##  关键区别（避免混淆）",
+"",
+"1. **start_app是MCP工具，不是test_step动作**",
+"   - 正确: 在hooks.before_all中使用 {\"action\": \"start_app\"}",
+"   - 错误: 在test_steps中使用 {\"action\": \"start_app\"}",
+"",
+"2. **test_steps只使用Layer 2的9种动作**",
+"   - click, input, swipe, press",
+"   - click_with_bias, wait_for_elements, wait_for_disappearance, wait, assert",
+
+
+*------
+
+查看之前执行生成用例产出的 日志文件, 确认目前还缺少哪些字段让日志更易读, 你有什么建议, 注意内容有些多, 你可一部分一部分查看,
+1. 添加阶段前缀 [PLAN] [ROUND 1/8]
+3. 工具执行结果摘要（元素数/页面/媒体状态）
+4. 错误信息内联显示
+6. 会话总结统计
+7. 元素选择可追溯性
+我只同意这些点, 请你先对每点进行一个大概的 plan 我看是否符合期望
 
 --------------
 
@@ -841,3 +909,18 @@ poco(resourceId="com.mobile.brasiltvmobile:id/searchEt").click()
 ## [page] search, [action] input, [comment] 输入搜索关键词
 sleep(0.5)
 text("西语手机端720资源02")
+
+
+
+
+
+
+
+
+
+对项目的掌控度时关键
+对项目掌控度不够, 无法做出正确决策, 这是原地徘徊的关键
+
+
+context eng 之路
+示例很重要, 只是讲解它根本无从理解, 

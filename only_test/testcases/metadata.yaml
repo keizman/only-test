@@ -2,6 +2,7 @@ mapping:
   icon:
     brightness:
       description: 亮度bar
-      - brightness
+      keywords:
+        - brightness
       
-      # 暂未想好规划, 暂不处理此文件, 
+      # 暂未想好规划, 暂不处理此文件 

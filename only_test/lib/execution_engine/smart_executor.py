@@ -16,6 +16,7 @@ from pathlib import Path
 # 导入自定义模块（实际使用时需要确保导入路径正确）
 from ..metadata_engine.conditional_logic import ConditionalLogicEngine
 from ..screen_capture import ScreenCapture
+from ...config.config_manager import get_config
 
 # 可选导入 - 如果模块不存在则使用None
 try:
@@ -70,18 +71,40 @@ class SmartTestExecutor:
     def __init__(self, device_id: Optional[str] = None):
         """
         初始化智能执行器
-        
+
         Args:
             device_id: 设备ID
         """
         self.device_id = device_id
         self.logger = self._setup_logger()
-        
+
+        # 加载框架配置
+        self.timeouts = {
+            'default_step': get_config('execution.timeouts.default_step', 30),
+            'element_wait': get_config('execution.timeouts.element_wait', 10),
+            'page_load': get_config('execution.timeouts.page_load', 15),
+            'assertion': get_config('execution.timeouts.assertion', 10),
+            'recovery': get_config('execution.timeouts.recovery', 5)
+        }
+
+        self.retry_config = {
+            'enabled': get_config('execution.retry.enabled', True),
+            'max_retries': get_config('execution.retry.max_retries', 3),
+            'retry_delay': get_config('execution.retry.retry_delay', 2),
+            'exponential_backoff': get_config('execution.retry.exponential_backoff', True)
+        }
+
+        self.recovery_config = {
+            'enabled': get_config('execution.recovery.enabled', True),
+            'auto_screenshot': get_config('execution.recovery.auto_screenshot', True),
+            'strategies': get_config('execution.recovery.recovery_strategies', [])
+        }
+
         # 初始化核心组件
         self.screen_capture = ScreenCapture(device_id)
         self.element_recognizer = ElementRecognizer() if ElementRecognizer else None
         self.conditional_engine = ConditionalLogicEngine()
-        
+
         # 执行上下文
         self.current_page = None
         self.current_app = None

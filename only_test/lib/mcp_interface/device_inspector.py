@@ -25,10 +25,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 # XML-only mode: remove visual_recognition dependency
 # Provide local XML extraction helpers and playback detection
-from lib.device_adapter import DeviceAdapter
+from only_test.lib.device_adapter import DeviceAdapter
 from .mcp_server import mcp_tool
-from lib.yaml_monitor import YamlMonitor
-from lib.app_launcher import start_app as unified_start_app
+from only_test.config.yaml_monitor import YamlMonitor
+from only_test.lib.app_management.app_launcher import start_app as unified_start_app
 
 # === 广告检测/关闭关键词（统一常量） ===
 # 全部使用小写做比较，匹配时先对目标字符串 lower()
@@ -39,7 +39,7 @@ PRIORITY_CLOSE_IDS = {
 EXCLUDED_CLOSE_IDS = {
     # 常见需要跳过的关闭按钮（例如优惠券）
     # 注意：这些ID应该使用小写，因为代码中会转换为小写进行匹配
-    'imcouponclose', 'mivclosenotice', "mtvnotice"
+    'imcouponclose', 'mivclosenotice', "mtvnotice", "skipbtn", "mtextversion"
 }
 # GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用“关闭/跳过”语义
 # - resource-id（例如: com.xxx:id/ivClose；会在小写化后匹配 'close' 等子串）
@@ -754,7 +754,11 @@ class DeviceInspector:
                     logger.info(f"预关闭广告失败（忽略）：{_e}")
 
             # 获取元素信息（XML-only）
-            elements = await self._get_elements_xml(clickable_only=clickable_only)
+            # 获取XML和元素（使用XML提取器，根据clickable_only过滤）
+            xml_dump = await self._dump_current_xml()
+            elements = self._xml_to_elements(xml_dump)
+            if clickable_only:
+                elements = [e for e in elements if e.get('clickable')]
             screen_info["total_elements"] = len(elements)
             
             if clickable_only:
@@ -812,6 +816,8 @@ class DeviceInspector:
             # 附加广告信息
             if ads_info:
                 screen_info["ads_info"] = ads_info
+            
+            # 注意：XML信息不再包含在result中，会在日志系统中分离存储
             return screen_info
             
         except Exception as e:
@@ -1319,7 +1325,6 @@ class DeviceInspector:
         logger.info(f"开始自动关闭循环，最大尝试次数: {max_attempts}")
 
         for attempt in range(1, max_attempts + 1):
-            logger.info(f"第 {attempt} 次尝试关闭广告")
 
             # 每次尝试前都重新获取最新UI状态
             if attempt > 1:
@@ -1341,18 +1346,16 @@ class DeviceInspector:
                 for e in close_es
             )
 
-            logger.info(f"第 {attempt} 次评估: 置信度={conf:.2f}, 优先关闭={has_priority_close}, 关闭元素={len(close_es)}个")
-
             if (has_priority_close or conf >= 0.50) and close_es:
-                logger.info(f"第 {attempt} 次: 满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f}), 开始尝试点击")
+                logger.info(f"第 {attempt} 次尝试: 满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f}), 开始尝试点击")
                 clicked = await try_close(close_es)
                 info['auto_close_attempts'] += 1
 
                 if not clicked:
-                    logger.warning(f"第 {attempt} 次: 关闭尝试失败，终止循环")
+                    logger.warning(f"第 {attempt} 次尝试: 关闭尝试失败，终止循环")
                     break
 
-                logger.info(f"第 {attempt} 次: 点击成功，等待界面更新")
+                logger.info(f"第 {attempt} 次尝试: 点击成功，等待界面更新")
                 # 点击后等待界面更新
                 try:
                     import asyncio as _aio
@@ -1375,7 +1378,7 @@ class DeviceInspector:
                 else:
                     logger.info(f"置信度仍为 {conf2:.2f} >= 0.70，继续下一轮")
             else:
-                logger.info(f"第 {attempt} 次: 不满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f} < 0.50), 跳过")
+                
                 break
 
         # 若多次后仍>=0.70，发出警告

@@ -235,18 +235,6 @@ performance:
     max_retries: 3
     connection_pool: 10
 
-# 安全配置
-security:
-  # API密钥管理
-  api_keys:
-    encryption: true
-    storage: "environment"  # environment, file, keyring
-  
-  # 敏感数据处理
-  sensitive_data:
-    mask_in_logs: true
-    mask_pattern: "\\b\\w*(?:password|token|key|secret)\\w*\\b"
-    replacement: "***MASKED***"
 
 # 调试配置
 debug:
@@ -259,30 +247,3 @@ debug:
     detailed_timing: false
     step_by_step: false
     
-  # 开发者选项
-  developer:
-    mock_device: false      # 使用模拟设备
-    skip_actual_actions: false  # 跳过实际操作
-    dry_run: false         # 干运行模式
-
-# 扩展配置
-extensions:
-  # 插件系统
-  plugins:
-    enabled: true
-    plugin_dir: "../plugins"
-    auto_load: true
-  
-  # 自定义识别器
-  custom_recognizers:
-    enabled: true
-    recognizer_dir: "../custom_recognizers"
-  
-  # 钩子系统
-  hooks:
-    enabled: true
-    hook_points:
-      - "before_test_execution"
-      - "after_test_execution"
-      - "on_step_failure"
-      - "on_recovery_attempt"

@@ -14,7 +14,7 @@ Only-Test MCP Complete Workflow Demo
 
 运行方式:
 
-python "C:\Download\git\uni\only_test\examples\mcp_llm_workflow_demo.py" --requirement "测试 vod 点播播放正常((h264)): 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'英语和西语音轨'点击节目，3.播放节目，断言: 验证设备是否处于播放状态" --target-app com.mobile.brasiltvmobile --max-rounds 1 --auto-close-limit 2 --logdir logs/mcp_demo --outdir only_test/testcases/generated
+python "C:/Download/git/uni/only_test/workflows/llm_workflow_demo.py" --requirement "测试 vod 点播播放正常((h264)): 1.进入APK后就是首页，执行关闭广告函数，2.找到searchbtn点击，直到可输入状态后输入节目名称'英语和西语音轨'点击节目，3.播放节目，断言: 验证设备是否处于播放状态" --target-app com.mobile.brasiltvmobile --max-rounds 1 --auto-close-limit 2 --logdir logs/mcp_demo --outdir only_test/testcases/generated
 """
 
 import asyncio
