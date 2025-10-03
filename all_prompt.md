@@ -855,6 +855,21 @@ prompts\generate_cases.py  内容有些过时, 请充当一个 prompt perfector 
 7. 元素选择可追溯性
 我只同意这些点, 请你先对每点进行一个大概的 plan 我看是否符合期望
 
+
+
+
+
+
+
+------------
+
+我希望你充当 prompt perfectpr for onlay_test 这是一个未完成品, 目前存在问题当让 外部 LLM 生成用例时无法正确可靠的操作屏幕, 录制出与事实一样的用例. and tmp/parlant 下方是一个其它项目的完善的 prompt  使用方式示例. 我希望你能从示例项目中学到经验, 谈一谈我们目前 only_test prompt 模块的的可优化点, 先输出那几点可优化后再具体优化方案, 请你先了解两项目的 prompt 存放地后再开始思考
+
+-----
+添加 setuo hooks 内容, 
+
+
+
 --------------
 
 1.first pls check C:\Download\git\uni\only_test\templates to know what did this dir each file do
