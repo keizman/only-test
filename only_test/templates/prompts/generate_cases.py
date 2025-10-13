@@ -449,6 +449,20 @@ class TestCaseGenerationPrompts:
             "",
             "现在开始第一步：请调用 analyze_current_screen 获取当前屏幕状态。",
         ])
+        # 强化输出约束与 shots 提示（新增，不改变原有行为）
+        template += """
+
+注意：输出必须为裸 JSON，不得使用 Markdown 代码块（不得使用 ```）。
+
+示例/反例（shots）：
+- 正例：
+  {"tool_request": {"name": "analyze_current_screen", "params": {}, "reason": "需要最新屏幕元素"}}
+  或
+  {"analysis": {"current_page_type": "...", "reason": "..."}, "next_action": {"action": "click", "target": {"priority_selectors": [{"resource_id": "..."}]}, "wait_after": 0.8}, "evidence": {"source_element_uuid": "...", "source_element_snapshot": {"uuid": "..."}}}
+- 反例：
+  ```json { ... } ```（使用了 Markdown 代码块）
+  或一次返回多个 next_action，或包含 close_ads/start_app/stop_app 动作。
+"""
         return template.format(
             description=description,
             app_package=app_package,
@@ -642,6 +656,7 @@ class TestCaseGenerationPrompts:
             "{examples_text}",
             "",
             "请将所有步骤整合成完整的 Only-Test JSON 测试用例(严格JSON, 动作允许 swipe 并提供 target.swipe.start_px/end_px)。每个步骤遵循以下严格结构：",
+            "（输出必须为裸 JSON，不得使用 Markdown 代码块或 ``` 包裹）",
             "",
             "```json",
             "{{",

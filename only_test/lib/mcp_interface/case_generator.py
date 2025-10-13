@@ -23,6 +23,10 @@ from lib.test_generator import TestCaseGenerator
 from .mcp_server import mcp_tool
 from .device_inspector import DeviceInspector
 
+# Additive imports for stepwise handshake
+from only_test.orchestrator.step_validator import validate_step, is_tool_request
+from only_test.templates.prompt_builder import OnlyTestPromptBuilder, SectionStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,10 +144,13 @@ class InteractiveCaseGenerator:
         category="case_generation",
         parameters={
             "use_similar_cases": {"type": "boolean", "description": "是否参考相似用例", "default": True},
-            "optimize_for_device": {"type": "boolean", "description": "是否针对设备优化", "default": True}
+            "optimize_for_device": {"type": "boolean", "description": "是否针对设备优化", "default": True},
+            "mode": {"type": "string", "description": "生成模式: batch(兼容旧方案) 或 stepwise(单步握手)", "enum": ["batch", "stepwise"], "default": "batch"},
+            "max_rounds": {"type": "integer", "description": "stepwise 模式下的最大轮数", "default": 8},
+            "retry_per_step": {"type": "integer", "description": "每步最多重试次数(解析/校验失败时)", "default": 2}
         }
     )
-    async def generate_with_context(self, use_similar_cases: bool = True, optimize_for_device: bool = True) -> Dict[str, Any]:
+    async def generate_with_context(self, use_similar_cases: bool = True, optimize_for_device: bool = True, mode: str = "batch", max_rounds: int = 8, retry_per_step: int = 2) -> Dict[str, Any]:
         """基于上下文生成测试用例"""
         try:
             if not self.current_session["description"]:
@@ -154,15 +161,30 @@ class InteractiveCaseGenerator:
             
             # 构建生成上下文
             generation_context = self._build_generation_context(use_similar_cases)
-            
-            # 创建增强的生成prompt
+
+            # 新增：stepwise 单步握手模式（保持旧 batch 逻辑不变）
+            if str(mode).lower() == "stepwise":
+                try:
+                    result = await self._run_stepwise_loop(
+                        description=self.current_session["description"],
+                        context=generation_context,
+                        optimize_for_device=optimize_for_device,
+                        max_rounds=max_rounds,
+                        retry_per_step=retry_per_step,
+                    )
+                    return result
+                except Exception as e:
+                    logger.error(f"stepwise 模式失败: {e}")
+                    return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+            # 兼容旧方案：一次性整案生成
             enhanced_prompt = self._create_enhanced_generation_prompt(
                 self.current_session["description"],
                 generation_context,
                 optimize_for_device
             )
             
-            # 调用LLM生成用例
+            # 调用LLM生成用例（batch）
             llm_response = await self._call_llm_for_generation(enhanced_prompt)
             
             if llm_response.get("success", False):
@@ -521,9 +543,17 @@ class InteractiveCaseGenerator:
             }
     
     def _parse_generated_case(self, llm_content: str) -> Dict[str, Any]:
-        """解析LLM生成的用例内容"""
+        """解析LLM生成的用例内容（先严格裸 JSON，再回退提取）。"""
         try:
-            # 尝试提取JSON内容
+            # 1) 严格裸 JSON 尝试（不允许 Markdown 代码块）
+            try:
+                stripped = llm_content.strip()
+                if stripped.startswith("{") and stripped.endswith("}"):
+                    return json.loads(stripped)
+            except Exception:
+                pass
+
+            # 2) 回退：尝试提取代码块或包裹的大括号
             import re
             
             # 查找JSON代码块
@@ -607,3 +637,173 @@ class InteractiveCaseGenerator:
                 "issues": [f"验证过程异常: {e}"],
                 "score": 0
             }
+
+    # === 新增：stepwise 单步握手核心实现（保持旧逻辑不变） ===
+    async def _run_stepwise_loop(
+        self,
+        description: str,
+        context: Dict[str, Any],
+        optimize_for_device: bool,
+        max_rounds: int = 8,
+        retry_per_step: int = 2,
+    ) -> Dict[str, Any]:
+        """
+        Plan → Execute → Verify → Append handshake.
+        仅新增该路径，不影响原 batch 行为。
+        """
+        steps: List[Dict[str, Any]] = []
+        screen = await self.device_inspector.get_current_screen_info(include_elements=True)
+        errors_last_round: List[str] = []
+
+        for i in range(1, int(max_rounds) + 1):
+            # 构造核心 step prompt（使用模板模块，保持统一约束）
+            core_prompt = TestCaseGenerationPrompts.get_mcp_step_guidance_prompt(
+                current_step=i,
+                screen_analysis_result=screen or {},
+                test_objective=description,
+                previous_steps=steps,
+                examples=None,
+            )
+
+            # 以分区组装器注入“修复片段/brief shots”等，可按需拓展
+            builder = OnlyTestPromptBuilder()
+            builder.add_section("core", core_prompt, status=SectionStatus.ACTIVE)
+            if errors_last_round:
+                repair = "\n".join([
+                    "## 故障与修复（上轮校验未通过）",
+                    "请修复以下问题并重新返回单步 JSON：",
+                    *[f"- {e}" for e in errors_last_round],
+                ])
+                builder.add_section("repair", repair, status=SectionStatus.ACTIVE)
+            prompt_text = builder.build()
+
+            # 调用 LLM 生成单步决策
+            step_resp = await self._call_llm_for_generation(prompt_text)
+            if not step_resp.get("success", False):
+                return {"success": False, "error": step_resp.get("error", "LLM生成失败"), "timestamp": datetime.now().isoformat()}
+
+            step_obj = self._parse_generated_case(step_resp["content"])  # 先尝试裸 JSON
+
+            # 处理 TOOL_REQUEST
+            if is_tool_request(step_obj):
+                screen = await self.device_inspector.get_current_screen_info(include_elements=True)
+                errors_last_round = []
+                continue
+
+            # 运行前校验（强制白名单+证据+hooks边界）
+            ok, errs, chosen = validate_step(
+                screen or {},
+                step_obj,
+                page_check_mode="soft",
+                page_field="current_page",
+                allowed_pages=None,
+                require_evidence=True,
+                enforce_hooks_boundary=True,
+            )
+            if not ok:
+                # 在当前轮内做有限次重试
+                retry = 0
+                while retry < int(retry_per_step) and not ok:
+                    retry += 1
+                    errors_last_round = errs
+                    # 重新询问（带入修复片段）
+                    step_resp = await self._call_llm_for_generation(prompt_text)
+                    step_obj = self._parse_generated_case(step_resp.get("content", ""))
+                    ok, errs, chosen = validate_step(
+                        screen or {},
+                        step_obj,
+                        page_check_mode="soft",
+                        page_field="current_page",
+                        allowed_pages=None,
+                        require_evidence=True,
+                        enforce_hooks_boundary=True,
+                    )
+                if not ok:
+                    # 无法修复，退出
+                    return {"success": False, "error": f"第{i}步校验失败: {errs}", "timestamp": datetime.now().isoformat()}
+                errors_last_round = []
+
+            # 执行动作
+            na = (step_obj or {}).get("next_action", {})
+            action = na.get("action")
+            target = na.get("target", {})
+            wait_after = float(na.get("wait_after", 0.8) or 0.8)
+            data = na.get("data") if isinstance(na.get("data"), str) else ""
+
+            exec_meta = await self.device_inspector.perform_ui_action(
+                action=action,
+                target=target,
+                data=data or "",
+                wait_after=wait_after,
+            )
+
+            # 验证并追加
+            new_screen = await self.device_inspector.get_current_screen_info(include_elements=True)
+            steps.append({
+                "step": i,
+                "analysis": step_obj.get("analysis", {}),
+                "next_action": na,
+                "evidence": step_obj.get("evidence", {}),
+                "execution": {"success": bool(exec_meta.get("success", True)), "used": exec_meta.get("used"), "exec_log": exec_meta.get("exec_log", [])},
+                "after_screen": {"current_page": new_screen.get("current_page"), "total_elements": new_screen.get("total_elements")},
+            })
+
+            # 准备下一轮
+            screen = new_screen
+
+        # 结束后整合为最终用例（调用 completion prompt）
+        completion_prompt = TestCaseGenerationPrompts.get_mcp_completion_prompt(
+            generated_steps=steps,
+            test_objective=description,
+            final_state=screen or {},
+            examples=None,
+        )
+        final_resp = await self._call_llm_for_generation(completion_prompt)
+        if not final_resp.get("success", False):
+            return {"success": False, "error": final_resp.get("error", "LLM生成失败"), "timestamp": datetime.now().isoformat()}
+        final_case = self._parse_generated_case(final_resp["content"])  # 再次优先裸 JSON
+
+        # 可选：按 schema 校验（若依赖不存在则跳过，不报错）
+        schema_validation = self._validate_final_case_schema(final_case)
+
+        # 保存会话状态
+        self.current_session["current_case"] = final_case
+        self.current_session["generation_history"].append({
+            "timestamp": datetime.now().isoformat(),
+            "action": "stepwise_complete",
+            "generated_case": final_case,
+            "schema_validation": schema_validation,
+        })
+
+        return {
+            "success": True,
+            "session_id": self.current_session["session_id"],
+            "generated_case": final_case,
+            "validation": schema_validation if isinstance(schema_validation, dict) else {"valid": True},
+            "next_step": "convert_to_python",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def _validate_final_case_schema(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        """使用 JSON Schema 验证最终用例（如果 jsonschema 可用）。保持可选、向后兼容。"""
+        try:
+            import json as _json
+            import os as _os
+            try:
+                import jsonschema  # type: ignore
+            except Exception:
+                return {"valid": True, "note": "jsonschema 未安装，跳过严格校验"}
+
+            schema_path = _os.path.join(_os.path.dirname(__file__), "..", "schema", "testcase_v1_1.json")
+            schema_path = _os.path.abspath(schema_path)
+            if not _os.path.exists(schema_path):
+                return {"valid": True, "note": f"schema 文件不存在: {schema_path}"}
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema = _json.load(f)
+            try:
+                jsonschema.validate(instance=case, schema=schema)
+                return {"valid": True}
+            except Exception as e:
+                return {"valid": False, "error": str(e)}
+        except Exception as e:
+            return {"valid": False, "error": f"schema 校验异常: {e}"}

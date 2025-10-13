@@ -84,6 +84,8 @@ ALLOWED_ACTIONS: Set[str] = {
 
 ALLOWED_SELECTOR_KEYS: Set[str] = {"resource_id", "text", "content_desc"}
 
+# 运行期禁止出现在 test_step 中的生命周期/工具动作（保留向后兼容，不变更 ALLOWED_ACTIONS）
+DISALLOWED_STEP_ACTIONS: Set[str] = {"start_app", "stop_app", "close_ads"}
 
 PAGE_FIELD_DEFAULT = "current_page"  # 默认屏幕页面字段名，可由调用方覆盖
 
@@ -153,6 +155,8 @@ def validate_step(
     page_check_mode: str = "off",  # "off" | "soft" | "hard"
     page_field: str = PAGE_FIELD_DEFAULT,
     allowed_pages: Optional[List[str]] = None,
+    require_evidence: bool = False,
+    enforce_hooks_boundary: bool = False,
 ) -> Tuple[bool, List[str], Optional[Dict[str, Any]]]:
     """
     Validate a single LLM-produced step against the given screen.
@@ -213,6 +217,9 @@ def validate_step(
     action = next_action.get("action")
     if action not in ALLOWED_ACTIONS:
         errors.append(f"action 不合法或缺失: {action}")
+    # 额外边界：禁止生命周期/工具类动作出现在 test_step（保持向后兼容，可按需开启）
+    if enforce_hooks_boundary and action in DISALLOWED_STEP_ACTIONS:
+        errors.append(f"动作不允许在 test_steps 中出现: {action}（请在 hooks 或 tool 调用中使用）")
 
     target = next_action.get("target", {})
     selectors = target.get("priority_selectors", [])
@@ -281,6 +288,15 @@ def validate_step(
                     errors.append("bounds_px 必须与所选元素的边界完全一致")
 
     # Evidence checks
+    if require_evidence and not isinstance(evidence, dict):
+        errors.append("必须提供 evidence 字段，并包含必要追溯信息")
+    if require_evidence and isinstance(evidence, dict):
+        # 软要求：存在字段
+        if evidence.get("source_element_uuid") in (None, ""):
+            errors.append("evidence.source_element_uuid 缺失")
+        if evidence.get("source_element_snapshot") in (None, {}):
+            errors.append("evidence.source_element_snapshot 缺失")
+        # screen_hash 若存在则校验一致性；未提供时不强制（保持兼容）
     if screen_hash is not None and evidence.get("screen_hash") not in (None, screen_hash):
         errors.append("evidence.screen_hash 与当前屏幕不一致")
 

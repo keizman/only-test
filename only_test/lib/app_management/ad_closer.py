@@ -12,10 +12,15 @@ from typing import Optional, Dict, Any
 import asyncio
 
 try:
-    # 运行于仓库上下文（only_test）
+    # 运行于包上下文（推荐：python -m only_test.lib.app_management.ad_closer）
     from .mcp_interface.device_inspector import DeviceInspector
 except ImportError:
-    # 允许从仓库根目录直接运行
+    # 允许从仓库根目录直接运行：python only_test/lib/app_management/ad_closer.py
+    import sys
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parents[3]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
     from only_test.lib.mcp_interface.device_inspector import DeviceInspector
 
 

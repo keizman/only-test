@@ -865,6 +865,163 @@ prompts\generate_cases.py  内容有些过时, 请充当一个 prompt perfector 
 
 我希望你充当 prompt perfectpr for onlay_test 这是一个未完成品, 目前存在问题当让 外部 LLM 生成用例时无法正确可靠的操作屏幕, 录制出与事实一样的用例. and tmp/parlant 下方是一个其它项目的完善的 prompt  使用方式示例. 我希望你能从示例项目中学到经验, 谈一谈我们目前 only_test prompt 模块的的可优化点, 先输出那几点可优化后再具体优化方案, 请你先了解两项目的 prompt 存放地后再开始思考
 
+----
+
+
+1.注意做到级联更改
+2.更改时保持原始 prompt 作用不变, 只能增加, 避免删除, 引起不必要错误
+3.处理好 Plan → Execute → Verify → Append 的 MCP 交流
+4.先明确目前的 prompt 设计方式, round1 作用和后方的 round 不同, 具体细节请先了解, 做出的修改需要兼容目前方案
+5.只执行我贴出的功能点增强
+
+
+1) 切换到“单步握手 + TOOL_REQUEST gating” 
+•  做法：
+◦  在交互式链路中禁止“一次性整案”生成；采用循环：Plan → Execute → Verify → Append。
+◦  每一轮仅允许两种返回：TOOL_REQUEST 或 单步 next_action（严格 JSON）。
+•  落地点：
+◦  改造 C:\Download\git\uni\only_test\lib\mcp_interface\case_generator.py 的 generate_with_context：
+▪  构建 prompt 时调用 TestCaseGenerationPrompts.get_mcp_step_guidance_prompt(...)
+▪  解析返回：若 tool_request→调用 DeviceInspector.get_current_screen_info 刷新后再问；否则进入 step_validator 校验
+▪  执行动作→再次 analyze_current_screen 验证→把“证据+结果”append入步骤链
+◦  完成目标后再调用 TestCaseGenerationPrompts.get_mcp_completion_prompt(...) 生成最终 JSON
+
+2) 模板与编排对齐、统一入口   
+•  做法：
+◦  在 case_generator.py 废弃自定义 _create_enhanced_generation_prompt，全部改用 templates/prompts/generate_cases.py 的三段式接口（main/step/completion）
+•  好处：
+◦  保证与模板定义的动作白名单/证据/TOOL_REQUEST 规则完全一致
+
+3) 引入“分区式 Prompt 组装器”（借鉴 parlant）
+•  做法：
+◦  新增 OnlyTestPromptBuilder（仿照 parlant 的 PromptBuilder）
+▪  可 add_section("general"), add_section("context"), add_section("history"), add_section("output_schema"), add_section("examples"), add_section("missing_or_invalid_data") 等
+▪  支持 SectionStatus（ACTIVE/PASSIVE/NONE）与按需开关
+•  落地点：
+◦  位置建议：C:\Download\git\uni\only_test\templates\prompt_builder.py
+◦  现有 generate_cases/element_location 等模块只负责“片段内容”，组装器负责“按场景拼装”
+
+4) 严格统一输出格式：裸 JSON、无 fenced code
+•  做法：
+◦  在 get_mcp_step_guidance_prompt 与 get_mcp_completion_prompt 中，明确“不得输出 ``` 包裹/Markdown”，只返回裸 JSON
+◦  统一解析器：case_generator._parse_generated_case 改为先尝试严格 json.loads，失败再给简短“修复提示”并重试生成（不再容忍 fenced code）
+•  好处：
+◦  降低解析脆弱性，减少 LLM 误格式率
+
+5) 强制白名单绑定 + 证据闭环（运行期加硬）
+•  做法：
+◦  每次 LLM 返回的 next_action 必须通过 only_test\orchestrator\step_validator.validate_step(...)，不通过则把错误列表原样回传给下一轮 Prompt（在“故障与修复”子分区中注入）
+◦  在 Prompt 的“输出要求”中保留 evidence 字段，但把“机读回传”作为执行门槛（无 evidence→拒绝执行）
+•  好处：
+◦  防止虚构 selector/坐标，直接把错误打回给 LLM 迭代修复
+
+6) 强化“动作白名单与 hooks 边界”
+•  做法：
+◦  在 step_guidance 的“错误示例/正确示例”里已写明，进一步在 step_validator 增加硬规则：test_steps 禁止 start_app/stop_app/close_ads；这些仅允许出现在 hooks 或 tool 调用
+◦  执行前，若发现动作越界，直接返回“修复指令”prompt，而非尝试执行
+•  好处：
+◦  彻底杜绝 LLM 把生命周期动作混入步骤列表
+
+9) 引入“示例/反例（shots）”分区
+•  做法：
+◦  在 step_guidance 之前注入“正例/反例+纠正”极简示例，强调“单步输出/证据齐全/不臆造”
+◦  参考 parlant 的 MessageGeneratorShot 样式，保留 1~2 个小样例即可
+•  好处：
+◦  显著降低模型走偏概率
+
+
+12) 输出结构强约束（Pydantic/JSON Schema）
+•  做法：
+◦  用 Pydantic 模型或现有 schema（only_test\lib\schema\testcase_v1_1.json）对“单步”和“最终 JSON”进行校验；失败时自动构造“修复提示”再询问
+•  好处：
+◦  避免“几乎对但不可执行”的灰区输出
+
+
+
+----
+
+
+4) 工作流状态持久化未实现
+•  现状判断: 基本属实
+◦  当前会话状态在内存维护，尚未执行到 QA.md 提到的 workflow_state.json/execution_progress.json/iteration_config.json 落盘。
+•  仍需完善（建议优先级：高）
+◦  设计持久化结构（建议 sessions/<session_id>/ 下放三份 JSON）：每步完成即写入，崩溃可 --resume 续跑；同时记录每轮 LLM 原始响应片段、解析失败原因与 validator 错误列表，便于复现与迭代。
+◦  在 stepwise 循环中加入“定期 checkpoint”（每步/每 N 步），保障长流程容错。
+
+
+-------------
+
+
+
+
+session_unified.json
+
+1.日志不够统一
+你相信这是有先后顺序的一段日志, 其是能代表当前含义的的, 易于过滤的一段日志吗: 假如我想查看某个阶段的日志, 你先告诉我如何解决. 这里的内容可能很多, 假如我想让你看一部分日志, 你似乎也只能全看. 是否要在统一路径上给出枚举值, 方便统计. 你还有什么建议, 尼觉得当前日志还有哪些问题
+
+
+"level": "artifact",
+"message": "Artifact: session_meta.json",
+"name": "session_meta.json",
+
+session_start
+"type": "tool_execution",
+"tool_name": "get_current_screen_info_plan",
+
+2.步骤问题, 确认这里先后步骤存在的意义, 
+- "tool_name": "get_current_screen_info_plan", 在 plan 之前获取屏幕内容, 但你并未提供给 LLM. 你认为 plan 阶段需要屏幕内容吗
+
+3.
+Prompt generated: prompt_plan.txt
+示例样本: example_airtest_record.py --> 这里还要提供实际文件内容, 而不仅仅是文件名称, 你可能都搞错了: 这里是相似代码示例, 你只需要参考其动作思路 {example_airtest_record.py}: {code}
+包含 keyword 和 max_rounds --> 包含 keyword 和 max_rounds (一般与要执行的动作次数相同)
+本用例关键语义标识；可为空 --> 本用例关键语义标识(example: play_vod_program)；可为空
+
+选择器范围规则：\n- 仅允许选择器匹配目标应用元素：resource_id 必须以 'com.mobile.brasiltvmobile:id/' 开头，或元素 package 必须等于 'com.mobile.brasiltvmobile'（text 也需满足该条件）；强调的意义? 只需要让其遵循目前的书写方式, 其做不到吗
+
+目标应用可选选择器 --> 以下elements 中为目标应用可选选择器, 请...  之后的内容为 list 并声明提供的元素数量, 让阅读更直观  ,虽然不允许直接提供 转换为 json 后的 XML 内容, 但是依旧可以按照那个格式来, 比如(我去除了一些不必要字段) : 
+{
+  "current_app": "android.view.ViewRootImpl",
+  "current_page": "unknown",
+  "page": "unknown",
+  "total_elements": 19,
+  "clickable_elements": 19,
+  "element_analysis": {
+    "has_text": 3,
+  },
+  "media_playing": false,
+  "elements": [
+    {
+      "text": "",
+      "resource_id": "com.mobile.brasiltvmobile:id/mCinemaTitle",
+      "class_name": "android.widget.ImageView",
+    },
+    {
+      "text": "Search for content title",
+      "resource_id": "com.mobile.brasiltvmobile:id/mVodSearch",
+      "class_name": "android.widget.TextView",
+    }....
+
+  ]
+}
+
+4.content_desc 确认是否还有作用, omniparser 视觉模式已无作用, 这个字段可以完全去除? , 直接使用过滤当前项目查看一部分上下文如果去除后不会有影响则直接去除, 有问题报给我
+
+往期用例示例: example_airtest_record与上相同, 问题是只提供了名称 未提供内容, 我思考了一下, 认为 json 也不能不提供, 因此期望提供 1 个 json 3 个相关联的 py 文件尼觉得如何,(目前么有更多的用例文件只提供我们自己录制的即可)
+
+其它的未提到的代表看不出问题, 保持原样即可. 
+
+
+
+调用 MCP tools 时日志不够详细, 请想想目前问题, 给出解决方案
+
+
+
+
+
+
+
+
 -----
 添加 setuo hooks 内容, 
 

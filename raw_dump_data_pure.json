@@ -1,0 +1,547 @@
+{
+  "name": "<Unknown>",
+  "payload": {
+    "name": "<Unknown>",
+    "type": "Unknown",
+    "visible": true,
+    "enabled": true,
+    "pos": [
+      0.0,
+      0.0
+    ],
+    "size": [
+      0.0,
+      0.0
+    ],
+    "bounds": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "text": "",
+    "resourceId": "",
+    "package": "",
+    "clickable": false,
+    "touchable": false,
+    "focusable": false,
+    "focused": false,
+    "scrollable": false,
+    "selected": false,
+    "checkable": false,
+    "checked": false,
+    "longClickable": false,
+    "editable": false,
+    "dismissable": false,
+    "scale": [
+      1.0,
+      1.0
+    ],
+    "anchorPoint": [
+      0.5,
+      0.5
+    ],
+    "boundsInParent": [
+      0.0,
+      0.0
+    ],
+    "zOrders": {
+      "local": 0,
+      "global": 0
+    }
+  },
+  "children": [
+    {
+      "name": "android.widget.FrameLayout",
+      "payload": {
+        "name": "android.widget.FrameLayout",
+        "type": "android.widget.FrameLayout",
+        "visible": true,
+        "enabled": true,
+        "pos": [
+          0.5,
+          0.5146484375
+        ],
+        "size": [
+          1.0,
+          0.970703125
+        ],
+        "bounds": [
+          0.0,
+          0.029296875,
+          1.0,
+          1.0
+        ],
+        "text": "",
+        "resourceId": "",
+        "package": "com.mobile.brasiltvmobile",
+        "clickable": false,
+        "touchable": false,
+        "focusable": false,
+        "focused": false,
+        "scrollable": false,
+        "selected": false,
+        "checkable": false,
+        "checked": false,
+        "longClickable": false,
+        "editable": false,
+        "dismissable": false,
+        "scale": [
+          1.0,
+          1.0
+        ],
+        "anchorPoint": [
+          0.5,
+          0.5
+        ],
+        "boundsInParent": [
+          1.0,
+          0.970703125
+        ],
+        "zOrders": {
+          "local": 0,
+          "global": 0
+        }
+      },
+      "children": [
+        {
+          "name": "android.widget.FrameLayout",
+          "payload": {
+            "name": "android.widget.FrameLayout",
+            "type": "android.widget.FrameLayout",
+            "visible": true,
+            "enabled": true,
+            "pos": [
+              0.5,
+              0.5146484375
+            ],
+            "size": [
+              1.0,
+              0.970703125
+            ],
+            "bounds": [
+              0.0,
+              0.029296875,
+              1.0,
+              1.0
+            ],
+            "text": "",
+            "resourceId": "",
+            "package": "com.mobile.brasiltvmobile",
+            "clickable": false,
+            "touchable": false,
+            "focusable": false,
+            "focused": false,
+            "scrollable": false,
+            "selected": false,
+            "checkable": false,
+            "checked": false,
+            "longClickable": false,
+            "editable": false,
+            "dismissable": false,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "anchorPoint": [
+              0.5,
+              0.5
+            ],
+            "boundsInParent": [
+              1.0,
+              0.970703125
+            ],
+            "zOrders": {
+              "local": 1,
+              "global": 1
+            }
+          },
+          "children": [
+            {
+              "name": "android.widget.FrameLayout",
+              "payload": {
+                "name": "android.widget.FrameLayout",
+                "type": "android.widget.FrameLayout",
+                "visible": true,
+                "enabled": true,
+                "pos": [
+                  0.5,
+                  0.5146484375
+                ],
+                "size": [
+                  1.0,
+                  0.970703125
+                ],
+                "bounds": [
+                  0.0,
+                  0.029296875,
+                  1.0,
+                  1.0
+                ],
+                "text": "",
+                "resourceId": "android:id/content",
+                "package": "com.mobile.brasiltvmobile",
+                "clickable": false,
+                "touchable": false,
+                "focusable": false,
+                "focused": false,
+                "scrollable": false,
+                "selected": false,
+                "checkable": false,
+                "checked": false,
+                "longClickable": false,
+                "editable": false,
+                "dismissable": false,
+                "scale": [
+                  1.0,
+                  1.0
+                ],
+                "anchorPoint": [
+                  0.5,
+                  0.5
+                ],
+                "boundsInParent": [
+                  1.0,
+                  0.970703125
+                ],
+                "zOrders": {
+                  "local": 1,
+                  "global": 1
+                }
+              },
+              "children": [
+                {
+                  "name": "android.widget.RelativeLayout",
+                  "payload": {
+                    "name": "android.widget.RelativeLayout",
+                    "type": "android.widget.RelativeLayout",
+                    "visible": true,
+                    "enabled": true,
+                    "pos": [
+                      0.5,
+                      0.5146484375
+                    ],
+                    "size": [
+                      1.0,
+                      0.970703125
+                    ],
+                    "bounds": [
+                      0.0,
+                      0.029296875,
+                      1.0,
+                      1.0
+                    ],
+                    "text": "",
+                    "resourceId": "com.mobile.brasiltvmobile:id/mLayoutRoot",
+                    "package": "com.mobile.brasiltvmobile",
+                    "clickable": false,
+                    "touchable": false,
+                    "focusable": false,
+                    "focused": false,
+                    "scrollable": false,
+                    "selected": false,
+                    "checkable": false,
+                    "checked": false,
+                    "longClickable": false,
+                    "editable": false,
+                    "dismissable": false,
+                    "scale": [
+                      1.0,
+                      1.0
+                    ],
+                    "anchorPoint": [
+                      0.5,
+                      0.5
+                    ],
+                    "boundsInParent": [
+                      1.0,
+                      0.970703125
+                    ],
+                    "zOrders": {
+                      "local": 1,
+                      "global": 1
+                    }
+                  },
+                  "children": [
+                    {
+                      "name": "android.widget.ImageView",
+                      "payload": {
+                        "name": "android.widget.ImageView",
+                        "type": "android.widget.ImageView",
+                        "visible": true,
+                        "enabled": true,
+                        "pos": [
+                          0.5072916666666667,
+                          0.1806640625
+                        ],
+                        "size": [
+                          0.06458333333333334,
+                          0.036328125
+                        ],
+                        "bounds": [
+                          0.475,
+                          0.1625,
+                          0.5395833333333333,
+                          0.198828125
+                        ],
+                        "text": "",
+                        "resourceId": "com.mobile.brasiltvmobile:id/mImgTarget",
+                        "package": "com.mobile.brasiltvmobile",
+                        "clickable": false,
+                        "touchable": false,
+                        "focusable": false,
+                        "focused": false,
+                        "scrollable": false,
+                        "selected": false,
+                        "checkable": false,
+                        "checked": false,
+                        "longClickable": false,
+                        "editable": false,
+                        "dismissable": false,
+                        "scale": [
+                          1.0,
+                          1.0
+                        ],
+                        "anchorPoint": [
+                          0.5,
+                          0.5
+                        ],
+                        "boundsInParent": [
+                          0.06458333333333334,
+                          0.036328125
+                        ],
+                        "zOrders": {
+                          "local": 1,
+                          "global": 1
+                        }
+                      },
+                      "children": []
+                    },
+                    {
+                      "name": "android.widget.FrameLayout",
+                      "payload": {
+                        "name": "android.widget.FrameLayout",
+                        "type": "android.widget.FrameLayout",
+                        "visible": true,
+                        "enabled": true,
+                        "pos": [
+                          0.7375,
+                          0.2794921875
+                        ],
+                        "size": [
+                          0.525,
+                          0.161328125
+                        ],
+                        "bounds": [
+                          0.475,
+                          0.198828125,
+                          1.0,
+                          0.36015625
+                        ],
+                        "text": "",
+                        "resourceId": "",
+                        "package": "com.mobile.brasiltvmobile",
+                        "clickable": false,
+                        "touchable": false,
+                        "focusable": false,
+                        "focused": false,
+                        "scrollable": false,
+                        "selected": false,
+                        "checkable": false,
+                        "checked": false,
+                        "longClickable": false,
+                        "editable": false,
+                        "dismissable": false,
+                        "scale": [
+                          1.0,
+                          1.0
+                        ],
+                        "anchorPoint": [
+                          0.5,
+                          0.5
+                        ],
+                        "boundsInParent": [
+                          0.525,
+                          0.161328125
+                        ],
+                        "zOrders": {
+                          "local": 2,
+                          "global": 2
+                        }
+                      },
+                      "children": [
+                        {
+                          "name": "android.widget.LinearLayout",
+                          "payload": {
+                            "name": "android.widget.LinearLayout",
+                            "type": "android.widget.LinearLayout",
+                            "visible": true,
+                            "enabled": true,
+                            "pos": [
+                              0.7375,
+                              0.2794921875
+                            ],
+                            "size": [
+                              0.525,
+                              0.161328125
+                            ],
+                            "bounds": [
+                              0.475,
+                              0.198828125,
+                              1.0,
+                              0.36015625
+                            ],
+                            "text": "",
+                            "resourceId": "",
+                            "package": "com.mobile.brasiltvmobile",
+                            "clickable": false,
+                            "touchable": false,
+                            "focusable": false,
+                            "focused": false,
+                            "scrollable": false,
+                            "selected": false,
+                            "checkable": false,
+                            "checked": false,
+                            "longClickable": false,
+                            "editable": false,
+                            "dismissable": false,
+                            "scale": [
+                              1.0,
+                              1.0
+                            ],
+                            "anchorPoint": [
+                              0.5,
+                              0.5
+                            ],
+                            "boundsInParent": [
+                              0.525,
+                              0.161328125
+                            ],
+                            "zOrders": {
+                              "local": 1,
+                              "global": 1
+                            }
+                          },
+                          "children": [
+                            {
+                              "name": "Tap it to share the APP with your friends",
+                              "payload": {
+                                "name": "Tap it to share the APP with your friends",
+                                "type": "android.widget.TextView",
+                                "visible": true,
+                                "enabled": true,
+                                "pos": [
+                                  0.7375,
+                                  0.253515625
+                                ],
+                                "size": [
+                                  0.4708333333333333,
+                                  0.04921875
+                                ],
+                                "bounds": [
+                                  0.5020833333333333,
+                                  0.22890625,
+                                  0.9729166666666667,
+                                  0.278125
+                                ],
+                                "text": "Tap it to share the APP with your friends",
+                                "resourceId": "",
+                                "package": "com.mobile.brasiltvmobile",
+                                "clickable": false,
+                                "touchable": false,
+                                "focusable": false,
+                                "focused": false,
+                                "scrollable": false,
+                                "selected": false,
+                                "checkable": false,
+                                "checked": false,
+                                "longClickable": false,
+                                "editable": false,
+                                "dismissable": false,
+                                "scale": [
+                                  1.0,
+                                  1.0
+                                ],
+                                "anchorPoint": [
+                                  0.5,
+                                  0.5
+                                ],
+                                "boundsInParent": [
+                                  0.4708333333333333,
+                                  0.04921875
+                                ],
+                                "zOrders": {
+                                  "local": 1,
+                                  "global": 1
+                                }
+                              },
+                              "children": []
+                            },
+                            {
+                              "name": "OK",
+                              "payload": {
+                                "name": "OK",
+                                "type": "android.widget.TextView",
+                                "visible": true,
+                                "enabled": true,
+                                "pos": [
+                                  0.9017361111111111,
+                                  0.3169921875
+                                ],
+                                "size": [
+                                  0.1076388888888889,
+                                  0.040234375
+                                ],
+                                "bounds": [
+                                  0.8479166666666667,
+                                  0.296875,
+                                  0.9555555555555556,
+                                  0.337109375
+                                ],
+                                "text": "OK",
+                                "resourceId": "",
+                                "package": "com.mobile.brasiltvmobile",
+                                "clickable": true,
+                                "touchable": true,
+                                "focusable": true,
+                                "focused": false,
+                                "scrollable": false,
+                                "selected": false,
+                                "checkable": false,
+                                "checked": false,
+                                "longClickable": false,
+                                "editable": false,
+                                "dismissable": false,
+                                "scale": [
+                                  1.0,
+                                  1.0
+                                ],
+                                "anchorPoint": [
+                                  0.5,
+                                  0.5
+                                ],
+                                "boundsInParent": [
+                                  0.1076388888888889,
+                                  0.040234375
+                                ],
+                                "zOrders": {
+                                  "local": 2,
+                                  "global": 2
+                                }
+                              },
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

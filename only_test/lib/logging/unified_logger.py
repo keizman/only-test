@@ -33,9 +33,10 @@ class UnifiedLogger:
         self.screenshots_dir = self.session_dir / "screenshots"
         self.artifacts_dir = self.session_dir / "artifacts"
 
-        # 计数器用于生成文件名
+        # 计数器用于生成文件名/事件序号
         self._result_counter = 0
         self._screenshot_counter = 0
+        self._event_counter = 0  # 统一日志顺序号（seq）
 
         # 结构化日志数据（JSON数组）
         self.structured_logs: List[Dict[str, Any]] = []
@@ -141,8 +142,8 @@ class UnifiedLogger:
         # 同时写入文件（带完整格式）
         self.logger.log(log_level, message)
     
-    def _save_structured_log(self, log_entry: Dict[str, Any]):
-        """保存结构化日志到JSON文件"""
+def _save_structured_log(self, log_entry: Dict[str, Any]):
+        """保存结构化日志到JSON文件，并注入统一字段方便过滤/统计"""
         with self._lock:
             # 读取现有数据
             try:
@@ -150,10 +151,37 @@ class UnifiedLogger:
                     data = json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 data = []
-            
+
+            # 事件顺序号（全局单调递增）
+            self._event_counter = max(self._event_counter, len(data)) + 1
+            # 注入统一字段
+            injected = dict(log_entry) if isinstance(log_entry, dict) else {"message": str(log_entry)}
+            injected.setdefault("timestamp", self._get_timestamp())
+            injected.setdefault("session_id", self.session_id)
+            # 统一事件类型：level/prompt/response/artifact等统一为event字段，保留原字段兼容
+            if "event" not in injected:
+                if isinstance(injected.get("level"), str):
+                    injected["event"] = injected["level"]
+                elif isinstance(injected.get("type"), str):
+                    injected["event"] = injected["type"]
+            # 注入阶段信息
+            phase = self.current_phase or (injected.get("type") in ("session_start", "session_end") and "session") or None
+            if phase:
+                injected.setdefault("phase", phase)
+            if self.current_round is not None:
+                injected.setdefault("round", self.current_round)
+            if self.max_rounds is not None:
+                injected.setdefault("max_rounds", self.max_rounds)
+            # 构建path用于聚合：plan/-, execution/3, completion/-
+            path_phase = injected.get("phase") or "unknown"
+            path_round = str(injected.get("round")) if injected.get("round") is not None else "-"
+            injected.setdefault("path", f"{path_phase}/{path_round}")
+            # 序号
+            injected.setdefault("seq", self._event_counter)
+
             # 添加新条目
-            data.append(log_entry)
-            
+            data.append(injected)
+
             # 写回文件
             with open(self.unified_json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -186,11 +214,12 @@ class UnifiedLogger:
         if kwargs:
             self._log_structured('debug', message, **kwargs)
     
-    def _log_structured(self, level: str, message: str, **kwargs):
-        """记录结构化日志"""
+def _log_structured(self, level: str, message: str, **kwargs):
+        """记录结构化日志（自动注入event/phase/path/seq等）"""
         log_entry = {
             "timestamp": self._get_timestamp(),
             "level": level,
+            "event": level,  # 兼容性：将level同时作为event类型
             "message": message,
             **kwargs
         }
@@ -208,10 +237,11 @@ class UnifiedLogger:
         }
         self._save_structured_log(log_entry)
     
-    def log_tool_execution(self, tool_name: str, success: bool, result: Any,
-                          execution_time: float, error: Optional[str] = None,
-                          screenshot_data: Optional[bytes] = None):
-        """记录工具执行 - 支持result和截图分离存储"""
+def log_tool_execution(self, tool_name: str, success: bool, result: Any,
+                         execution_time: float, error: Optional[str] = None,
+                         screenshot_data: Optional[bytes] = None,
+                         input_params: Optional[Dict[str, Any]] = None):
+        """记录工具执行 - 支持result和截图分离存储，并记录输入参数摘要"""
 
         status = "SUCCESS" if success else "FAILED"
         self.info(f"Tool {tool_name} executed: {status} ({execution_time:.3f}s)")
@@ -229,10 +259,11 @@ class UnifiedLogger:
         log_entry = {
             "timestamp": self._get_timestamp(),
             "type": "tool_execution",
+            "event": "tool_execution",
             "tool_name": tool_name,
             "success": success,
             "execution_time": execution_time,
-            "result_summary": simplified_result,  # 简化的result摘要
+            # 按需精简：不再在主日志中内联 result_summary，仅保留大文件链接
             "error": error
         }
         
@@ -246,6 +277,17 @@ class UnifiedLogger:
                 import json
                 result_json = json.dumps(result, ensure_ascii=False)
                 log_entry["metadata"]["result_size"] = len(result_json)
+        
+        # 处理输入参数摘要（不内联大对象）
+        if input_params is not None:
+            try:
+                params_str = json.dumps(input_params, ensure_ascii=False)
+                log_entry["input_params"] = {"keys": list(input_params.keys())}
+                log_entry["metadata"] = log_entry.get("metadata", {})
+                log_entry["metadata"]["input_size"] = len(params_str)
+            except Exception:
+                # Fallback: just note param presence
+                log_entry["input_params"] = {"present": True}
         
         # 处理截图分离存储
         if screenshot_data:
@@ -328,9 +370,7 @@ class UnifiedLogger:
         # 如果有elements数组，只保留数量信息
         if "elements" in result and isinstance(result["elements"], list):
             simplified["elements_count"] = len(result["elements"])
-            # 可选：保留前3个元素作为示例
-            if result["elements"]:
-                simplified["elements_sample"] = result["elements"][:3]
+            # 不再在主日志中包含 elements 抽样，避免误导；查看完整 result_dumps 获取详细元素
 
         # 保留ads_info但简化
         if "ads_info" in result:

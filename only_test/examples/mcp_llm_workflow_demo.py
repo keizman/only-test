@@ -788,14 +788,7 @@ async def main():
                         'metadata': {'tags': ['golden','json'], 'path': ['home','search','result','play']},
                         'content': golden_json_path.read_text(encoding='utf-8')
                     })
-                # v2 JSON demo
-                v2_json_path = Path('only_test/testcases/generated/example_airtest_record.v2.json')
-                if v2_json_path.exists():
-                    examples.append({
-                        'file': str(v2_json_path),
-                        'metadata': {'tags': ['v2','json'], 'path': ['home','search','result','play']},
-                        'content': v2_json_path.read_text(encoding='utf-8')
-                    })
+
             except Exception:
                 examples = []
 

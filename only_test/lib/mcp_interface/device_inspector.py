@@ -46,7 +46,7 @@ EXCLUDED_CLOSE_IDS = {
 # - text（控件显示文本，例如 “关闭”/“跳过”/"close"）
 # - content-desc（无障碍描述，可能标注为 close/关闭 等）
 # 检测逻辑会在 kw['rid']、kw['text']、kw['desc'] 三者上进行包含匹配
-GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x', 'fechar', 'pular'}
+GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x', 'fechar', 'pular', 'ok'}
 
 logger = logging.getLogger(__name__)
 

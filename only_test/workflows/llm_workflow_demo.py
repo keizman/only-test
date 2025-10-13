@@ -153,19 +153,21 @@ async def main():
     session_dir = logger.session_dir
     combined_log_path = logger.unified_json_path
 
-    def dump_text(name: str, content: str) -> None:
+def dump_text(name: str, content: str) -> None:
         """保存文本内容到统一日志系统"""
         try:
             content_str = content if isinstance(content, str) else str(content)
             
             # 提取执行信息（如果是工具执行结果）
             execution_time = None
+            input_params = None
             if name.startswith("tool_"):
                 try:
-                    # 解析JSON内容以提取执行时间
+                    # 解析JSON内容以提取执行时间与输入参数
                     import json
                     tool_data = json.loads(content_str)
                     execution_time = tool_data.get("execution_time")
+                    input_params = tool_data.get("input_params") or tool_data.get("parameters")
                 except:
                     pass
             
@@ -196,7 +198,8 @@ async def main():
                         success=success,
                         result=result,
                         execution_time=exec_time,
-                        error=error
+                        error=error,
+                        input_params=input_params
                     )
                 except Exception as parse_error:
                     # 如果解析失败，使用基础记录方法
@@ -283,7 +286,7 @@ async def main():
     except Exception:
         pass
 
-    # Prepare MCP server and register real DeviceInspector tools
+# Prepare MCP server and register real DeviceInspector tools
     server = MCPServer(device_id=args.device_id)
     try:
         from only_test.lib.mcp_interface.device_inspector import DeviceInspector
@@ -304,8 +307,15 @@ async def main():
         logger.info("Registered DeviceInspector tools for real device interaction")
         # Auto hook: restart target app to reset state
         try:
-            start_resp = await server.execute_tool("start_app", {"application": args.target_app, "force_restart": True})
-            dump_text("tool_start_app.json", json.dumps(start_resp.to_dict() if hasattr(start_resp, 'to_dict') else start_resp, ensure_ascii=False, indent=2))
+            _params_start = {"application": args.target_app, "force_restart": True}
+            start_resp = await server.execute_tool("start_app", _params_start)
+            _start_dict = start_resp.to_dict() if hasattr(start_resp, 'to_dict') else start_resp
+            try:
+                _start_dict = dict(_start_dict)
+                _start_dict["input_params"] = _params_start
+            except Exception:
+                pass
+            dump_text("tool_start_app.json", json.dumps(_start_dict, ensure_ascii=False, indent=2))
         except Exception as hook_e:
             logger.warning(f"Auto restart hook failed (continuing): {hook_e}")
     except Exception as e:
@@ -317,10 +327,17 @@ async def main():
         requirement = kwargs.get("requirement") or args.requirement
         target_app = kwargs.get("target_app") or args.target_app
 
-        # Real screen analysis via MCP
+# Real screen analysis via MCP
         logger.info("Calling MCP: get_current_screen_info(include_elements=True)…")
-        screen_resp = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
-        dump_text("tool_get_current_screen_info.json", json.dumps(screen_resp.to_dict(), ensure_ascii=False, indent=2))
+        _params_initial_screen = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+        screen_resp = await server.execute_tool("get_current_screen_info", _params_initial_screen)
+        _screen_dict_for_dump = screen_resp.to_dict() if hasattr(screen_resp, 'to_dict') else screen_resp
+        try:
+            _screen_dict_for_dump = dict(_screen_dict_for_dump)
+            _screen_dict_for_dump["input_params"] = _params_initial_screen
+        except Exception:
+            pass
+        dump_text("tool_get_current_screen_info.json", json.dumps(_screen_dict_for_dump, ensure_ascii=False, indent=2))
         if not screen_resp.success:
             raise RuntimeError(f"get_current_screen_info failed: {screen_resp.error}")
         screen_analysis_result = screen_resp.result
@@ -599,18 +616,15 @@ async def main():
                 return ""
 
         # Helper: test if any selector exists in element list
-        def _exists_selectors(elements: list, selectors: list) -> bool:
+def _exists_selectors(elements: list, selectors: list) -> bool:
             try:
                 for s in selectors or []:
                     rid = (s.get('resource_id') or '').strip()
                     txt = (s.get('text') or '').strip()
-                    cdesc = (s.get('content_desc') or '').strip()
                     for ee in elements or []:
                         if rid and ee.get('resource_id') == rid:
                             return True
                         if txt and ee.get('text') == txt:
-                            return True
-                        if cdesc and ee.get('content_desc') == cdesc:
                             return True
                 return False
             except Exception:
@@ -685,15 +699,23 @@ async def main():
                 'texts': _dedup(texts),
             }
 
-        # Helper: build selector pool filtered to target package only
+# Helper: build selector pool filtered to target package only
         def _build_selector_pool_for_pkg(screen_resp, target_pkg: str):
             els = (screen_resp.result or {}).get('elements', []) if getattr(screen_resp, 'success', False) else []
             rids, texts = [], []
             for e in els:
                 pkg = (e.get('package') or '').strip()
+                rid = (e.get('resource_id') or '').strip()
+                if rid and rid.startswith(f"{target_pkg}:id/"):
+                    # 优先按resource_id前缀判断
+                    if rid:
+                        rids.append(rid)
+                    tx = (e.get('text') or '').strip()
+                    if tx:
+                        texts.append(tx)
+                    continue
                 if not target_pkg or pkg != target_pkg:
                     continue
-                rid = (e.get('resource_id') or '').strip()
                 if rid:
                     rids.append(rid)
                 tx = (e.get('text') or '').strip()
@@ -721,26 +743,44 @@ async def main():
             ])
 
         # Helper: build planning prompt requiring keyword and max_rounds
-        def _build_plan_prompt(requirement: str, selector_pool_str: str, examples: list) -> str:
+def _build_plan_prompt(requirement: str, selector_pool_str: str, examples: list) -> str:
             example_note = ""
+            examples_block = ""
             try:
-                if examples:
-                    example_files = ", ".join([os.path.basename(e.get('file','')) for e in examples if isinstance(examples, list)])
+                if isinstance(examples, list) and examples:
+                    import os
+                    example_files = ", ".join([os.path.basename((e or {}).get('file','')) for e in examples if isinstance(e, dict)])
                     example_note = f"示例样本: {example_files}\n\n"
+                    # 追加样本内容（仅供动作思路参考）
+                    rendered = []
+                    for e in examples:
+                        if not isinstance(e, dict):
+                            continue
+                        fname = os.path.basename(e.get('file',''))
+                        code = (e.get('content') or '').strip()
+                        # 安全截断，避免提示过长
+                        if len(code) > 6000:
+                            code = code[:6000] + "\n# ...(内容已截断)"
+                        if fname and code:
+                            rendered.append(f"{fname}:\n{code}")
+                    if rendered:
+                        examples_block = "往期用例示例（仅参考动作思路）:\n\n" + "\n\n".join(rendered) + "\n\n"
             except Exception:
                 example_note = ""
+                examples_block = ""
             return (
                 "# 仅输出严格JSON，不要使用Markdown。\n\n"
                 "你是 Only-Test 的用例规划助手。请先给出高层次计划（不挑具体selector），再由后续步骤基于当前XML选择器执行。\n\n"
                 f"测试目标: {requirement}\n\n"
-                + example_note +
-                "注意：计划阶段禁止编造任何 resource_id/text/content_desc 值；具体selector 由后续步骤从当前XML的可选列表中选择。\n\n"
+                + example_note
+                + examples_block +
+                "注意：计划阶段禁止编造任何 resource_id/text 值；具体selector 由后续步骤从当前XML的可选列表中选择。\n\n"
                 "可用动作类别（后续步骤会用到）：click, input, press, wait_for_elements, wait, restart, launch, assert, swipe, click_with_bias, wait_for_disappearance。\n"
                 "可用工具：get_current_screen_info, perform_and_verify, perform_ui_action, close_ads, start_app。\n\n"
                 "输出JSON格式（必须包含 keyword 和 max_rounds）：{\n"
                 "  \"plan_id\": \"plan_YYYYmmdd_HHMMSS\",\n"
                 "  \"objective\": \"...\",\n"
-                "  \"keyword\": \"(本用例关键语义标识；可为空)\",\n"
+                "  \"keyword\": \"(本用例关键语义标识，例如 play_vod_program；可为空)\",\n"
                 "  \"max_rounds\": 8,\n"
                 "  \"steps\": [\n"
                 "    {\"intent\": \"打开搜索\", \"action\": \"click\", \"notes\": \"...\"},\n"
@@ -752,13 +792,20 @@ async def main():
                 "}\n"
             )
 
-        # Pre-round: get initial screen, examples and build a high-level plan
-        initial_screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
-        dump_text("tool_get_current_screen_info_plan.json", json.dumps(initial_screen.to_dict(), ensure_ascii=False, indent=2))
+# Pre-round: get initial screen, examples and build a high-level plan
+        _params_plan_screen = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+        initial_screen = await server.execute_tool("get_current_screen_info", _params_plan_screen)
+        _initial_screen_dict = initial_screen.to_dict() if hasattr(initial_screen, 'to_dict') else initial_screen
+        try:
+            _initial_screen_dict = dict(_initial_screen_dict)
+            _initial_screen_dict["input_params"] = _params_plan_screen
+        except Exception:
+            pass
+        dump_text("tool_get_current_screen_info_plan.json", json.dumps(_initial_screen_dict, ensure_ascii=False, indent=2))
         selector_pool = _build_selector_pool(initial_screen)
         selector_pool_str = _format_selector_pool(selector_pool)
 
-        # Few-shot examples for planning
+# Few-shot examples for planning
         examples = []
         try:
             golden_json_path = Path('only_test/testcases/generated/golden_example_airtest_record.json')
@@ -778,7 +825,7 @@ async def main():
         except Exception:
             examples = []
 
-        # Build plan via LLM
+# Build plan via LLM
         logger.set_phase("plan")
         plan_prompt = _build_plan_prompt(requirement, selector_pool_str, examples) + "\n\n务必：只输出一个 JSON 对象，不要返回多段 JSON 或任何额外文本。"
         dump_text("prompt_plan.txt", plan_prompt)
@@ -830,16 +877,43 @@ async def main():
                         'metadata': {'tags': ['golden','json'], 'path': ['home','search','result','play']},
                         'content': golden_json_path.read_text(encoding='utf-8')
                     })
-                # v2 JSON demo
-                v2_json_path = Path('only_test/testcases/generated/example_airtest_record.v2.json')
-                if v2_json_path.exists():
-                    examples.append({
-                        'file': str(v2_json_path),
-                        'metadata': {'tags': ['v2','json'], 'path': ['home','search','result','play']},
-                        'content': v2_json_path.read_text(encoding='utf-8')
-                    })
+
             except Exception:
                 examples = []
+
+# Helper: build a trimmed JSON-like summary for current screen (target app only)
+            def _build_screen_summary_json(screen_resp, target_pkg: str, max_items: int = 30) -> str:
+                try:
+                    scr = screen_resp.to_dict() if hasattr(screen_resp, 'to_dict') else screen_resp
+                    res = (scr or {}).get('result', scr or {})
+                    els = (res or {}).get('elements', []) or []
+                    def _in_target(e: dict) -> bool:
+                        rid = (e.get('resource_id') or '').strip()
+                        pkg = (e.get('package') or '').strip()
+                        return bool((rid and rid.startswith(f"{target_pkg}:id/")) or (pkg == target_pkg))
+                    filtered = [
+                        {
+                            'text': (e.get('text') or ''),
+                            'resource_id': (e.get('resource_id') or ''),
+                            'class_name': (e.get('class_name') or ''),
+                        }
+                        for e in els if isinstance(e, dict) and _in_target(e)
+                    ]
+                    summary = {
+                        'current_app': (res or {}).get('current_app') or (scr or {}).get('current_app') or 'unknown',
+                        'current_page': (res or {}).get('current_page') or 'unknown',
+                        'page': (res or {}).get('page') or 'unknown',
+                        'total_elements': int((res or {}).get('total_elements', 0)),
+                        'clickable_elements': int((res or {}).get('clickable_elements', 0)),
+                        'element_analysis': {
+                            'has_text': int(((res or {}).get('element_analysis') or {}).get('has_text', 0)),
+                        },
+                        'media_playing': bool((res or {}).get('media_playing', False)),
+                        'elements': filtered[:max_items]
+                    }
+                    return json.dumps(summary, ensure_ascii=False, indent=2)
+                except Exception:
+                    return "{}"
 
             # Build a minimal strict step prompt inline (avoid template import)
             # If last step included an invalid_note, prepend it to guide the LLM away from no-op actions
@@ -851,24 +925,25 @@ async def main():
                 last_note = ""
             # Build selector pool for THIS round's screen and format it
             selector_pool_round = _build_selector_pool_for_pkg(screen, args.target_app)
-            selector_pool_round_str = _format_selector_pool(selector_pool_round)
+selector_pool_round_str = _format_selector_pool(selector_pool_round)
             try:
                 round_pools.append({
                     'resource_ids': set(selector_pool_round.get('resource_ids', [])),
-                    'content_descs': set(selector_pool_round.get('content_descs', [])),
                     'texts': set(selector_pool_round.get('texts', [])),
                 })
             except Exception:
                 round_pools.append(selector_pool_round)
 
             # Build example files summary for the prompt (filenames only)
-            example_files = ""
+example_files = ""
             try:
                 if examples:
                     import os as _os
                     example_files = ", ".join([_os.path.basename(e.get('file','')) for e in examples if isinstance(e, dict)])
             except Exception:
                 example_files = ""
+
+            screen_json_for_prompt = _build_screen_summary_json(screen, args.target_app, max_items=30)
 
             step_prompt = (
                 "# 仅输出严格JSON。严禁Markdown。只输出一个 JSON 对象。\n\n"
@@ -880,14 +955,14 @@ async def main():
                 f"- 仅允许选择器匹配目标应用元素：resource_id 必须以 '{args.target_app}:id/' 开头，或元素 package 必须等于 '{args.target_app}'（text 也需满足该条件）；越界的 selector 会被拒绝。\n"
                 "- 系统对话白名单允许操作：android, com.android.permissioncontroller, com.google.android.permissioncontroller, com.android.packageinstaller, com.android.systemui。\n\n"
                 "生成规则（防止选择器漂移）：\n"
-                "- priority_selectors 中的 resource_id/content_desc/text 的每个取值，必须 EXACTLY 来自上面的可选列表；否则返回 tool_request。\n"
+                "- priority_selectors 中的 resource_id/text 的每个取值，必须 EXACTLY 来自下面的可选列表；否则返回 tool_request。\n"
                 "- 若找不到合适选择器，务必返回 tool_request 请求刷新屏幕或调整流程。\n\n"
                 "无效动作处理规则：\n"
                 "- 如果上一动作被判定为 invalid_action=true（XML 未变化且截图相似度≥98%），你必须给出一个【重试】步骤，而不是重复相同容器点击。\n"
                 "- 重试策略：优先提供更具体的 resource_id 或 text 选择器；避免点击容器布局，直接点击可交互控件（例如搜索输入框 searchEt）；必要时添加 wait_for_elements（appearance/disappearance）；并在 expected_result 中写明可观测变化（例如输入框获得焦点/元素消失/元素出现）。\n"
                 "- 仅当认为屏幕元素不一致/过期时才可以返回 tool_request 以刷新屏幕。\n\n"
-                "目标应用可选选择器（仅 {target_app} 包）：\n"
-                "{pool}\n\n"
+                "目标应用可选选择器（JSON 概览，含元素数量）：\n"
+                "{screen_json}\n\n"
                 + (f"往期用例示例: {example_files}\n\n" if (example_files or "").strip() else "") +
                 "之前步骤: {prev}\n\n"
                 "返回两种之一（务必只返回一个 JSON 对象）：\n"
@@ -911,7 +986,7 @@ async def main():
                 req=requirement,
                 plan=json.dumps(plan_json, ensure_ascii=False),
                 prev=json.dumps(generated_steps, ensure_ascii=False),
-                pool=selector_pool_round_str,
+                screen_json=screen_json_for_prompt,
                 target_app=args.target_app
             )
             dump_text(f"prompt_step_{round_idx}.txt", step_prompt)
@@ -919,7 +994,7 @@ async def main():
                 {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."},
                 {"role": "user", "content": step_prompt}
             ]
-            resp = llm.chat_completion(msgs, temperature=0.2, max_tokens=800)
+resp = llm.chat_completion(msgs, temperature=0.2, max_tokens=800)
             dump_text(f"response_step_{round_idx}.txt", resp.content or "")
             refresh_used = False
             try:
@@ -927,13 +1002,20 @@ async def main():
                 if not isinstance(step_json, dict) or not (step_json.get('next_action') or step_json.get('tool_request')):
                     raise ValueError("step_json missing next_action/tool_request")
                 # Handle tool_request to refresh screen within the same round
-                if isinstance(step_json.get('tool_request'), dict):
+if isinstance(step_json.get('tool_request'), dict):
                     tr = step_json.get('tool_request') or {}
                     tr_name = (tr.get('name') or '').lower()
                     if 'analyze_current_screen' in tr_name or 'analyze' in tr_name or 'screen' in tr_name:
                         # single refresh per round
-                        new_screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
-                        dump_text(f"tool_get_current_screen_info_round_{round_idx}_refresh.json", json.dumps(new_screen.to_dict(), ensure_ascii=False, indent=2))
+                        _params_refresh = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+                        new_screen = await server.execute_tool("get_current_screen_info", _params_refresh)
+                        _new_scr_dict = new_screen.to_dict() if hasattr(new_screen, 'to_dict') else new_screen
+                        try:
+                            _new_scr_dict = dict(_new_scr_dict)
+                            _new_scr_dict["input_params"] = _params_refresh
+                        except Exception:
+                            pass
+                        dump_text(f"tool_get_current_screen_info_round_{round_idx}_refresh.json", json.dumps(_new_scr_dict, ensure_ascii=False, indent=2))
                         screen = new_screen
                         selector_pool_round = _build_selector_pool_for_pkg(screen, args.target_app)
                         selector_pool_round_str = _format_selector_pool(selector_pool_round)
@@ -965,7 +1047,7 @@ async def main():
                     if not isinstance(t, dict):
                         return {}
                     t2 = dict(t)
-                    if 'resource-id' in t2 and 'resource_id' not in t2:
+if 'resource-id' in t2 and 'resource_id' not in t2:
                         t2['resource_id'] = t2.pop('resource-id')
                     # Build allowed sets from current screen elements
                     allowed_rids = set()
@@ -1070,25 +1152,25 @@ async def main():
                 data = next_action.get('data') or ''
 
                 # If selectors were invalid (all filtered out), try one corrective retry with explicit pool
-                def _has_any_selector(t: dict) -> bool:
+def _has_any_selector(t: dict) -> bool:
                     if not isinstance(t, dict):
                         return False
-                    if any(k in t for k in ('resource_id','content_desc','text','bounds_px')):
-                        vals = [t.get('resource_id'), t.get('content_desc'), t.get('text'), t.get('bounds_px')]
+                    if any(k in t for k in ('resource_id','text','bounds_px')):
+                        vals = [t.get('resource_id'), t.get('text'), t.get('bounds_px')]
                         return any(bool(v) for v in vals)
                     sels = (t.get('priority_selectors') or []) if isinstance(t, dict) else []
                     if not sels:
                         return False
                     for s in sels:
-                        if any((s.get('resource_id'), s.get('content_desc'), s.get('text'))):
+                        if any((s.get('resource_id'), s.get('text'))):
                             return True
                     return False
 
                 if action in ("click", "input", "wait_for_elements") and not _has_any_selector(target):
-                    corrective = step_prompt + "\n\n上一次选择器无效：提供的 resource_id/content_desc/text 不在可选列表中。请仅从下列列表中选择：\n" + selector_pool_round_str
+corrective = step_prompt + "\n\n上一次选择器无效：提供的 resource_id/text 不在可选列表中。请仅从下列列表中选择：\n" + selector_pool_round_str
                     dump_text(f"prompt_step_{round_idx}_corrective.txt", corrective)
                     msgs2 = [
-                        {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > content_desc > text."},
+                        {"role": "system", "content": "You are Only-Test LLM. Output strict JSON only. Do not use markdown fences. Selector priority: resource_id > text."},
                         {"role": "user", "content": corrective}
                     ]
                     resp2 = llm.chat_completion(msgs2, temperature=0.15, max_tokens=800)
@@ -1109,12 +1191,21 @@ async def main():
                         "wait_after": next_action.get('wait_after', 0.8)
                     }
                     dump_text(f"intent_execute_round_{round_idx}.json", json.dumps(exec_intent, ensure_ascii=False, indent=2))
-                    exec_resp = await server.execute_tool("perform_and_verify", {
+_params_exec = {
                         "action": action,
                         "target": target,
                         "data": data,
                         "wait_after": next_action.get('wait_after', 0.8)
-                    })
+                    }
+                    exec_resp = await server.execute_tool("perform_and_verify", _params_exec)
+                    # 记录MCP工具响应（携带输入参数）
+                    _exec_dict = exec_resp.to_dict() if hasattr(exec_resp, 'to_dict') else exec_resp
+                    try:
+                        _exec_dict = dict(_exec_dict)
+                        _exec_dict["input_params"] = _params_exec
+                    except Exception:
+                        pass
+                    dump_text(f"tool_perform_and_verify_round_{round_idx}.json", json.dumps(_exec_dict, ensure_ascii=False, indent=2))
                     append_exec_log({
                         "phase": "execute",
                         "round": round_idx,
@@ -1185,8 +1276,15 @@ async def main():
                 continue
 
         logger.set_phase("completion")
-        final_screen = await server.execute_tool("get_current_screen_info", {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit})
-        dump_text("tool_get_current_screen_info_after.json", json.dumps(final_screen.to_dict(), ensure_ascii=False, indent=2))
+_params_final = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+        final_screen = await server.execute_tool("get_current_screen_info", _params_final)
+        _final_dict = final_screen.to_dict() if hasattr(final_screen, 'to_dict') else final_screen
+        try:
+            _final_dict = dict(_final_dict)
+            _final_dict["input_params"] = _params_final
+        except Exception:
+            pass
+        dump_text("tool_get_current_screen_info_after.json", json.dumps(_final_dict, ensure_ascii=False, indent=2))
         final_state = {
             "app_state": final_screen.result.get("element_analysis", {}).get("recognition_strategy", "unknown"),
             "current_content": f"elements={final_screen.result.get('total_elements', 0)}",
