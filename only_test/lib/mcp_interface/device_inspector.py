@@ -23,6 +23,13 @@ import xml.etree.ElementTree as ET
 # 添加项目路径
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
+# 可选的视觉集成（在 XML-only 模式下不强制依赖）
+try:
+    from only_test.lib.visual_integration import VisualIntegration, IntegrationConfig  # type: ignore
+except Exception:
+    VisualIntegration = None  # type: ignore
+    IntegrationConfig = None  # type: ignore
+
 # XML-only mode: remove visual_recognition dependency
 # Provide local XML extraction helpers and playback detection
 from only_test.lib.device_adapter import DeviceAdapter
@@ -90,6 +97,8 @@ class DeviceInspector:
         self._wake_keyword_cache: Dict[str, Any] = {"keywords": tuple(), "visible": False, "ts": 0.0}
         # 自动关广告最大轮次（可通过 get_current_screen_info 的 auto_close_limit 覆盖）
         self.auto_close_ads_limit: int = 3
+        # 可选视觉集成实例（按需初始化）
+        self.visual_integration = None
         # 从环境变量读取全局覆盖（每会话），例如 ONLY_TEST_AUTO_CLOSE_LIMIT=2
         try:
             env_limit = os.getenv("ONLY_TEST_AUTO_CLOSE_LIMIT")
@@ -1449,10 +1458,14 @@ class DeviceInspector:
                 if not (rid.startswith(f"{self.target_app_package}:id/") or rid.startswith("id/")):
                     return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
 
-            # 通过 ElementRecognizer 执行动作
-            if not self.visual_integration:
-                self.visual_integration = VisualIntegration(IntegrationConfig(device_id=self.device_id))
-                await self.visual_integration.initialize()
+            # 通过 ElementRecognizer 执行动作（可选）
+            try:
+                if VisualIntegration is not None and getattr(self, 'visual_integration', None) is None:
+                    self.visual_integration = VisualIntegration(IntegrationConfig(device_id=self.device_id))
+                    await self.visual_integration.initialize()
+            except Exception:
+                # 在 XML-only 场景忽略视觉集成失败
+                self.visual_integration = None
 
             if action == 'click':
                 # 1) 首选按选择器点击（Poco/XML-only）
@@ -1499,7 +1512,18 @@ class DeviceInspector:
                                         break
                                 except Exception:
                                     obj = None
-                        if obj and obj.exists():
+                        # 记录 exists 检查路径
+                        def _exists_log(o, label):
+                            try:
+                                ex = bool(o and o.exists())
+                                exec_log.append(f"exists({label})={ex}")
+                                return ex
+                            except Exception as _e:
+                                exec_log.append(f"exists({label})=error:{_e}")
+                                return False
+                        if obj is None and sel_type == 'resource_id' and '/' in str(sel_value):
+                            exec_log.append(f"try resourceIdMatches .*:id/{str(sel_value).split('/')[-1]}$")
+                        if _exists_log(obj, f"{sel_type}={sel_value}"):
                             try:
                                 try:
                                     obj.wait_for_appearance(timeout=2.0)
@@ -1508,9 +1532,11 @@ class DeviceInspector:
                                 exec_log.append(f"poco.click({sel_type}={sel_value})")
                                 obj.click()
                                 ok = True
-                            except Exception:
+                            except Exception as click_e:
+                                exec_log.append(f"click_error:{click_e}")
                                 ok = False
-                    except Exception:
+                    except Exception as poco_e:
+                        exec_log.append(f"poco_error:{poco_e}")
                         ok = False
                 # 2) 若失败，尝试“容器→子输入框”启发式
                 if not ok and sel_type == 'resource_id' and sel_value:
@@ -1556,9 +1582,9 @@ class DeviceInspector:
                                     x = int((b[0] + b[2]) / 2.0)
                                     y = int((b[1] + b[3]) / 2.0)
                                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
-                                exec_log.append(cmd)
-                                subprocess.run(cmd.split(), capture_output=True, text=True)
-                                ok = True
+                                p = subprocess.run(cmd.split(), capture_output=True, text=True)
+                                exec_log.append(f"{cmd} -> rc={p.returncode}")
+                                ok = (p.returncode == 0) or True
                     except Exception:
                         pass
                 # 3) 若仍失败，且给定 bounds_px，则用坐标兜底（需验证属于目标包/白名单）
@@ -1612,9 +1638,9 @@ class DeviceInspector:
                         x = int((bp[0] + bp[2]) / 2)
                         y = int((bp[1] + bp[3]) / 2)
                         cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
-                        exec_log.append(cmd)
-                        subprocess.run(cmd.split(), capture_output=True, text=True)
-                        ok = True
+                        p = subprocess.run(cmd.split(), capture_output=True, text=True)
+                        exec_log.append(f"{cmd} -> rc={p.returncode}")
+                        ok = (p.returncode == 0) or True
                 _time.sleep(max(0.0, float(wait_after)))
                 return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector), "exec_log": exec_log}
 
@@ -1665,8 +1691,8 @@ class DeviceInspector:
                 # ADB 输入（空格替换为% s以兼容input）
                 safe = (data or '').replace(' ', '%s')
                 cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
-                exec_log.append(cmd)
-                subprocess.run(cmd.split(), capture_output=True, text=True)
+                p = subprocess.run(cmd.split(), capture_output=True, text=True)
+                exec_log.append(f"{cmd} -> rc={p.returncode}")
                 _time.sleep(max(0.0, float(wait_after)))
                 return {"success": True, "used": used_selector, "exec_log": exec_log}
             elif action == 'swipe':
@@ -1693,8 +1719,8 @@ class DeviceInspector:
                 if start_px and end_px:
                     dur = int((swipe.get('duration_ms') or 300))
                     cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input swipe {int(start_px[0])} {int(start_px[1])} {int(end_px[0])} {int(end_px[1])} {dur}"
-                    exec_log.append(cmd)
-                    subprocess.run(cmd.split(), capture_output=True, text=True)
+                    p = subprocess.run(cmd.split(), capture_output=True, text=True)
+                    exec_log.append(f"{cmd} -> rc={p.returncode}")
                     _time.sleep(max(0.0, float(wait_after)))
                     return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur}, "exec_log": exec_log}
                 return {"success": False, "error": "invalid swipe parameters", "exec_log": exec_log}

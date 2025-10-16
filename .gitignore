@@ -5,3 +5,4 @@ only_test/__pycache__/*
 *log
 */__pycache__/*
 
+tmp/

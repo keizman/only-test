@@ -953,7 +953,7 @@ prompts\generate_cases.py  内容有些过时, 请充当一个 prompt perfector 
 
 
 
-
+这些处理了吗, 列一个 todo list  一个个做, 做完check 下,  避免掠过
 session_unified.json
 
 1.日志不够统一
@@ -1017,6 +1017,35 @@ Prompt generated: prompt_plan.txt
 
 
 
+---------------
+
+
+--------------
+
+
+忽略之前的任务, 执行以下
+
+
+1.为什么 max_round 是 10 却有 15个get_current_screen 是否 max 设置没生效
+2. session_unified 和  session_combined 的区别? 是否重复, 只回答 先不修改
+3.Prompt generated: prompt_step_1.txt  实际我并没有看到这个文件, 请你确认原因, 是否index 增长顺序与实际命名不一致
+4.目前来看 执行 action 的 MCP 是有问题的, 因为每次获取的屏幕信息是相同的, 但是我观察到 LLM 给的 ID 是正确的, 拿问题肯定就是传达--> 执行 这两步的问题了, 
+junya@WIN-D623EFH4RDQ:/mnt/c/Download/git/uni/logs/mcp_demo/session_20251015_181739/result_dumps$ diff step_002_get_current_screen_info_plan.json  step_003_get_current_screen_info_round_1.json
+2c2
+<   "timestamp": "2025-10-15T18:38:01.259382",
+---
+>   "timestamp": "2025-10-15T18:38:10.354803",
+4c4
+<   "analysis_round": 1,
+---
+>   "analysis_round": 2,
+
+看向 exec log , 为什么 success": false 后面又说成功页面changed  "wait_after": 0.8, "expected_result": "搜索输入框应出现，页面跳转至搜索界面，键盘弹出或输入框获得焦点。"}, "recognition_strategy": "xml_extractor", "verification": {"success": true, "result": {"success": false, "used": {"type": "resource_id", "value": "com.mobile.brasiltvmobile:id/mVodSearch"}, "exec_log": [], "changed": true, "xml_changed": true, "visual_similarity": 0.9079637789552095, "visual_changed": true, "invalid_action": false, "wait_result
+
+现在聚焦在这一步进行修复 你选需要先搞清楚具体哪里的问题, 是否 MCP调用问题/没有调用 MCP 又 MCP 调用日志吗, 写在哪里, 确认 MCP 工具可用性.
+
+5.s所有 jsonl 改为使用 json suffix
+6.logs/下创建了很多空目录, 无用的空目录不再创建
 
 
 

@@ -142,7 +142,7 @@ class UnifiedLogger:
         # 同时写入文件（带完整格式）
         self.logger.log(log_level, message)
     
-def _save_structured_log(self, log_entry: Dict[str, Any]):
+    def _save_structured_log(self, log_entry: Dict[str, Any]):
         """保存结构化日志到JSON文件，并注入统一字段方便过滤/统计"""
         with self._lock:
             # 读取现有数据
@@ -214,7 +214,7 @@ def _save_structured_log(self, log_entry: Dict[str, Any]):
         if kwargs:
             self._log_structured('debug', message, **kwargs)
     
-def _log_structured(self, level: str, message: str, **kwargs):
+    def _log_structured(self, level: str, message: str, **kwargs):
         """记录结构化日志（自动注入event/phase/path/seq等）"""
         log_entry = {
             "timestamp": self._get_timestamp(),
@@ -237,7 +237,7 @@ def _log_structured(self, level: str, message: str, **kwargs):
         }
         self._save_structured_log(log_entry)
     
-def log_tool_execution(self, tool_name: str, success: bool, result: Any,
+    def log_tool_execution(self, tool_name: str, success: bool, result: Any,
                          execution_time: float, error: Optional[str] = None,
                          screenshot_data: Optional[bytes] = None,
                          input_params: Optional[Dict[str, Any]] = None):
