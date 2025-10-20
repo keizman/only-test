@@ -6,3 +6,9 @@ only_test/__pycache__/*
 */__pycache__/*
 
 tmp/
+omnitool/*
+only_test/__pycache__/__init__.cpython-313.pyc
+__pycache__/
+
+logs
+only_test/__pycache__/__init__.cpython-313.pyc

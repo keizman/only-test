@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Enhanced Pure UIAutomator2 Widget Extractor with Omniparser Integration
-增强版纯UIAutomator2提取器，集成Omniparser视觉识别能力
+Enhanced Pure UIAutomator2 Widget Extractor (XML-only)
+增强版纯UIAutomator2提取器（XML模式）
 
-核心功能:
+重要说明（防误解）：
+- 视觉识别（Omniparser）在当前版本已默认禁用且不支持；框架默认仅使用 XML（UIAutomator2）进行元素识别。
+- 如后续恢复视觉能力，会在配置中显式开启，并在文档中另行说明。
+
+核心功能（现状）:
 1. 正常模式: 使用 XML 方式定位元素并点击，执行用户任务
-2. 播放状态: 使用 Omniparser 解析现有模式进行视觉识别
-3. 统一接口: 智能调度器自动选择最佳工具，对外输出一致
-4. 手动选择: 支持外部指定使用的具体组件
+2. 播放状态: 使用播放状态探测与保活（不依赖视觉）
+3. 统一接口: 智能调度器对外输出一致（当视觉关闭时强制 XML）
+4. 手动选择: 支持外部指定使用的具体组件（视觉将被忽略）
 """
 
 import sys
@@ -382,7 +386,16 @@ class EnhancedUIAutomator2Extractor:
         self.xml_content = None
         self.screen_size = (1440, 2560)
         
-        # 初始化组件
+        # 读取配置，确定视觉识别是否启用（默认关闭）
+        self._visual_enabled = False
+        try:
+            from only_test.lib.config_manager import ConfigManager  # 延迟导入
+            cfg = ConfigManager().get_config()
+            self._visual_enabled = bool(((cfg.get('recognition') or {}).get('visual_recognition') or {}).get('enabled', False))
+        except Exception:
+            self._visual_enabled = False
+
+        # 初始化组件（当视觉未启用时，不触发视觉客户端使用）
         self.omniparser_client = OmniparserClient(omniparser_url)
         self.visual_extractor = VisualExtractor(self.omniparser_client, device=None, device_id=self.device_id)
         self.playback_detector = PlaybackDetector()
@@ -481,6 +494,10 @@ class EnhancedUIAutomator2Extractor:
     async def detect_optimal_mode(self) -> ExtractionMode:
         """检测最佳提取模式"""
         try:
+            # 若视觉能力关闭，强制 XML 模式
+            if not self._visual_enabled:
+                logger.info("视觉识别已禁用，强制使用 XML 模式")
+                return ExtractionMode.XML_ONLY
             # 检查Omniparser服务器状态
             omniparser_available = await self.omniparser_client.health_check()
             

@@ -55,6 +55,10 @@ recognition:
   # 默认识别模式（XML-only）
   default_mode: "xml"   # 仅使用 xml（UIAutomator2）
   
+  # 视觉识别能力（Omniparser）
+  visual_recognition:
+    enabled: false   # 当前版本不支持视觉识别，强制关闭，避免误解
+  
   # 广告策略
   ads:
     auto_close_limit: 3   # 仅在前N次屏幕分析时自动关闭广告（防止过度干预）

@@ -992,6 +992,12 @@ class DeviceInspector:
             except Exception:
                 pass
             result = unified_start_app(application=pkg, device_id=self.device_id, force_restart=force_restart)
+            # 补充应用名用于日志展示
+            try:
+                if isinstance(result, dict):
+                    result.setdefault("app_name", pkg)
+            except Exception:
+                pass
             return result
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -1073,6 +1079,10 @@ class DeviceInspector:
                 resource_id = e.get('resource_id', '')
                 text = e.get('text', '')
 
+                # 先忽略完全为空的元素（rid/text/desc 全为空），避免误判
+                if not kw['rid'] and not kw['text'] and not kw['desc']:
+                    continue
+
                 # 首先检查是否在排除列表中
                 is_excluded = any(excluded_id in kw['rid'] for excluded_id in EXCLUDED_CLOSE_IDS)
                 if is_excluded:
@@ -1105,12 +1115,13 @@ class DeviceInspector:
                 if not force_close:
                     generic_matches = [k for k in GENERIC_CLOSE_KEYWORDS if k in kw['text'] or k in kw['rid'] or k in kw['desc']]
                     if generic_matches:
-                        # 再次确认不在排除列表中
-                        if not is_excluded:
-                            close_elems.append(e)
-                            logger.debug(f"发现通用关闭元素: '{text}' [{resource_id}] - 匹配: {generic_matches}")
-                        else:
-                            logger.debug(f"跳过排除的通用按钮: '{text}' [{resource_id}] - 匹配: {generic_matches} (在EXCLUDED_CLOSE_IDS中)")
+                        # 仅当存在非空的 resource_id 或 content_desc 时，才认为是有效“关闭”候选，避免纯文本(如 OK)造成误判
+                        if (kw['rid'] or kw['desc']):
+                            if not is_excluded:
+                                close_elems.append(e)
+                                logger.debug(f"发现通用关闭元素: rid='{resource_id}' text='{text}' desc='{e.get('content_desc','')}' 匹配={generic_matches}")
+                            else:
+                                logger.debug(f"跳过排除的通用按钮: rid='{resource_id}' text='{text}' 匹配={generic_matches} (在EXCLUDED_CLOSE_IDS中)")
             # 置信度评分计算
             score_details = []
 
@@ -1155,9 +1166,19 @@ class DeviceInspector:
 
             # 仅在检测到广告时输出关键信息
             if final_score >= 0.5:
-                logger.info(f"广告检测: 置信度={final_score:.2f}, 广告={len(ad_elems)}, 关闭={len(close_elems)}")
+                logger.info(f"广告检测: 置信度={final_score:.2f}, 广告={len(ad_elems)}, 关闭候选={len(close_elems)}")
                 if close_elems:
-                    logger.info(f"找到关闭按钮: {[elem.get('resource_id', '') for elem in close_elems[:3]]}")
+                    # 增强日志：输出前三个候选的关键信息，便于排查误判
+                    def _fmt(e):
+                        rid = e.get('resource_id') or ''
+                        tx = (e.get('text') or '')[:30]
+                        desc = (e.get('content_desc') or '')[:30]
+                        cls = e.get('class_name') or ''
+                        clk = e.get('clickable')
+                        b = e.get('bounds') or []
+                        return f"rid='{rid}' text='{tx}' desc='{desc}' cls='{cls}' clickable={clk} bounds={b}"
+                    preview = ", ".join(_fmt(e) for e in close_elems[:3])
+                    logger.info(f"关闭候选(Top-3): {preview}")
             else:
                 logger.debug(f"广告检测: 置信度={final_score:.2f} (未检测到明显广告)")
 
@@ -1177,7 +1198,7 @@ class DeviceInspector:
             try:
                 # 使用本地自定义的Poco库
                 from ..poco_utils import get_android_poco
-                poco = get_android_poco()
+                poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
 
                 success_count = 0
                 attempted_count = 0
@@ -1207,7 +1228,16 @@ class DeviceInspector:
                     if should_click:
                         attempted_count += 1
                         elem_type = "优先级" if is_priority else "通用"
-                        logger.debug(f"尝试点击 {elem_type} 关闭按钮: [{resource_id}]")
+                        # 增强日志：详细记录点击目标
+                        logger.info(
+                            "尝试点击%s关闭: rid='%s' text='%s' desc='%s' clickable=%s bounds=%s",
+                            elem_type,
+                            resource_id or '',
+                            text_val or '',
+                            (e.get('content_desc') or ''),
+                            clickable,
+                            e.get('bounds') or []
+                        )
 
                         try:
 
@@ -1408,7 +1438,7 @@ class DeviceInspector:
         description="执行UI动作（click/input/swipe），基于选择器或坐标并返回结果",
         category="interaction",
         parameters={
-            "action": {"type": "string", "enum": ["click", "input", "swipe"], "description": "动作类型"},
+            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "swipe"], "description": "动作类型"},
             "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px"},
             "data": {"type": "string", "description": "输入文本（当 action=input 时）", "default": ""},
             "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.5}
@@ -1470,6 +1500,21 @@ class DeviceInspector:
             if action == 'click':
                 # 1) 首选按选择器点击（Poco/XML-only）
                 ok = False
+                # 初始化 Poco（后续坐标兜底也复用）
+                from ..poco_utils import get_android_poco
+                poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                # 解析偏移（像素）
+                bias = {}
+                if isinstance(target, dict):
+                    bias = target.get('bias') or {}
+                try:
+                    dx_px = int(bias.get('dx_px')) if bias.get('dx_px') is not None else 0
+                except Exception:
+                    dx_px = 0
+                try:
+                    dy_px = int(bias.get('dy_px')) if bias.get('dy_px') is not None else 0
+                except Exception:
+                    dy_px = 0
                 # 内容/文本选择器：先验证属于目标包
                 if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
                     try:
@@ -1488,8 +1533,6 @@ class DeviceInspector:
                         pass
                 if sel_type in ('resource_id', 'content_desc', 'text') and sel_value:
                     try:
-                        from ..poco_utils import get_android_poco
-                        poco = get_android_poco()
                         obj = None
                         if sel_type == 'resource_id':
                             obj = poco(resourceId=sel_value)
@@ -1529,8 +1572,12 @@ class DeviceInspector:
                                     obj.wait_for_appearance(timeout=2.0)
                                 except Exception:
                                     pass
-                                exec_log.append(f"poco.click({sel_type}={sel_value})")
-                                obj.click()
+                                if action == 'click_with_bias' or (dx_px or dy_px):
+                                    exec_log.append(f"poco.click_with_bias({sel_type}={sel_value}, dx_px={dx_px}, dy_px={dy_px})")
+                                    obj.click_with_bias(dx_px=dx_px, dy_px=dy_px)
+                                else:
+                                    exec_log.append(f"poco.click({sel_type}={sel_value})")
+                                    obj.click()
                                 ok = True
                             except Exception as click_e:
                                 exec_log.append(f"click_error:{click_e}")
@@ -1576,18 +1623,32 @@ class DeviceInspector:
                                     return 1080, 1920
                                 sw, sh = _screen_size()
                                 if max(b) <= 1.0:
-                                    x = int(((b[0] + b[2]) / 2.0) * sw)
-                                    y = int(((b[1] + b[3]) / 2.0) * sh)
+                                    nx = (b[0] + b[2]) / 2.0
+                                    ny = (b[1] + b[3]) / 2.0
+                                    nx_off = nx + (float(dx_px) / max(1, sw))
+                                    ny_off = ny + (float(dy_px) / max(1, sh))
+                                    exec_log.append(f"poco.click([norm:{nx_off:.4f},{ny_off:.4f}]) (bias dx={dx_px},dy={dy_px})")
+                                    try:
+                                        from ..poco_utils import get_android_poco
+                                        _p = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                                        _p.click([nx_off, ny_off])
+                                        ok = True
+                                    except Exception as _pe:
+                                        exec_log.append(f"poco.click_error:{_pe}")
                                 else:
-                                    x = int((b[0] + b[2]) / 2.0)
-                                    y = int((b[1] + b[3]) / 2.0)
-                                cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
-                                p = subprocess.run(cmd.split(), capture_output=True, text=True)
-                                exec_log.append(f"{cmd} -> rc={p.returncode}")
-                                ok = (p.returncode == 0) or True
+                                    x = int((b[0] + b[2]) / 2.0) + dx_px
+                                    y = int((b[1] + b[3]) / 2.0) + dy_px
+                                    exec_log.append(f"poco.click_px({x},{y}) (bias)")
+                                    try:
+                                        from ..poco_utils import get_android_poco
+                                        _p = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                                        _p.click_px(x, y)
+                                        ok = True
+                                    except Exception as _pe2:
+                                        exec_log.append(f"poco.click_px_error:{_pe2}")
                     except Exception:
                         pass
-                # 3) 若仍失败，且给定 bounds_px，则用坐标兜底（需验证属于目标包/白名单）
+                # 3) 若仍失败，且给定 bounds_px，则用坐标兜底（需验证属于目标包/白名单），通过 Poco 执行点击
                 if not ok:
                     bp = target.get('bounds_px') if isinstance(target, dict) else None
                     if bp and isinstance(bp, (list, tuple)) and len(bp) == 4:
@@ -1596,14 +1657,10 @@ class DeviceInspector:
                                 elems = await self._get_elements_xml(clickable_only=False)
                                 # 统一为像素坐标进行重叠判断
                                 def _screen_size():
-                                    out = subprocess.run(
-                                        f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(), capture_output=True, text=True
-                                    )
-                                    if out.returncode == 0 and 'Physical size:' in out.stdout:
-                                        sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
-                                        w, h = sz.split('x')
-                                        return int(w), int(h)
-                                    return 1080, 1920
+                                    try:
+                                        return poco.get_screen_size()
+                                    except Exception:
+                                        return (1080, 1920)
                                 sw, sh = _screen_size()
                                 def _to_px(b):
                                     if max(b) <= 1.0:
@@ -1637,17 +1694,20 @@ class DeviceInspector:
 
                         x = int((bp[0] + bp[2]) / 2)
                         y = int((bp[1] + bp[3]) / 2)
-                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {x} {y}"
-                        p = subprocess.run(cmd.split(), capture_output=True, text=True)
-                        exec_log.append(f"{cmd} -> rc={p.returncode}")
-                        ok = (p.returncode == 0) or True
+                        exec_log.append(f"poco.click_px({x},{y})")
+                        try:
+                            poco.click_px(x, y)
+                            ok = True
+                        except Exception as e:
+                            exec_log.append(f"poco.click_px_error:{e}")
                 _time.sleep(max(0.0, float(wait_after)))
                 return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector), "exec_log": exec_log}
 
             elif action == 'input':
                 # 选择器范围限制
                 if sel_type == 'resource_id' and sel_value and self.target_app_package:
-                    if not str(sel_value).startswith(self.target_app_package + ":"):
+                    rid = str(sel_value)
+                    if not (rid.startswith(f"{self.target_app_package}:id/") or rid.startswith("id/")):
                         return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                 if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
                     try:
@@ -1662,10 +1722,11 @@ class DeviceInspector:
                             return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                     except Exception:
                         pass
-                # 聚焦输入框（Poco）
+                # 聚焦输入框并 set_text（优先使用 Poco 增强 set_text），失败兜底 airtest / adb
+                ok = False
                 try:
                     from ..poco_utils import get_android_poco
-                    poco = get_android_poco()
+                    poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
                     obj = None
                     if sel_type == 'resource_id':
                         obj = poco(resourceId=sel_value)
@@ -1684,32 +1745,42 @@ class DeviceInspector:
                             obj.wait_for_appearance(timeout=2.0)
                         except Exception:
                             pass
-                        exec_log.append(f"poco.click({sel_type}={sel_value})")
-                        obj.click()
-                except Exception:
-                    pass
-                # ADB 输入（空格替换为% s以兼容input）
-                safe = (data or '').replace(' ', '%s')
-                cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
-                p = subprocess.run(cmd.split(), capture_output=True, text=True)
-                exec_log.append(f"{cmd} -> rc={p.returncode}")
+                        try:
+                            obj.click()
+                        except Exception:
+                            pass
+                        res = obj.set_text(str(data or ""))
+                        exec_log.append("poco.set_text(...) -> %s" % (res if isinstance(res, str) else "ok"))
+                        ok = True
+                except Exception as e:
+                    exec_log.append(f"poco.set_text_failed:{e}")
+                    ok = False
+                if not ok:
+                    try:
+                        from only_test.lib.airtest_compat import text as air_text
+                        air_text(str(data or ""))
+                        exec_log.append("airtest.text(...)")
+                        ok = True
+                    except Exception:
+                        safe = (data or '').replace(' ', '%s')
+                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
+                        p = subprocess.run(cmd.split(), capture_output=True, text=True)
+                        exec_log.append(f"{cmd} -> rc={p.returncode}")
+                        ok = (p.returncode == 0)
                 _time.sleep(max(0.0, float(wait_after)))
-                return {"success": True, "used": used_selector, "exec_log": exec_log}
+                return {"success": True if ok else False, "used": used_selector, "exec_log": exec_log}
             elif action == 'swipe':
-                # 支持 target.swipe.start_px/end_px 或通过 bounds_px 推导方向
+                # 使用 Poco.swipe 执行滑动；支持 start_px/end_px 或基于 bounds_px 推导
                 swipe = target.get('swipe', {}) if isinstance(target, dict) else {}
-                def _screen_size():
-                    out = subprocess.run(f"adb {'-s ' + self.device_id if self.device_id else ''} shell wm size".split(), capture_output=True, text=True)
-                    if out.returncode == 0 and 'Physical size:' in out.stdout:
-                        sz = out.stdout.split('Physical size:')[-1].strip().split('\n')[0].strip()
-                        w, h = sz.split('x')
-                        return int(w), int(h)
-                    return 1080, 1920
-                w, h = _screen_size()
+                from ..poco_utils import get_android_poco
+                poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                try:
+                    w, h = poco.get_screen_size()
+                except Exception:
+                    w, h = (1080, 1920)
                 start_px = swipe.get('start_px')
                 end_px = swipe.get('end_px')
                 if not (start_px and end_px):
-                    # 若缺失，则尝试通过 bounds_px 生成从元素中心向上滑动
                     bp = target.get('bounds_px')
                     if isinstance(bp, list) and len(bp) == 4:
                         cx = int((bp[0] + bp[2]) / 2)
@@ -1717,12 +1788,19 @@ class DeviceInspector:
                         start_px = [cx, cy]
                         end_px = [cx, max(0, cy - int(0.3 * h))]
                 if start_px and end_px:
-                    dur = int((swipe.get('duration_ms') or 300))
-                    cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input swipe {int(start_px[0])} {int(start_px[1])} {int(end_px[0])} {int(end_px[1])} {dur}"
-                    p = subprocess.run(cmd.split(), capture_output=True, text=True)
-                    exec_log.append(f"{cmd} -> rc={p.returncode}")
-                    _time.sleep(max(0.0, float(wait_after)))
-                    return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur}, "exec_log": exec_log}
+                    nx1 = max(0.0, min(1.0, float(start_px[0]) / max(1, w)))
+                    ny1 = max(0.0, min(1.0, float(start_px[1]) / max(1, h)))
+                    nx2 = max(0.0, min(1.0, float(end_px[0]) / max(1, w)))
+                    ny2 = max(0.0, min(1.0, float(end_px[1]) / max(1, h)))
+                    dur_ms = int((swipe.get('duration_ms') or 300))
+                    dur = float(dur_ms) / 1000.0
+                    exec_log.append(f"poco.swipe([{nx1:.4f},{ny1:.4f}], [{nx2:.4f},{ny2:.4f}], duration={dur:.2f})")
+                    try:
+                        poco.swipe([nx1, ny1], [nx2, ny2], duration=dur)
+                        _time.sleep(max(0.0, float(wait_after)))
+                        return {"success": True, "used": {"type": "swipe", "start_px": start_px, "end_px": end_px, "duration_ms": dur_ms}, "exec_log": exec_log}
+                    except Exception as se:
+                        exec_log.append(f"poco.swipe_error:{se}")
                 return {"success": False, "error": "invalid swipe parameters", "exec_log": exec_log}
             else:
                 return {"success": False, "error": f"unsupported action: {action}", "exec_log": exec_log}
@@ -1730,11 +1808,35 @@ class DeviceInspector:
             return {"success": False, "error": str(e), "used": used_selector, "exec_log": exec_log}
 
     @mcp_tool(
+        name="execute_step_json",
+        description="执行一个步骤JSON（包含 action/target/data/wait_after），并返回执行/验证结果",
+        category="interaction",
+        parameters={
+            "step": {"type": "object", "description": "单步 JSON ({action,target,data,wait_after})"},
+            "verify": {"type": "boolean", "description": "是否进行前后验证", "default": True}
+        }
+    )
+    async def execute_step_json(self, step: Dict[str, Any], verify: bool = True) -> Dict[str, Any]:
+        try:
+            if not isinstance(step, dict):
+                return {"success": False, "error": "step must be object"}
+            action = (step.get("action") or "").lower()
+            target = step.get("target") or {}
+            data = step.get("data") or ""
+            wait_after = float(step.get("wait_after", 0.8))
+            if verify:
+                return await self.perform_and_verify(action=action, target=target, data=data, wait_after=wait_after)
+            else:
+                return await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @mcp_tool(
         name="perform_and_verify",
         description="执行UI动作并前后对比屏幕元素签名/等待条件，返回是否发生变化",
         category="interaction",
         parameters={
-            "action": {"type": "string", "enum": ["click", "input", "swipe"], "description": "动作类型"},
+            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "swipe"], "description": "动作类型"},
             "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px"},
             "data": {"type": "string", "description": "输入文本（可选）", "default": ""},
             "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.8},

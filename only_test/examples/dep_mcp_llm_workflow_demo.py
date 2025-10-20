@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: This demo file has moved to only_test/workflows/mcp_llm_workflow_demo.py
+
+Please use the new path:
+  - Module: only_test.workflows.mcp_llm_workflow_demo
+  - Script: python -m only_test.workflows.mcp_llm_workflow_demo ...
+
+This file remains temporarily for compatibility and will be removed in a future cleanup.
+"""
+"""
 MCP + LLM Workflow Demo
 =======================
 
@@ -134,7 +143,7 @@ async def main():
     meta_dir = session_dir / "meta"
 
     # Unified combined log
-    SINGLE_FILE_LOG = True
+    SINGLE_FILE_LOG = False
     combined_log_path = session_dir / "session_combined.json"
     try:
         fh = logging.FileHandler(session_dir / "session.log", encoding='utf-8')
@@ -147,6 +156,8 @@ async def main():
     # Unified session logger (session_unified.json)
     console_level = logging.INFO
     u_logger = get_logger(session_id, str(Path(args.logdir)), console_level)
+    # 记录每个工具调用对应的 result_dump_path，便于 execution_log 引用而不内联大对象
+    tool_result_dump_map: dict[str, str] = {}
 
     def dump_text(name: str, content: str) -> None:
         try:
@@ -175,7 +186,19 @@ async def main():
                     error = data.get("error")
                     exec_time = data.get("execution_time", 0.0)
                     input_params = data.get("input_params") or data.get("parameters")
-                    u_logger.log_tool_execution(tool_name=tool_name, success=success, result=result, execution_time=exec_time, error=error, input_params=input_params)
+                    res_dump_path = u_logger.log_tool_execution(
+                        tool_name=tool_name,
+                        success=success,
+                        result=result,
+                        execution_time=exec_time,
+                        error=error,
+                        input_params=input_params
+                    )
+                    try:
+                        if isinstance(res_dump_path, str) and res_dump_path:
+                            tool_result_dump_map[tool_name] = res_dump_path
+                    except Exception:
+                        pass
                 except Exception:
                     u_logger._log_structured('tool_execution', f"Tool execution: {name}", name=name, content=content_str)
             elif name.startswith("error_"):
@@ -239,13 +262,45 @@ async def main():
     exec_log_path = session_dir / "execution_log.json"
     def append_exec_log(record: dict) -> None:
         try:
-            record = dict(record)
-            record.setdefault("timestamp", datetime.now().isoformat())
+            rec = dict(record)
+            rec.setdefault("timestamp", datetime.now().isoformat())
+            # 元素太大时：将 verification.result.pre/post.elements 换成路径引用，避免干扰阅读
+            try:
+                v = rec.get("verification")
+                if isinstance(v, dict):
+                    # 计算本轮 key 和可用路径
+                    rnd = rec.get("round")
+                    tool_key = f"perform_and_verify_round_{rnd}" if rnd is not None else None
+                    ver_dump_path = tool_result_dump_map.get(tool_key, "") if tool_key else ""
+                    if ver_dump_path:
+                        rec["verification_dump_path"] = ver_dump_path
+                    else:
+                        # 兜底：指向离散工具日志文件（包含 pre/post 完整内容）
+                        rec["verification_dump_path"] = f"tools/tool_perform_and_verify_round_{rnd}.json" if rnd is not None else ""
+                    # pre 元素可直接指向同轮的 screen_info（若有 refresh 则使用刷新版本）
+                    pre_tool_name = f"tool_get_current_screen_info_round_{rnd}{'_refresh' if rec.get('refresh_used') else ''}.json" if rnd is not None else ""
+                    pre_path = f"tools/{pre_tool_name}" if pre_tool_name else ""
+
+                    # 就地精简 verification 对象里的 elements
+                    tv = v.get("result") if isinstance(v.get("result"), dict) else v
+                    for part, path_val in (("pre", pre_path), ("post", rec.get("verification_dump_path"))):
+                        try:
+                            if isinstance(tv.get(part), dict):
+                                # 删除巨大 elements，改写为 elements_path
+                                if "elements" in tv[part]:
+                                    tv[part].pop("elements", None)
+                                if path_val:
+                                    tv[part]["elements_path"] = path_val
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
             with open(exec_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             # also add to combined log
             with open(combined_log_path, 'a', encoding='utf-8') as cf:
-                cf.write(json.dumps({"name": "execution_log", **record}, ensure_ascii=False) + "\n")
+                cf.write(json.dumps({"name": "execution_log", **rec}, ensure_ascii=False) + "\n")
         except Exception:
             pass
 
@@ -275,6 +330,51 @@ async def main():
         pass
 
     # Prepare MCP server and register real DeviceInspector tools
+    # 在启动前严格校验设备是否存在；若设备不存在则直接退出
+    try:
+        import subprocess as _sp
+        def _list_adb_devices() -> list[str]:
+            try:
+                out = _sp.run(["adb", "devices"], capture_output=True, text=True, timeout=10)
+                if out.returncode != 0:
+                    return []
+                lines = [ln.strip() for ln in (out.stdout or "").splitlines()]
+                devs = []
+                for ln in lines[1:]:  # skip header
+                    if not ln:
+                        continue
+                    parts = ln.split()
+                    if len(parts) >= 2 and parts[1] == "device":
+                        devs.append(parts[0])
+                return devs
+            except Exception:
+                return []
+
+        connected = _list_adb_devices()
+        target_serial = (args.device_id or "").strip() if args.device_id else None
+        device_ok = False
+        if target_serial:
+            device_ok = target_serial in connected
+        else:
+            device_ok = len(connected) > 0
+
+        if not device_ok:
+            msg = f"ADB 设备不存在或未连接: target={target_serial or 'default'}; connected={connected}"
+            logger.error(msg)
+            try:
+                dump_text("error_device_not_found.txt", msg)
+            except Exception:
+                pass
+            # 统一日志通道
+            try:
+                u_logger._log_structured('error', 'Device not found', name='error_device_not_found', content=msg)
+            except Exception:
+                pass
+            sys.exit(2)
+    except Exception:
+        # 若校验逻辑本身出错，则继续，但后续很可能失败
+        pass
+
     server = MCPServer(device_id=args.device_id)
     try:
         from only_test.lib.mcp_interface.device_inspector import DeviceInspector
@@ -303,12 +403,44 @@ async def main():
             except Exception:
                 pass
             dump_text("tool_start_app.json", json.dumps(_start_dict, ensure_ascii=False, indent=2))
+
+            # 若启动应用失败（包括未抛异常但返回失败），直接错误并退出
+            start_success = bool(getattr(start_resp, 'success', False))
+            try:
+                # 如果 result 是 dict 并包含 success 字段，则与顶层 success 共同判定
+                res_obj = getattr(start_resp, 'result', None)
+                if isinstance(res_obj, dict) and ('success' in res_obj):
+                    start_success = start_success and bool(res_obj.get('success'))
+            except Exception:
+                pass
+            if not start_success:
+                err_msg = None
+                try:
+                    err_msg = getattr(start_resp, 'error', None)
+                    if not err_msg and isinstance(getattr(start_resp, 'result', None), dict):
+                        err_msg = start_resp.result.get('error')
+                except Exception:
+                    pass
+                err_text = f"启动未知应用: 失败{(' - ' + err_msg) if err_msg else ''}"
+                logger.error(err_text)
+                try:
+                    dump_text("error_start_app.txt", err_text)
+                except Exception:
+                    pass
+                sys.exit(3)
         except Exception as hook_e:
-            logger.warning(f"Auto restart hook failed (continuing): {hook_e}")
+            # 异常场景也直接退出
+            logger.error(f"启动应用发生异常: {hook_e}")
+            try:
+                dump_text("error_start_app_exception.txt", str(hook_e))
+            except Exception:
+                pass
+            sys.exit(3)
     except Exception as e:
         logger.error(f"Failed to init/register DeviceInspector tools: {e}")
         dump_text("error_device_inspector.txt", str(e))
-        raise
+        # 初始化失败也直接退出
+        sys.exit(1)
 
     async def llm_generate_testcase(**kwargs):
         requirement = kwargs.get("requirement") or args.requirement
@@ -466,7 +598,7 @@ async def main():
             raise
 
     async def llm_generate_testcase_v2(**kwargs):
-        """Multi-round step guidance with strict JSON and dry-run safety; writes execution_log.jsonl."""
+        """Multi-round step guidance with strict JSON and dry-run safety; writes execution_log.json."""
         requirement = kwargs.get("requirement") or args.requirement
         target_app = kwargs.get("target_app") or args.target_app
 
@@ -1184,7 +1316,7 @@ async def main():
                         data = next_action.get('data') or ''
                     except Exception as e:
                         dump_text(f"error_parse_step_{round_idx}_corrective.txt", f"{e}\n\nRAW:\n{resp2.content}")
-                if action in ("click", "input"):
+                if action in ("click", "click_with_bias", "input"):
                     exec_intent = {
                         "action": action,
                         "target": target,
@@ -1214,6 +1346,7 @@ async def main():
                         "next_action": next_action,
                         "recognition_strategy": (screen.result or {}).get("element_analysis", {}).get("recognition_strategy", "unknown"),
                         "verification": exec_resp.to_dict() if hasattr(exec_resp, 'to_dict') else exec_resp,
+                        "refresh_used": bool(refresh_used),
                     })
                     generated_steps.append({
                         "step": round_idx,
@@ -1255,6 +1388,7 @@ async def main():
                         "next_action": next_action,
                         "recognition_strategy": (screen.result or {}).get("element_analysis", {}).get("recognition_strategy", "unknown"),
                         "verification": wf,
+                        "refresh_used": bool(refresh_used),
                     })
                     generated_steps.append({
                         "step": round_idx,

@@ -24,7 +24,7 @@ except Exception:
     jsonschema = None
 
 ALLOWED_ACTIONS: Set[str] = {
-    "launch", "restart", "click", "input", "wait", "wait_for_elements", "assert", "swipe"
+    "launch", "restart", "click", "click_with_bias", "input", "wait", "wait_for_elements", "assert", "swipe"
 }
 ALLOWED_SELECTOR_KEYS: Set[str] = {"resource_id", "text", "content_desc"}
 
@@ -120,7 +120,7 @@ def semantic_checks(case: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
                 if not selectors:
                     errors.append(f"{ctx}: wait_for_elements requires target.priority_selectors")
 
-            if action in ("click", "input"):
+            if action in ("click", "click_with_bias", "input"):
                 if not selectors and not bounds_px:
                     errors.append(f"{ctx}: click/input requires either priority_selectors or bounds_px")
 

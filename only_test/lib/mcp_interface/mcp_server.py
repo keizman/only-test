@@ -111,12 +111,24 @@ class MCPServer:
                 result = await tool.function(**parameters)
             else:
                 result = tool.function(**parameters)
-            
+
             execution_time = asyncio.get_event_loop().time() - start_time
-            
+
+            # 若工具返回字典且包含 success=False，则将本次执行判定为失败
+            derived_success = True
+            derived_error: Optional[str] = None
+            try:
+                if isinstance(result, dict) and ("success" in result):
+                    if not bool(result.get("success")):
+                        derived_success = False
+                        derived_error = str(result.get("error") or f"{tool_name} 执行返回失败")
+            except Exception:
+                pass
+
             response = MCPResponse(
-                success=True,
+                success=derived_success,
                 result=result,
+                error=derived_error,
                 execution_time=execution_time,
                 tool_name=tool_name,
                 timestamp=datetime.now().isoformat()
@@ -125,7 +137,10 @@ class MCPServer:
             # 记录执行历史
             self._record_execution(tool_name, parameters, response)
             
-            logger.info(f"工具执行成功: {tool_name} ({execution_time:.2f}s)")
+            if response.success:
+                logger.info(f"工具执行成功: {tool_name} ({execution_time:.2f}s)")
+            else:
+                logger.error(f"工具执行失败: {tool_name} - {response.error or 'unknown error'}")
             return response
             
         except Exception as e:

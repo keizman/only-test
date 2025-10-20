@@ -1047,8 +1047,149 @@ junya@WIN-D623EFH4RDQ:/mnt/c/Download/git/uni/logs/mcp_demo/session_20251015_181
 5.s所有 jsonl 改为使用 json suffix
 6.logs/下创建了很多空目录, 无用的空目录不再创建
 
+-------------
+
+1.excution_log 中的 elements换为 path 的方式, 与 session_unified 逻辑相同, 避免太多的不相关因素干扰阅读, 另外 其内容是否和 tool_get_current_screen*相同呢, 那就直接可以指向相同 path? 
 
 
+----
+
+recorder
+
+
+yaml 驱动配置/测试用例
+json 驱动日志/LLM 用例生成, 关联 log path 
+log/txt 记录日志
+
+./only_test 是目前正在做的一个 Android 用例自动录制的项目
+.\tmp\midscene\README.zh.md 是业界多人使用的 AI 执行用例的项目, 理念不同 但其中的实现思路值得借鉴, 
+我现在需要你先了解 only_test 是什么, 之后了解 midscene 项目, 最后给出从宏观到具体的对于 only_test 的优化思路. 并解决目前录制效果不稳定问题
+
+
+support yaml testcase file to make the input testcase --requirement more understandable
+
+file: main.yaml
+
+file: test_case_plan_001.yaml
+
+```
+
+tasks:
+- testcase: "播放 VOD 节目 'Peppa Pig: The Golden Boots'：进入首页→关闭广告→打开搜索→输入节目名→点击节目→点击播放→等待广告消失→点击全屏→断言播放状态正常"
+  - test_case_file_name: ""
+  - description: 
+	- for_ai: "in general this is a Precautions"
+    - for_human: "this content should copy to testcase file, LLM just need to copy it, no need to understand it"
+  - step_name: Search for weather
+    flow:
+      - ai: Search for "today's weather"
+      - sleep: 3000
+	  
+	  
+
+  - step_name: Check results
+    flow:
+      - aiAssert: The results show weather information
+
+
+```
+
+
+
+
+不实用. 1.Poster 等重复元素无任何作用, 节目点击步骤无任何作用, 
+Idea: To XML  resourceId or more content to vector. Collect/record all history XML resource
+1.When start action: search it from vector the simiulatory higer than 90%? 
+2.match it from current screen, if exist 
+
+--------
+
+这句话的内容从哪了解到的  以及可选视觉识别（Omniparser）. 将其标注为 目前已不支持 视觉识别（Omniparser）, 因为 XML 识别方式满足现有需求, 防止后人误会. 
+2.jsonl 统一使用了 json, 如果还有说明使用 jsonl 的注释. 代码 请兼容
+
+# 3.实现坐标归一化, 适用于多设备情况直接根据该设备的像素计算出对应的坐标点, 避免多次适配(可能出现该 app 没有适配指定端 即使进行重新计算也无法成功点击, 需要想想解决方案) --只有 coord 定位才需要, 确认目前有吗?      - 设备自适配：坐标统一归一化存储并按 device_config.yaml 的 device_adaptation
+
+- 可视化报告/Playground 将 unified_logger 的结构化日志与录制步 JSON 结合， 提供回放视图：每步高亮目标元素、展示多策略定位的命中顺序与失败原因。
+  
+
+- LLM 调用与工作流（具体落地）
+  - 选择器池约束 + 回退：LLM 只能使用 validator 提供的选择器池，失败时自动落到 bounds/坐标（已有 validator，建议把录制池接入）。
+  - 调用缓存：midscene 的缓存理念同样适用——相同上下文跳过重复推理，直接走即时通道。
+
+
+
+3. 坐标归一化与多设备适配（仅 coord 定位）
+
+- 确认现状
+  - 已有：Poco 的 click_px 会按屏幕分辨率换算为归一化坐标；click_with_bias 使用归一化；多处有获取屏幕尺寸的回退方案。
+- 目标与落地
+  - 录制与用例存储：坐标只存“归一化坐标”（必要时同时存像素作为冗余），避免设备间反复适配。
+  - 运行期换算：在点击执行时按当前设备分辨率换算像素；结合 device_config.yaml 的 device_adaptation（状态栏偏移、横竖屏等）修正。
+  - 失败兜底（App 未适配指定端的场景）：
+	  - 以归一化坐标为中心做“附近搜索”（半径阈值）用 CoordElementFinder 找到最前景且可交互的候选点击；
+	  - 若仍失败，回退到已录选择器池或 bounds 中心点；再不行再用坐标硬点。
+- 验收
+  - 跨两台不同分辨率设备的“coord-only”步骤可直接回放；
+  - 提供“附近搜索”成功率与回退层级日志，便于诊断。
+
+
+
+----
+
+先对以下任务进行规划, 不 coding: 对比两者的 MCP 实现, 当前项目存在问题: 使用 MCP 执行任务时(点击/任意好像没有成功? 导致页面只是滑动并没有成功执行, 比如
+{
+    "phase": "execute",
+    "round": 2,
+    "status": "ok",
+    "next_action": {
+        "action": "click",
+        "target": {
+            "priority_selectors": [
+                {
+                    "resource_id": "com.mobile.brasiltvmobile:id/mVodSearch"
+                },
+                {
+                    "text": "Search for content title"
+                }
+            ]
+        },
+        "data": null,
+        "wait_after": 1.0,
+        "expected_result": "搜索输入框应被激活，进入搜索页面，出现可输入的文本框。"
+    },
+} 日志成功显示了 LLM 期望点击 com.mobile.brasiltvmobile:id/mVodSearch, 但是最终我从页面看并没有看到其进入了 页面, 还有一些滑动操作好像还没有记录? 这让我 confuse, 认为日志记录也有些问题, 
+./only_test 是目前正在做的一个 Android 用例自动录制的项目
+.\tmp\midscene\README.zh.md 是业界多人使用的 AI 执行用例的项目, 理念不同 但其中的实现思路值得借鉴, 
+
+context: 
+You need consider to read 
+only_test\testcases\python\example_airtest_record.py
+only_test\templates\prompts\
+
+to load more about this prompt. 
+
+
+---
+
+1.用例生成不传入 element resourceId 为空 and text 为空的, 都为空的一般认为不为有效控件, 直接不考虑传入
+2.目前步骤与步骤之前链接有问题 比如 第一步执行成功后, 第二步执行了与第一步相同的事情, 为了避免这种情况, 我考虑把 第一轮的输出 + 到第二轮的输出, 
+以此类推, 只输入 上 N (目前暂定 10 ) 轮次的 response 以让 next step 不要混淆已经执行过的步骤, (如果超出 10 个 step了 则 1-11 取 2 -11 输入最新的content)  因此 pormpt 中需要明确标识 previous step 的 respone 产物, 并且这个 N defualt 10 可配置, 你可以将配置写道已有的 yaml 中, 或者支持生成用例时命令行传入
+同时你可以看到plan 是有多个 step的, 请再书写完这个 计划后使用 max_rounds 算出当前 step 之后取出 steps 中当前应该执行的 step 追加到末尾, 让 LLM 更清楚应该做什么 比如 
+总体计划: {\"plan_id\": \"plan_20231005_120000\", \"objective\": \"播放 VOD 节目 'Peppa Pig: The Golden Boots'：进入首页→关闭广告→打开搜索→输入节目名→点击节目→点击播放→等待广告消失→点击全屏→断言播放状态正常\", \"keyword\": \"play_vod_program\", \"max_rounds\": 8, \"steps\": [{\"intent\": \"关闭启动广告\", \"action\": \"tool\", \"notes\": \"使用 close_ads 工具关闭可能弹出的启动广告，确保进入首页状态干净\"}, {\"intent\": \"打开搜索\", \"action\": \"click\", \"notes\": \"在首页找到并点击搜索入口，进入搜索页面\"}, {\"intent\": \"输入关键词\", \"action\": \"input\", \"notes\": \"在搜索输入框中输入目标节目名称 'Peppa Pig: The Golden Boots'\"}, {\"intent\": \"等待结果\", \"action\": \"wait_for_elements\", \"notes\": \"等待搜索结果加载完成，确保目标节目出现在列表中\"}, {\"intent\": \"进入详情并播放\", \"action\": \"click\", \"notes\": \"点击搜索结果中的目标节目，进入播放详情页并触发播放\"}, {\"intent\": \"等待广告消失\", \"action\": \"tool\", \"notes\": \"使用 close_ads 工具处理播放前可能出现的插播广告\"}, {\"intent\": \"进入全屏\", \"action\": \"click\", \"notes\": \"点击播放器全屏按钮，进入全屏播放模式\"}, {\"intent\": \"断言播放状态\", \"action\": \"assert\", \"notes\": \"验证视频正在播放，无卡顿、无错误提示，播放状态正常\"}]}, 上 {N} 轮输出是 {response} 你的任务是 {step[index]} = {\"intent\": \"进入详情并播放\", \"action\": \"click\", \"notes\": \"点击搜索结果中的目标节目，进入播放详情页并触发播放\"} .... 剩余内容
+-- 我发现之前有 "之前步骤"  的内容是包含往期 response 的但是还是有问题 证明描述不够清晰, 请你按照上方描述
+
+3.检查之前的 prompt 中是否有 next_action_guidance 可以让这一轮执行时用自然语言描述一些内容让下一轮的输出更精确, 避免太长内容导致其不知道干什么的问题 
+4.往期用例示例: example_airtest_record.from_py.json, example_airtest_record.py 还是有问题, 只写了文件名 未提供文件内容
+
+
+
+---
+1. 无需这一步   {\n      \"intent\": \"关闭启动广告\",\n      \"action\": \"tool\",\n      \"notes\": \"使用 close_ads 工具关闭可能弹出的启动广告，确保进入首页状态干净\"\n    }     启动应用时会自动关闭广告, 增加 prompt 说明无需 plan 广告那一环
+2.确认是 step[i] = …”（来自 plan.steps[i-1]）. 不应直接是 i 吗 当前轮次 = 1 则给 LLM  的提示也应该是 第一个 . 你的想法呢 -----for 里 0 是1 .... 迷糊了
+
+
+
+"{\n  \"plan_id\": \"plan_20231005_120000\",\n  \"objective\": \"播放 VOD 节目 'Peppa Pig: The Golden Boots'：进入首页→关闭广告→打开搜索→输入节目名→点击节目→点击播放→等待广告消失→点击全屏→断言播放状态正常\",\n  \"keyword\": \"play_vod_program\",\n  \"max_rounds\": 8,\n  \"steps\": [\n    {\n      \"intent\": \"关闭启动广告\",\n      \"action\": \"tool\",\n      \"notes\": \"使用 close_ads 工具关闭可能弹出的启动广告，确保进入首页状态干净\"\n    },\n    {\n      \"intent\": \"打开搜索\",\n      \"action\": \"click\",\n      \"notes\": \"在首页找到并点击搜索入口，进入搜索页面\"\n    },\n    {\n      \"intent\": \"输入关键词\",\n      \"action\": \"input\",\n      \"notes\": \"在搜索输入框中输入目标节目名称 'Peppa Pig: The Golden Boots'\"\n    },\n    {\n      \"intent\": \"等待结果\",\n      \"action\": \"wait_for_elements\",\n      \"notes\": \"等待搜索结果加载完成，确保目标节目出现在列表中\"\n    },\n    {\n      \"intent\": \"进入详情并播放\",\n      \"action\": \"click\",\n      \"notes\": \"点击搜索结果中的目标节目，进入播放详情页并触发播放\"\n    },\n    {\n      \"intent\": \"等待广告消失\",\n      \"action\": \"tool\",\n      \"notes\": \"使用 close_ads 工具处理播放前可能出现的插播广告\"\n    },\n    {\n      \"intent\": \"进入全屏\",\n      \"action\": \"click\",\n      \"notes\": \"点击播放器全屏按钮，进入全屏播放模式\"\n    },\n    {\n      \"intent\": \"断言播放状态\",\n      \"action\": \"assert\",\n      \"notes\": \"验证视频正在播放，无卡顿、无错误提示，播放状态正常\"\n    }\n  ]\n}",
 
 
 -----

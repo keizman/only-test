@@ -298,7 +298,7 @@ device_adaptation:
   # 默认设备适配参数
   default_adaptation:
     # 状态栏偏移配置 - 设备适配器用于计算触摸坐标偏移
-    status_bar_offset:
+    status_bar_offset: 
       high_resolution: 60    # >= 2400px (高分辨率设备状态栏高度)
       standard_resolution: 50  # >= 1920px (标准分辨率状态栏高度)
       low_resolution: 40     # < 1920px (低分辨率设备状态栏高度)

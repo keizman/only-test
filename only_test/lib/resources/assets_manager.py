@@ -260,12 +260,29 @@ class AssetsManager:
             "error_info": result.get("error", None)
         }
         
-        # 追加到执行日志文件
-        log_file = self.session_path / "execution_log.jsonl"  # 使用JSONL格式便于追加
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        
-        return f"{self.session_path.name}/execution_log.jsonl"
+        # 追加到执行日志文件（JSON 对象 + entries 数组）
+        log_file = self.session_path / "execution_log.json"
+        if log_file.exists():
+            try:
+                data = json.loads(log_file.read_text(encoding='utf-8'))
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+        if not isinstance(data, dict):
+            data = {}
+        data.setdefault("session_id", self.current_session.get("session_id"))
+        entries = data.get("entries")
+        if not isinstance(entries, list):
+            entries = []
+        entries.append(log_entry)
+        data["entries"] = entries
+
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return f"{self.session_path.name}/execution_log.json"
     
     def update_json_testcase_with_assets(self, json_file: str, output_file: Optional[str] = None) -> str:
         """

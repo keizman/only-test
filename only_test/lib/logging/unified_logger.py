@@ -127,20 +127,15 @@ class UnifiedLogger:
             return f"[{self.current_phase.upper()}] "
 
     def _print_and_log(self, message: str, level: str = "info"):
-        """输出到控制台并记录到文件（不带时间戳前缀）"""
+        """记录一条带阶段前缀的日志到控制台和文件（避免重复打印）。"""
         prefix = self._get_phase_prefix()
-        full_message = f"{prefix}{message}"
+        full_message = f"{prefix}{message}" if prefix else message
 
-        # 输出到控制台（通过logger以保持一致性）
-        # 使用_log方法直接记录，避免重复的时间戳
         import logging
         log_level = getattr(logging, level.upper(), logging.INFO)
 
-        # 创建不带格式的输出
-        print(full_message)
-
-        # 同时写入文件（带完整格式）
-        self.logger.log(log_level, message)
+        # 仅通过标准 logger 输出一次（控制台+文件handler），不再直接 print，避免重复
+        self.logger.log(log_level, full_message)
     
     def _save_structured_log(self, log_entry: Dict[str, Any]):
         """保存结构化日志到JSON文件，并注入统一字段方便过滤/统计"""
@@ -241,7 +236,9 @@ class UnifiedLogger:
                          execution_time: float, error: Optional[str] = None,
                          screenshot_data: Optional[bytes] = None,
                          input_params: Optional[Dict[str, Any]] = None):
-        """记录工具执行 - 支持result和截图分离存储，并记录输入参数摘要"""
+        """记录工具执行 - 支持result和截图分离存储，并记录输入参数摘要
+        返回值：若保存了完整result转储，则返回相对路径（result_dump_path）；否则返回None。
+        """
 
         status = "SUCCESS" if success else "FAILED"
         self.info(f"Tool {tool_name} executed: {status} ({execution_time:.3f}s)")
@@ -277,6 +274,8 @@ class UnifiedLogger:
                 import json
                 result_json = json.dumps(result, ensure_ascii=False)
                 log_entry["metadata"]["result_size"] = len(result_json)
+        else:
+            result_path = None
         
         # 处理输入参数摘要（不内联大对象）
         if input_params is not None:
@@ -297,6 +296,8 @@ class UnifiedLogger:
             log_entry["metadata"]["screenshot_size"] = len(screenshot_data)
         
         self._save_structured_log(log_entry)
+        # 返回完整结果转储路径，便于上层在其他日志中做引用
+        return log_entry.get("result_dump_path")
     
     def _log_tool_result_summary(self, tool_name: str, result: Any):
         """显示工具执行结果摘要"""

@@ -4,6 +4,10 @@ Scope
 - Replace legacy UIAutomator1 stack with UIAutomator2 only, while keeping Poco’s API and dump format stable.
 - Make it work inside AirtestIDE’s embedded Python 3.6.8 (no site‑packages), without changing IDE internals.
 
+Note on Visual Recognition (Omniparser)
+- Current project status: visual recognition (Omniparser) is NOT supported and remains disabled by default.
+- Default identification mode is XML (UIAutomator2). Any future re‑enablement will be explicitly documented and gated by configuration.
+
 Major Problems Encountered
 - Embedded Python has no pip/site‑packages; imports fail (ImportError: uiautomator2, adbutils, whichcraft, xmltodict, cigam, progress, …).
 - Old PIL shipped by IDE (5.4.1) causes crashes in libs expecting newer Pillow (UnidentifiedImageError) or binary core mismatch (_imaging).

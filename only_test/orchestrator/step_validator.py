@@ -79,7 +79,7 @@ step = {
 from typing import Dict, Any, List, Tuple, Optional, Set
 
 ALLOWED_ACTIONS: Set[str] = {
-    "click", "input", "wait_for_elements", "wait", "restart", "launch", "assert", "swipe"
+    "click", "click_with_bias", "input", "wait_for_elements", "wait", "restart", "launch", "assert", "swipe"
 }
 
 ALLOWED_SELECTOR_KEYS: Set[str] = {"resource_id", "text", "content_desc"}

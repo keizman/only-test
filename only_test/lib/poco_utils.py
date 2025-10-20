@@ -99,6 +99,18 @@ def get_android_poco(
         except Exception as exc:  # noqa: BLE001 - logging only
             logger.debug("自动注入播放态Hook失败: %s", exc)
 
+        # 可选：安装录制Hook（通过环境变量启用）
+        try:
+            from only_test.lib.recorder import start_recording, install_poco_hooks  # lazy import
+
+            if str(os.getenv("ONLY_TEST_RECORD", "")).strip() in ("1", "true", "True"):
+                # 初始化全局recorder（仅一次）并安装poco hooks
+                start_recording(device_id=device_id)
+                install_poco_hooks(poco)
+                print("✓ 已启用操作录制（Poco hooks）")
+        except Exception as exc:  # noqa: BLE001 - logging only
+            logger.debug("启用录制Hook失败: %s", exc)
+
         return poco
         
     except ImportError as import_error:

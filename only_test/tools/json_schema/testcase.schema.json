@@ -34,7 +34,7 @@
           "type": {"type": "string", "enum": ["ui", "tool"]},
           "description": {"type": "string"},
           "action": {"type": "string", "enum": [
-            "launch", "restart", "click", "input", "wait", "wait_for_elements", "assert", "swipe"
+            "launch", "restart", "click", "click_with_bias", "input", "wait", "wait_for_elements", "assert", "swipe"
           ]},
           "target": {
             "type": "object",

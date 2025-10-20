@@ -25,6 +25,17 @@ try:
 except Exception:  # pragma: no cover
     _current_device = None  # type: ignore
 
+# 可选：录制Hook（与 ONLY_TEST_RECORD 配合使用）
+try:
+    from only_test.lib.recorder import start_recording as _rec_start, install_airtest_hooks as _rec_install_air
+    import os as _os
+    if str(_os.getenv("ONLY_TEST_RECORD", "")).strip() in ("1", "true", "True"):
+        # 初始化录制器 + 安装Airtest钩子（幂等）
+        _rec_start(device_id=_os.getenv("ONLY_TEST_DEVICE_ID") or None)
+        _rec_install_air()
+except Exception:
+    pass
+
 
 def _get_current_serial() -> Optional[str]:
     try:
@@ -68,4 +79,3 @@ def start_app(package: str, *args: Any, **kwargs: Any):  # type: ignore[override
     except Exception:
         # 兜底：回退到原生 airtest 行为，避免破坏既有用例
         return _air_api.start_app(package, *args, **kwargs)
-

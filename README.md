@@ -46,6 +46,7 @@ Only-Test 是一个革命性的移动端UI自动化测试框架，通过 JSON + 
 - ✅ **条件逻辑**: "如果搜索框有内容先清空" → 自动转换为条件分支
 - ✅ **自然语言**: 用户只需描述测试意图，无需编程
 - ✅ **XML 识别**: 基于 UIAutomator2 的 XML 模式，配合"播放控制栏保活"确保播放场景可操作
+- ⚠️ 说明：视觉识别（Omniparser）目前不支持，默认仅使用 XML（UIAutomator2）模式，避免误解。
 - ✅ **完整追溯**: 每个操作都有完整的执行轨迹记录
 
 ### 🏗️ 核心架构设计思想
@@ -165,7 +166,7 @@ python tools/test_runner.py --file testcase.json
 # 示例: assets/com_ss_android_ugc_aweme_Pixel6Pro/
 #   ├── step01_click_before_20241205_143022_123.png
 #   ├── step02_conditional_action_after_20241205_143035.png
-#   └── execution_log.jsonl
+#   └── execution_log.json
 ```
 
 #### **步骤4: 数据回写与代码生成**
