@@ -397,121 +397,125 @@ class LLMClient:
         return response
     
     def generate_test_case(self, description: str, app_package: str, device_type: str = "android_phone") -> Optional[Dict[str, Any]]:
-        """
-        生成测试用例
+        # 这里的内容不再使用, 只使用统一的 prompt 模块定义 prompt
+        return "这里的内容不再使用, 只使用统一的 prompt 模块定义 prompt"
+#         """
+#         生成测试用例
         
-        Args:
-            description: 测试需求描述
-            app_package: 应用包名
-            device_type: 设备类型
+#         Args:
+#             description: 测试需求描述
+#             app_package: 应用包名
+#             device_type: 设备类型
             
-        Returns:
-            Dict: 生成的测试用例JSON
-        """
-        system_prompt = """你是一个专业的移动端UI自动化测试专家，负责将用户的自然语言描述转换为结构化的测试用例JSON。
+#         Returns:
+#             Dict: 生成的测试用例JSON
+#         """
+#         system_prompt = """你是一个专业的移动端UI自动化测试专家，负责将用户的自然语言描述转换为结构化的测试用例JSON。
 
-请根据用户描述生成完整的测试用例，包含：
-1. 条件分支逻辑 (如果...就...)
-2. 智能元数据 (AI提示、业务逻辑说明)
-3. 多重选择器策略
-4. 断言验证
+# 请根据用户描述生成完整的测试用例，包含：
+# 1. 条件分支逻辑 (如果...就...)
+# 2. 智能元数据 (AI提示、业务逻辑说明)
+# 3. 多重选择器策略
+# 4. 断言验证
 
-返回标准的Only-Test JSON格式。"""
+# 返回标准的Only-Test JSON格式。"""
         
-        user_prompt = f"""
-请为以下测试需求生成测试用例:
+#         user_prompt = f"""
+# 请为以下测试需求生成测试用例:
 
-应用包名: {app_package}
-设备类型: {device_type}
-测试需求: {description}
+# 应用包名: {app_package}
+# 设备类型: {device_type}
+# 测试需求: {description}
 
-请生成包含智能条件逻辑的完整JSON测试用例。
-"""
+# 请生成包含智能条件逻辑的完整JSON测试用例。
+# """
         
-        messages = [
-            LLMMessage("system", system_prompt),
-            LLMMessage("user", user_prompt)
-        ]
+#         messages = [
+#             LLMMessage("system", system_prompt),
+#             LLMMessage("user", user_prompt)
+#         ]
         
-        response = self.chat_completion(messages, temperature=0.3)  # 较低温度保证结构化输出
+#         response = self.chat_completion(messages, temperature=0.3)  # 较低温度保证结构化输出
         
-        if not response.success:
-            logger.error(f"LLM测试用例生成失败: {response.error}")
-            return None
+#         if not response.success:
+#             logger.error(f"LLM测试用例生成失败: {response.error}")
+#             return None
         
-        try:
-            # 尝试解析JSON
-            content = response.content.strip()
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
+#         try:
+#             # 尝试解析JSON
+#             content = response.content.strip()
+#             if content.startswith('```json'):
+#                 content = content[7:]
+#             if content.endswith('```'):
+#                 content = content[:-3]
             
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"LLM返回内容不是有效JSON: {e}")
-            logger.debug(f"原始内容: {response.content}")
-            return None
+#             return json.loads(content)
+#         except json.JSONDecodeError as e:
+#             logger.error(f"LLM返回内容不是有效JSON: {e}")
+#             logger.debug(f"原始内容: {response.content}")
+#             return None
     
     def review_test_case(self, test_case: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        审查测试用例
+        # 这里的内容不再使用, 只使用统一的 prompt 模块定义 prompt
+        return "这里的内容不再使用, 只使用统一的 prompt 模块定义 prompt"
+#         """
+#         审查测试用例
         
-        Args:
-            test_case: 测试用例JSON
+#         Args:
+#             test_case: 测试用例JSON
             
-        Returns:
-            Dict: 审查结果和建议
-        """
-        system_prompt = """你是一个测试用例审查专家，负责审查移动端UI自动化测试用例的质量。
+#         Returns:
+#             Dict: 审查结果和建议
+#         """
+#         system_prompt = """你是一个测试用例审查专家，负责审查移动端UI自动化测试用例的质量。
 
-请从以下方面评估测试用例：
-1. 逻辑完整性
-2. 选择器准确性  
-3. 异常处理
-4. 执行效率
-5. 维护性
+# 请从以下方面评估测试用例：
+# 1. 逻辑完整性
+# 2. 选择器准确性  
+# 3. 异常处理
+# 4. 执行效率
+# 5. 维护性
 
-返回JSON格式的审查报告。"""
+# 返回JSON格式的审查报告。"""
         
-        user_prompt = f"""
-请审查以下测试用例:
+#         user_prompt = f"""
+# 请审查以下测试用例:
 
-{json.dumps(test_case, ensure_ascii=False, indent=2)}
+# {json.dumps(test_case, ensure_ascii=False, indent=2)}
 
-返回审查报告，包含评分、问题列表和改进建议。
-"""
+# 返回审查报告，包含评分、问题列表和改进建议。
+# """
         
-        messages = [
-            LLMMessage("system", system_prompt),
-            LLMMessage("user", user_prompt)
-        ]
+#         messages = [
+#             LLMMessage("system", system_prompt),
+#             LLMMessage("user", user_prompt)
+#         ]
         
-        response = self.chat_completion(messages, temperature=0.2)
+#         response = self.chat_completion(messages, temperature=0.2)
         
-        if not response.success:
-            return {
-                "success": False,
-                "error": response.error,
-                "score": 0,
-                "issues": ["LLM审查服务不可用"],
-                "suggestions": []
-            }
+#         if not response.success:
+#             return {
+#                 "success": False,
+#                 "error": response.error,
+#                 "score": 0,
+#                 "issues": ["LLM审查服务不可用"],
+#                 "suggestions": []
+#             }
         
-        try:
-            content = response.content.strip()
-            if content.startswith('```json'):
-                content = content[7:-3]
+#         try:
+#             content = response.content.strip()
+#             if content.startswith('```json'):
+#                 content = content[7:-3]
             
-            review_result = json.loads(content)
-            review_result["success"] = True
-            return review_result
-        except json.JSONDecodeError:
-            return {
-                "success": False,
-                "error": "审查结果解析失败",
-                "raw_response": response.content
-            }
+#             review_result = json.loads(content)
+#             review_result["success"] = True
+#             return review_result
+#         except json.JSONDecodeError:
+#             return {
+#                 "success": False,
+#                 "error": "审查结果解析失败",
+#                 "raw_response": response.content
+#             }
     
     def get_usage_stats(self) -> Dict[str, Any]:
         """获取使用统计"""

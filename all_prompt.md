@@ -1192,6 +1192,27 @@ to load more about this prompt.
 "{\n  \"plan_id\": \"plan_20231005_120000\",\n  \"objective\": \"播放 VOD 节目 'Peppa Pig: The Golden Boots'：进入首页→关闭广告→打开搜索→输入节目名→点击节目→点击播放→等待广告消失→点击全屏→断言播放状态正常\",\n  \"keyword\": \"play_vod_program\",\n  \"max_rounds\": 8,\n  \"steps\": [\n    {\n      \"intent\": \"关闭启动广告\",\n      \"action\": \"tool\",\n      \"notes\": \"使用 close_ads 工具关闭可能弹出的启动广告，确保进入首页状态干净\"\n    },\n    {\n      \"intent\": \"打开搜索\",\n      \"action\": \"click\",\n      \"notes\": \"在首页找到并点击搜索入口，进入搜索页面\"\n    },\n    {\n      \"intent\": \"输入关键词\",\n      \"action\": \"input\",\n      \"notes\": \"在搜索输入框中输入目标节目名称 'Peppa Pig: The Golden Boots'\"\n    },\n    {\n      \"intent\": \"等待结果\",\n      \"action\": \"wait_for_elements\",\n      \"notes\": \"等待搜索结果加载完成，确保目标节目出现在列表中\"\n    },\n    {\n      \"intent\": \"进入详情并播放\",\n      \"action\": \"click\",\n      \"notes\": \"点击搜索结果中的目标节目，进入播放详情页并触发播放\"\n    },\n    {\n      \"intent\": \"等待广告消失\",\n      \"action\": \"tool\",\n      \"notes\": \"使用 close_ads 工具处理播放前可能出现的插播广告\"\n    },\n    {\n      \"intent\": \"进入全屏\",\n      \"action\": \"click\",\n      \"notes\": \"点击播放器全屏按钮，进入全屏播放模式\"\n    },\n    {\n      \"intent\": \"断言播放状态\",\n      \"action\": \"assert\",\n      \"notes\": \"验证视频正在播放，无卡顿、无错误提示，播放状态正常\"\n    }\n  ]\n}",
 
 
+----
+
+ act as a prompt perfector, 这个 prompt 有问题 ,会让其它 LLM 固定输出  "{\"tool_request\": {\"name\": \"analyze_current_screen\", \"params\": {}, \"reason\": \"需要最新/一致的屏幕元素\"}}",   我觉得是哪里说明不清楚/prompt 过多导致 LLM 不够聪明, 你有什么办法优化下这个 prompt 避免误解产出不符合事实的内容吗, 之前是正常输出 第二个的 可能孻改了什么改坏了
+
+检查 only_test 的MCP 调用链是怎样的, 它究竟是真的让 LLM 调用了 MCP. 还是只是获取 LLM json 输出后尝试执行, 你觉得这里有什么逻辑问题, 因为我总是碰到未成功执行 action 情况, 虽然有 prompt 原因, 但我感觉逻辑可能不够 完善, 先只研究, 不coding
+
+新问题 1.execution_log.jsonl 不要再生成这个文件, 这里边的一个日志也没什么用, 直接去除相关逻辑  2.  {\n      \"intent\": \"重启应用以确保测试环境干净\",\n      \"action\": \"restart\"\n    },\n    {\n      \"intent\": \"启动应用并等待初始化完成\",\n      \"action\": \"launch\"\n    },\n 目前的 plan prompt 不是说明了不要再生成 restart lanch 这种已经做过的事了吗, 为什么还是由相关 step.     3.确认一件事情我之前准备的是 有两个 action 1.current_action 和 next_action_guidance 作用是让下一个不会迷失应该规划哪一步 引起重复规划问题, 但是目前好像有一点误会? 其字段并未完全分清?  请确认 MCP 能正确执行当前 action 忽略 guidance , 之后说说你推荐如何做,你觉得这样做的对吗   {\n  \"analysis\": {\n    \"current_page_type\": \"unknown\",\n    \"available_actions\": [\"restart\", \"launch\", \"click\", \"input\", \"press\", \"wait_for_disappearance\", \"assert\", \"swipe\"],\n    \"reason\": \"当前为测试起始阶段，需确保环境干净。根据总体计划第一步 '重启应用以确保测试环境干净'，应执行 restart 操作。\",\n    \"next_action_guidance\": \"重启后等待应用启动并进入首页\"\n  },\n  \"next_action\": {\n    \"action\": \"restart\",\n    \"reason\": \"遵循总体计划的第一步，重启应用以确保测试环境干净，避免残留状态影响测试结果\",\n    \"target\": {\n      \"priority_selectors\": []\n    },\n    \"wait_after\": 0.8,\n    \"expected_result\": \"应用被完全关闭后重新启动，进入初始加载页面\"\n  },\n  \"evidence\": {\n    \"screen_hash\": \"unknown_initial\"\n  }\n}
+
+
+ ----
+
+
+screen = await server.execute_tool("get_current_screen_info") │  增加更多参数, 且应作为 MCP 工具, 待 LLLM 主动调用, 传入参数, 比如是否返回 bouns
+
+
+step_prompt2（当前已有）:
+  Round 1: 屏幕A（广告） → LLM: tool_request → 刷新屏幕B → LLM二次提问
+  
+我说的重试（目前缺失）:
+  Round 1: 屏幕A → LLM: 点击X → 执行失败 → LLM纠正: 点击Y → 再次执行
+
 -----
 添加 setuo hooks 内容, 
 
@@ -1266,3 +1287,5 @@ text("西语手机端720资源02")
 
 context eng 之路
 示例很重要, 只是讲解它根本无从理解, 
+
+微调还是要使用 cursor 等工具, 精准掌控修改点, 

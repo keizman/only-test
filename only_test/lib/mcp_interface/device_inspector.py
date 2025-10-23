@@ -1345,11 +1345,15 @@ class DeviceInspector:
                     else:
                         left, top, right, bottom = map(int, b)
                     cx, cy = (left + right) // 2, (top + bottom) // 2
-                    # 轻微扰动多次点击
-                    for dx, dy in [(0,0), (8,0), (-8,0), (0,8), (0,-8)]:
-                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input tap {cx+dx} {cy+dy}"
-                        subprocess.run(cmd.split(), capture_output=True, text=True)
-                        time.sleep(0.25)
+                    # 轻微扰动多次点击（使用 poco 而非 adb）
+                    try:
+                        from ..poco_utils import get_android_poco
+                        poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                        for dx, dy in [(0,0), (8,0), (-8,0), (0,8), (0,-8)]:
+                            poco.click([cx+dx, cy+dy])
+                            time.sleep(0.25)
+                    except Exception as tap_e:
+                        logger.warning(f"poco.click 失败: {tap_e}")
                     tried += 1
                     # 点击一次高优先级元素后先退出循环，交由外层再次评估置信度
                     break
@@ -1435,11 +1439,11 @@ class DeviceInspector:
 
     @mcp_tool(
         name="perform_ui_action",
-        description="执行UI动作（click/input/swipe），基于选择器或坐标并返回结果",
+        description="执行UI动作（click/input/press/swipe），基于选择器或坐标并返回结果",
         category="interaction",
         parameters={
-            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "swipe"], "description": "动作类型"},
-            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px"},
+            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "press", "swipe"], "description": "动作类型"},
+            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px；press 动作使用 keyevent 字段"},
             "data": {"type": "string", "description": "输入文本（当 action=input 时）", "default": ""},
             "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.5}
         }
@@ -1722,53 +1726,109 @@ class DeviceInspector:
                             return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                     except Exception:
                         pass
-                # 聚焦输入框并 set_text（优先使用 Poco 增强 set_text），失败兜底 airtest / adb
+                # 聚焦输入框并 set_text（严格使用 Poco，与 example_airtest_record.py 保持一致）
                 ok = False
+                error_msg = None
                 try:
                     from ..poco_utils import get_android_poco
                     poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
                     obj = None
                     if sel_type == 'resource_id':
                         obj = poco(resourceId=sel_value)
+                        exec_log.append(f"poco(resourceId={sel_value})")
                     elif sel_type == 'text':
                         obj = poco(text=sel_value)
+                        exec_log.append(f"poco(text={sel_value})")
                     elif sel_type == 'content_desc':
                         for key in ('desc', 'description', 'contentDescription', 'name'):
                             try:
                                 obj = poco(**{key: sel_value})
                                 if obj.exists():
+                                    exec_log.append(f"poco({key}={sel_value})")
                                     break
                             except Exception:
                                 obj = None
-                    if obj and obj.exists():
+                    
+                    if obj is None:
+                        error_msg = "无法构造 poco 对象"
+                        exec_log.append(f"ERROR: {error_msg}")
+                    elif not obj.exists():
+                        error_msg = f"元素不存在: {sel_type}={sel_value}"
+                        exec_log.append(f"ERROR: {error_msg}")
+                    else:
                         try:
                             obj.wait_for_appearance(timeout=2.0)
-                        except Exception:
-                            pass
+                            exec_log.append("wait_for_appearance(timeout=2.0)")
+                        except Exception as we:
+                            exec_log.append(f"wait_warning:{we}")
+                        
+                        # 先点击获取焦点（与 example 一致）
                         try:
                             obj.click()
-                        except Exception:
-                            pass
+                            exec_log.append("poco.click()")
+                        except Exception as ce:
+                            exec_log.append(f"click_warning:{ce}")
+                        
+                        # 使用 set_text（与 example 一致：poco(resourceId=...).set_text(program_name)）
                         res = obj.set_text(str(data or ""))
-                        exec_log.append("poco.set_text(...) -> %s" % (res if isinstance(res, str) else "ok"))
+                        exec_log.append(f"poco.set_text('{data}') -> {res if isinstance(res, str) else 'ok'}")
                         ok = True
+                        
                 except Exception as e:
-                    exec_log.append(f"poco.set_text_failed:{e}")
+                    error_msg = str(e)
+                    exec_log.append(f"poco.set_text_exception:{e}")
                     ok = False
-                if not ok:
-                    try:
-                        from only_test.lib.airtest_compat import text as air_text
-                        air_text(str(data or ""))
-                        exec_log.append("airtest.text(...)")
-                        ok = True
-                    except Exception:
-                        safe = (data or '').replace(' ', '%s')
-                        cmd = f"adb {'-s ' + self.device_id + ' ' if self.device_id else ''}shell input text {safe}"
-                        p = subprocess.run(cmd.split(), capture_output=True, text=True)
-                        exec_log.append(f"{cmd} -> rc={p.returncode}")
-                        ok = (p.returncode == 0)
+                
                 _time.sleep(max(0.0, float(wait_after)))
-                return {"success": True if ok else False, "used": used_selector, "exec_log": exec_log}
+                
+                if ok:
+                    return {"success": True, "used": used_selector, "exec_log": exec_log}
+                else:
+                    return {"success": False, "error": error_msg or "input_failed", "used": used_selector, "exec_log": exec_log}
+            elif action == 'press':
+                # 使用 airtest.keyevent 执行按键操作（与 example_airtest_record.py 保持一致）
+                # 支持的按键：ENTER, BACK, HOME, MENU
+                keyevent = None
+                if isinstance(target, dict):
+                    keyevent = target.get('keyevent') or target.get('key')
+                
+                if not keyevent:
+                    return {"success": False, "error": "press action requires target.keyevent field", "exec_log": exec_log}
+                
+                keyevent = str(keyevent).upper()
+                supported_keys = {'ENTER', 'BACK', 'HOME', 'MENU'}
+                if keyevent not in supported_keys:
+                    return {"success": False, "error": f"unsupported keyevent: {keyevent}, only {supported_keys} are supported", "exec_log": exec_log}
+                
+                ok = False
+                error_msg = None
+                try:
+                    # 确保 airtest 设备已连接
+                    from only_test.lib.airtest_compat import connect_device, keyevent as air_keyevent
+                    try:
+                        # 尝试连接设备（如果已连接会忽略）
+                        device_uri = f"android://127.0.0.1:5037/{self.device_id}?touch_method=ADBTOUCH&" if self.device_id else "android:///"
+                        connect_device(device_uri)
+                        exec_log.append(f"connect_device('{device_uri}')")
+                    except Exception as conn_e:
+                        exec_log.append(f"connect_warning:{conn_e}")
+                    
+                    # 执行 keyevent（与 example 一致：keyevent('ENTER')）
+                    air_keyevent(keyevent)
+                    exec_log.append(f"keyevent('{keyevent}')")
+                    ok = True
+                except Exception as e:
+                    error_msg = str(e)
+                    exec_log.append(f"keyevent_exception:{e}")
+                    ok = False
+                
+                _time.sleep(max(0.0, float(wait_after)))
+                
+                if ok:
+                    return {"success": True, "used": {"type": "press", "keyevent": keyevent}, "exec_log": exec_log}
+                else:
+                    return {"success": False, "error": error_msg or "keyevent_failed", "used": {"type": "press", "keyevent": keyevent}, "exec_log": exec_log}
+            
             elif action == 'swipe':
                 # 使用 Poco.swipe 执行滑动；支持 start_px/end_px 或基于 bounds_px 推导
                 swipe = target.get('swipe', {}) if isinstance(target, dict) else {}
@@ -1836,8 +1896,8 @@ class DeviceInspector:
         description="执行UI动作并前后对比屏幕元素签名/等待条件，返回是否发生变化",
         category="interaction",
         parameters={
-            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "swipe"], "description": "动作类型"},
-            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px"},
+            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "press", "swipe"], "description": "动作类型"},
+            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px；press 动作使用 keyevent 字段"},
             "data": {"type": "string", "description": "输入文本（可选）", "default": ""},
             "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.8},
             "wait_for": {"type": "object", "description": "等待条件 {type: appearance|disappearance, selectors: [...], timeout: 10}", "default": {}}

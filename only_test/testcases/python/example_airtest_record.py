@@ -53,6 +53,7 @@ poco(resourceId="com.mobile.brasiltvmobile:id/mVodImageSearch").click()
 sleep(0.5)
 # 现在set_text会自动刷新缓存并返回实际文本
 # 注意: 点击搜索后，text属性会从占位符变成实际内容，所以只使用resourceId定位
+# 根据总体计划，当前步骤为在 searchEt 中输入目标节目名称。往期用例示例中也使用了 input 动作向搜索框输入节目名。
 res_for_set = poco(resourceId="com.mobile.brasiltvmobile:id/searchEt").set_text(program_name)
 # 备用方案: res_for_set = poco(class_name="android.widget.EditText").set_text("西语手机端720资源02")
 

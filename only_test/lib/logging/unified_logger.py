@@ -264,18 +264,16 @@ class UnifiedLogger:
             "error": error
         }
         
-        # 处理完整result分离存储
+        # 处理完整result引用（不再自动保存，避免与 dump_text 重复）
+        # result已经由 dump_text 保存到 tools/ 目录
+        result_path = None
         if result:
-            result_path = self.save_result_dump(result, tool_name)
-            if result_path:
-                log_entry["result_dump_path"] = result_path
-                log_entry["metadata"] = log_entry.get("metadata", {})
-                # 计算result大小
-                import json
-                result_json = json.dumps(result, ensure_ascii=False)
-                log_entry["metadata"]["result_size"] = len(result_json)
-        else:
-            result_path = None
+            log_entry["metadata"] = log_entry.get("metadata", {})
+            # 计算result大小
+            import json
+            result_json = json.dumps(result, ensure_ascii=False)
+            log_entry["metadata"]["result_size"] = len(result_json)
+            # 如果外部已经保存了result，会通过 result_dump_path 参数传入
         
         # 处理输入参数摘要（不内联大对象）
         if input_params is not None:
