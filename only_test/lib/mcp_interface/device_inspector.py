@@ -23,6 +23,21 @@ import xml.etree.ElementTree as ET
 # 添加项目路径
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
+# Android 交互日志记录器
+try:
+    from only_test.lib.android_interaction_logger import (
+        log_poco_interaction, 
+        log_airtest_interaction, 
+        log_adb_interaction,
+        log_ad_detection_event
+    )
+except ImportError:
+    # Fallback: 如果导入失败，使用空函数
+    def log_poco_interaction(*args, **kwargs): pass
+    def log_airtest_interaction(*args, **kwargs): pass
+    def log_adb_interaction(*args, **kwargs): pass
+    def log_ad_detection_event(*args, **kwargs): pass
+
 # 可选的视觉集成（在 XML-only 模式下不强制依赖）
 try:
     from only_test.lib.visual_integration import VisualIntegration, IntegrationConfig  # type: ignore
@@ -46,7 +61,7 @@ PRIORITY_CLOSE_IDS = {
 EXCLUDED_CLOSE_IDS = {
     # 常见需要跳过的关闭按钮（例如优惠券）
     # 注意：这些ID应该使用小写，因为代码中会转换为小写进行匹配
-    'imcouponclose', 'mivclosenotice', "mtvnotice", "skipbtn", "mtextversion"
+    'imcouponclose', 'mivclosenotice', "mtvnotice", "skipbtn", "mtextversion", 'mIvBack'
 }
 # GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用“关闭/跳过”语义
 # - resource-id（例如: com.xxx:id/ivClose；会在小写化后匹配 'close' 等子串）
@@ -119,9 +134,73 @@ class DeviceInspector:
 
         logger.info(f"设备探测器初始化 - 设备: {device_id or 'default'}")
     
+    # ============================================================
+    # Android 交互日志封装方法
+    # ============================================================
+    
+    def _log_adb_call(self, command: List[str], result: Any = None, error: str = None):
+        """记录 ADB 命令调用"""
+        try:
+            log_adb_interaction(
+                command=" ".join(command),
+                device_id=self.device_id,
+                result=result,
+                error=error
+            )
+        except Exception:
+            pass
+    
+    def _log_poco_call(self, operation: str, **kwargs):
+        """记录 Poco 操作"""
+        try:
+            log_poco_interaction(
+                command=operation,
+                device_id=self.device_id,
+                **kwargs
+            )
+        except Exception:
+            pass
+    
+    def _log_airtest_call(self, operation: str, **kwargs):
+        """记录 Airtest 操作"""
+        try:
+            log_airtest_interaction(
+                command=operation,
+                device_id=self.device_id,
+                **kwargs
+            )
+        except Exception:
+            pass
+    
     # === XML-only 辅助方法 ===
     def _adb_prefix(self) -> list:
         return ["adb"] + (["-s", self.device_id] if self.device_id else [])
+    
+    def _run_adb_command(self, args: List[str], **kwargs) -> subprocess.CompletedProcess:
+        """执行 ADB 命令并记录日志"""
+        cmd = self._adb_prefix() + args
+        try:
+            result = subprocess.run(cmd, **kwargs)
+            self._log_adb_call(cmd, result=f"rc={result.returncode}" if result else None)
+            return result
+        except Exception as e:
+            self._log_adb_call(cmd, error=str(e))
+            raise
+    
+    async def _run_adb_command_async(self, args: List[str], **kwargs) -> Any:
+        """异步执行 ADB 命令并记录日志"""
+        cmd = self._adb_prefix() + args
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                **kwargs
+            )
+            stdout, stderr = await proc.communicate()
+            self._log_adb_call(cmd, result=f"rc={proc.returncode}")
+            return (stdout, stderr, proc.returncode)
+        except Exception as e:
+            self._log_adb_call(cmd, error=str(e))
+            raise
 
     def _get_screen_size(self) -> tuple[int, int]:
         if self._screen_size_cache:
@@ -757,10 +836,13 @@ class DeviceInspector:
             
             # 在分析前，按默认参数尝试自动连续关闭广告（仅限前N轮；可关闭）
             if should_auto_close:
+                logger.info(f"[AUTO-CLOSE-ADS] 第 {self._analysis_round} 轮：自动关闭广告（limit={limit}）")
                 try:
                     _ = await self.close_ads(mode="continuous", consecutive_no_ad=3, max_duration=10.0)
                 except Exception as _e:
                     logger.info(f"预关闭广告失败（忽略）：{_e}")
+            else:
+                logger.info(f"[AUTO-CLOSE-ADS] 第 {self._analysis_round} 轮：已跳过自动关闭广告（limit={limit}, enabled={should_auto_close}）")
 
             # 获取元素信息（XML-only）
             # 获取XML和元素（使用XML提取器，根据clickable_only过滤）
@@ -1068,6 +1150,15 @@ class DeviceInspector:
             ad_elems = []
             close_elems = []
             logger.debug(f"检测广告置信度 - 元素数量: {n}")
+            
+            # 记录广告检测开始
+            log_ad_detection_event(
+                phase="detection",
+                confidence=0.0,  # 将在计算后更新
+                ad_count=0,
+                close_count=0,
+                details=f"开始检测，元素总数={n}"
+            )
             # 使用统一常量
 
             for i, e in enumerate(elements):
@@ -1269,6 +1360,8 @@ class DeviceInspector:
                                         obj.wait_for_appearance(timeout=2.0)
                                     except Exception:
                                         pass
+                                    # 记录 Poco 交互（优先ID模式关闭）
+                                    self._log_poco_call("click", resource_id=resource_id, reason="close_ad_priority")
                                     obj.click()
                                     success_count += 1
                                     logger.info(f"poco点击成功: [{resource_id}]")
@@ -1350,10 +1443,13 @@ class DeviceInspector:
                         from ..poco_utils import get_android_poco
                         poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
                         for dx, dy in [(0,0), (8,0), (-8,0), (0,8), (0,-8)]:
+                            # 记录 Poco 交互
+                            self._log_poco_call("click", x=cx+dx, y=cy+dy, reason="close_ad")
                             poco.click([cx+dx, cy+dy])
                             time.sleep(0.25)
                     except Exception as tap_e:
                         logger.warning(f"poco.click 失败: {tap_e}")
+                        self._log_poco_call("click", error=str(tap_e))
                     tried += 1
                     # 点击一次高优先级元素后先退出循环，交由外层再次评估置信度
                     break
@@ -1391,11 +1487,31 @@ class DeviceInspector:
 
             if (has_priority_close or conf >= 0.50) and close_es:
                 logger.info(f"第 {attempt} 次尝试: 满足关闭条件(优先={has_priority_close}, 置信度={conf:.2f}), 开始尝试点击")
+                
+                # 记录开始关闭
+                log_ad_detection_event(
+                    phase="closing",
+                    confidence=conf,
+                    ad_count=len(ad_es),
+                    close_count=len(close_es),
+                    action_taken="attempting",
+                    details=f"尝试第 {attempt} 次关闭"
+                )
+                
                 clicked = await try_close(close_es)
                 info['auto_close_attempts'] += 1
 
                 if not clicked:
                     logger.warning(f"第 {attempt} 次尝试: 关闭尝试失败，终止循环")
+                    log_ad_detection_event(
+                        phase="closing",
+                        confidence=conf,
+                        ad_count=len(ad_es),
+                        close_count=len(close_es),
+                        action_taken="failed",
+                        success=False,
+                        details=f"第 {attempt} 次关闭失败"
+                    )
                     break
 
                 logger.info(f"第 {attempt} 次尝试: 点击成功，等待界面更新")
@@ -1417,9 +1533,27 @@ class DeviceInspector:
                 if conf2 < 0.70:
                     info['auto_closed'] = True
                     logger.info(f"置信度降至 {conf2:.2f} < 0.70，广告已成功关闭")
+                    log_ad_detection_event(
+                        phase="verification",
+                        confidence=conf2,
+                        ad_count=0,
+                        close_count=0,
+                        action_taken="closed",
+                        success=True,
+                        details=f"第 {attempt} 次关闭成功，置信度降至 {conf2:.2f}"
+                    )
                     break
                 else:
                     logger.info(f"置信度仍为 {conf2:.2f} >= 0.70，继续下一轮")
+                    log_ad_detection_event(
+                        phase="verification",
+                        confidence=conf2,
+                        ad_count=0,
+                        close_count=0,
+                        action_taken="continuing",
+                        success=False,
+                        details=f"第 {attempt} 次关闭后置信度仍高"
+                    )
             else:
                 
                 break
@@ -1451,8 +1585,11 @@ class DeviceInspector:
     async def perform_ui_action(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.5) -> Dict[str, Any]:
         """执行单步UI动作。
         策略：优先使用选择器（resource_id > content_desc > text）；仅当选择器失败时再使用 bounds_px。
-        同时内置“容器→子输入框”启发式：若点击容器失败，尝试点击其子 EditText。
+        同时内置"容器→子输入框"启发式：若点击容器失败，尝试点击其子 EditText。
         """
+        # 记录函数调用（调试用）
+        logger.info(f"[PERFORM_UI_ACTION] action={action}, target_keys={list(target.keys()) if isinstance(target, dict) else 'not_dict'}, data='{data[:50] if data else ''}'")
+        
         if not self._initialized:
             await self.initialize()
         import subprocess, time as _time
@@ -1578,9 +1715,11 @@ class DeviceInspector:
                                     pass
                                 if action == 'click_with_bias' or (dx_px or dy_px):
                                     exec_log.append(f"poco.click_with_bias({sel_type}={sel_value}, dx_px={dx_px}, dy_px={dy_px})")
+                                    self._log_poco_call("click_with_bias", selector_type=sel_type, selector_value=sel_value, dx_px=dx_px, dy_px=dy_px)
                                     obj.click_with_bias(dx_px=dx_px, dy_px=dy_px)
                                 else:
                                     exec_log.append(f"poco.click({sel_type}={sel_value})")
+                                    self._log_poco_call("click", selector_type=sel_type, selector_value=sel_value)
                                     obj.click()
                                 ok = True
                             except Exception as click_e:
@@ -1632,6 +1771,7 @@ class DeviceInspector:
                                     nx_off = nx + (float(dx_px) / max(1, sw))
                                     ny_off = ny + (float(dy_px) / max(1, sh))
                                     exec_log.append(f"poco.click([norm:{nx_off:.4f},{ny_off:.4f}]) (bias dx={dx_px},dy={dy_px})")
+                                    self._log_poco_call("click", x=nx_off, y=ny_off, bias_dx=dx_px, bias_dy=dy_px)
                                     try:
                                         from ..poco_utils import get_android_poco
                                         _p = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
@@ -1699,6 +1839,7 @@ class DeviceInspector:
                         x = int((bp[0] + bp[2]) / 2)
                         y = int((bp[1] + bp[3]) / 2)
                         exec_log.append(f"poco.click_px({x},{y})")
+                        self._log_poco_call("click_px", x=x, y=y)
                         try:
                             poco.click_px(x, y)
                             ok = True
@@ -1764,12 +1905,14 @@ class DeviceInspector:
                         
                         # 先点击获取焦点（与 example 一致）
                         try:
+                            self._log_poco_call("click", selector_type=sel_type, selector_value=sel_value, reason="focus_for_input")
                             obj.click()
                             exec_log.append("poco.click()")
                         except Exception as ce:
                             exec_log.append(f"click_warning:{ce}")
                         
                         # 使用 set_text（与 example 一致：poco(resourceId=...).set_text(program_name)）
+                        self._log_poco_call("set_text", selector_type=sel_type, selector_value=sel_value, text=str(data or ""))
                         res = obj.set_text(str(data or ""))
                         exec_log.append(f"poco.set_text('{data}') -> {res if isinstance(res, str) else 'ok'}")
                         ok = True
@@ -1814,6 +1957,7 @@ class DeviceInspector:
                         exec_log.append(f"connect_warning:{conn_e}")
                     
                     # 执行 keyevent（与 example 一致：keyevent('ENTER')）
+                    self._log_airtest_call("keyevent", key=keyevent)
                     air_keyevent(keyevent)
                     exec_log.append(f"keyevent('{keyevent}')")
                     ok = True

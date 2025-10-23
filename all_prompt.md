@@ -1168,6 +1168,16 @@ only_test\templates\prompts\
 
 to load more about this prompt. 
 
+----
+
+我需要再来一个日志文件, 记录所有 poco / airtest / adb 的命令执行记录, 无论任何, 只要是和android 进行了互的,都要记录下来, 依旧以json 的方式, 主要为了加上时间戳, 方便我与其它日志一起对比, 相当于说明 1111时间, 执行了 操作 :  click resource_id ..... 这个也要打印到录制输出中, 一定要检查有响应调用的都加上, 比如 如果是使用的 poco 可以再通用函数中加一个函数打印相关日志, airtest 相同, 可以再裹一层封装, adb 的你自己想一下如何封装, 记住 这是最底层, 最后分析手段, 不容有错
+
+记得检查下 auto close ads 是否也会打印, 防止错漏. 之后给 auto close ads 增加 json 日志打印, 目前逻辑不变, 只是增加响应的 检测到了 什么, 是否执行了 close , 结果什么....
+
+
+
+----
+
 
 ---
 

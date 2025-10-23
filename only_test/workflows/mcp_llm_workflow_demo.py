@@ -41,12 +41,11 @@ MCP + LLM Workflow Demo - Unified Logging & Auto-Refresh Strategy
     --max-rounds 10 \
     --verbose
 
-  # 真实执行 UI 动作（stepwise，添加 --run-stepwise）:
+  # 真实执行 UI 动作（默认行为）:
   python -m only_test.workflows.mcp_llm_workflow_demo \
     --requirement "播放VOD节目" \
     --target-app com.mobile.brasiltvmobile \
-    --max-rounds 10 \
-    --run-stepwise  # <-- 启用按回合实际执行（MCP级别）
+    --max-rounds 10
 
   # 生成完整 JSON → 转 PY → 直接执行生成的 Python（添加 --execute）:
   python -m only_test.workflows.mcp_llm_workflow_demo \
@@ -56,7 +55,6 @@ MCP + LLM Workflow Demo - Unified Logging & Auto-Refresh Strategy
     --execute  # <-- 生成完成后转换为 Python 并尝试直接执行
 
 可选参数:
-  --run-stepwise          启用按回合 UI 动作执行（MCP 单步）
   --execute               在完成阶段：将最终 JSON 转换为 Python，并尝试直接执行
   --max-rounds N          最大轮数 (CLI > plan > 默认10, 绝对上限20)
   --history-window N      context窗口大小 (默认从config读取或10)
@@ -105,7 +103,6 @@ async def main():
     parser.add_argument("--max-rounds", type=int, default=6)
     parser.add_argument("--auto-close-limit", type=int, default=None)
     parser.add_argument("--history-window", type=int, default=None, help="How many previous step responses to include (defaults from YAML or 10)")
-    parser.add_argument("--run-stepwise", action="store_true", help="Execute current_action per round via MCP tools")
     parser.add_argument("--execute", action="store_true", help="After completion: convert final JSON to Python and try to execute")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
@@ -197,6 +194,14 @@ async def main():
     mcp_exec_log_path = session_dir / "mcp_execution_log.json"
     mcp_log_entries = []  # Collect all entries in memory for proper JSON array format
     
+    # Android 交互日志（底层调试）
+    android_interaction_log_path = session_dir / "android_interaction_log.json"
+    ad_detection_log_path = session_dir / "ad_detection_log.json"
+    from only_test.lib.android_interaction_logger import initialize_android_logger
+    initialize_android_logger(android_interaction_log_path, ad_detection_log_path)
+    logger.info(f"Android interaction log: {android_interaction_log_path}")
+    logger.info(f"Ad detection log: {ad_detection_log_path}")
+    
     def append_mcp_log(*, tool: str, parameters: dict | None, success: bool, result_dump_path: str | None, phase: str, round_idx: int | None = None, error: str | None = None, exec_log: list | None = None, result_summary: dict | None = None) -> None:
         try:
             rec = {
@@ -212,9 +217,9 @@ async def main():
             if error:
                 rec["error"] = str(error)
             if exec_log:
-                rec["exec_log"] = list(exec_log)  # ✅ 记录执行日志
+                rec["exec_log"] = list(exec_log)  # 记录执行日志
             if result_summary:
-                rec["result_summary"] = dict(result_summary)  # ✅ 记录结果摘要
+                rec["result_summary"] = dict(result_summary)  # 记录结果摘要
             
             # Append to in-memory list
             mcp_log_entries.append(rec)
@@ -273,10 +278,6 @@ async def main():
         if callable(fn) and hasattr(fn, "_mcp_tool_info"):
             info = getattr(fn, "_mcp_tool_info")
             server.register_tool(MCPTool(name=info["name"], description=info["description"], parameters=info.get("parameters", {}), function=fn, category=info.get("category", "general")))
-
-    # Informative note if not executing actions (plan-only mode)
-    if not args.run_stepwise:
-        logger.info("当前为规划/提问模式（未传 --run-stepwise），不会执行每轮 UI 动作；仅记录 MCP 屏幕分析与 LLM 输出。")
 
     # restart target app
     try:
@@ -480,8 +481,6 @@ async def main():
                     continue
                 fname = _os.path.basename(e.get('file',''))
                 code = (e.get('content') or '').strip()
-                if len(code) > 6000:
-                    code = code[:6000] + "\n# ...(内容已截断)"
                 if fname and code:
                     rendered.append(f"{fname}:\n{code}")
             return ("往期用例示例（仅参考动作思路） [[[ START ]]]  :\n\n" + "\n\n".join(rendered) + " [[[ END ]]]") if rendered else ""
@@ -521,7 +520,7 @@ async def main():
     logger.info("=" * 80)
     logger.info("PLAN RESPONSE:")
     if plan_resp.content:
-        logger.info(plan_resp.content[:500] + ("...\n(内容已截断，完整内容见 response_plan.txt)" if len(plan_resp.content) > 500 else ""))
+        logger.info(plan_resp.content)
     else:
         logger.warning("Plan response is empty!")
     logger.info("=" * 80)
@@ -717,10 +716,9 @@ async def main():
         
         # 打印 Step Response 到命令行
         logger.info("-" * 80)
-        logger.info(f"🔄 STEP {round_idx} RESPONSE:")
+        logger.info(f"STEP {round_idx} RESPONSE:")
         if resp.content:
-            preview = resp.content[:300] + ("...\n(截断)" if len(resp.content) > 300 else "")
-            logger.info(preview)
+            logger.info(resp.content)
         else:
             logger.warning(f"Step {round_idx} response is empty!")
         logger.info("-" * 80)
@@ -789,10 +787,9 @@ async def main():
                         
                         # 打印 Refresh Response 到命令行
                         logger.info("-" * 80)
-                        logger.info(f"🔄 STEP {round_idx} REFRESH RESPONSE (二次提问):")
+                        logger.info(f"STEP {round_idx} REFRESH RESPONSE (二次提问):")
                         if resp2.content:
-                            preview = resp2.content[:300] + ("...\n(截断)" if len(resp2.content) > 300 else "")
-                            logger.info(preview)
+                            logger.info(resp2.content)
                         else:
                             logger.warning(f"Step {round_idx} refresh response is empty!")
                         logger.info("-" * 80)
@@ -845,14 +842,8 @@ async def main():
                     # 统一调用 execute_step_json
                     action_result = await server.execute_tool("execute_step_json", step_params)
                     
-                    # 记录执行结果（统一日志名称）
+                    # 记录执行结果到 mcp_execution_log（不再保存完整的 pre/post 屏幕快照，避免冗余）
                     if action_result:
-                        # 记录完整结果到 tools 目录（使用 tool_ 前缀）
-                        dump_text(f"tool_mcp_execute_step_json_round_{round_idx}.json", 
-                                json.dumps(action_result if isinstance(action_result, dict) else 
-                                         (action_result.to_dict() if hasattr(action_result, 'to_dict') else str(action_result)), 
-                                         ensure_ascii=False, indent=2))
-                        
                         # 追加 MCP 调用简表到 mcp_execution_log（包含 exec_log）
                         try:
                             # Unwrap response to derive success/error/exec_log for logging
@@ -887,7 +878,7 @@ async def main():
                                 tool="execute_step_json",
                                 parameters=step_params,
                                 success=success_flag,
-                                result_dump_path=f"tools/tool_mcp_execute_step_json_round_{round_idx}.json",
+                                result_dump_path=None,  # 不再保存冗余的完整结果文件
                                 phase="execution",
                                 round_idx=round_idx,
                                 exec_log=exec_log_data,  # 包含执行日志
@@ -964,7 +955,7 @@ async def main():
     logger.info("=" * 80)
     logger.info("COMPLETION RESPONSE:")
     if comp_resp.content:
-        logger.info(comp_resp.content[:500] + ("...\n(内容已截断，完整内容见 response_completion.txt)" if len(comp_resp.content) > 500 else ""))
+        logger.info(comp_resp.content)
     else:
         logger.warning("Completion response is empty!")
     logger.info("=" * 80)
