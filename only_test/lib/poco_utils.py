@@ -634,27 +634,15 @@ def _perform_auto_wake(
     target_proxy,
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    wake_result: Dict[str, Any] = {}
-    try:
-        logger.info(
-            "播放态自动唤起: 执行唤起动作 device=%s app=%s keywords=%s",
-            device_id or "default",
-            config.get("app_id") or "",
-            config.get("wake_keywords", []),
-        )
-        wake_result = _run_async_fn(
-            lambda: inspector._ensure_controls_visible_once(  # type: ignore[attr-defined]
-                config.get("wake_keywords", []),
-                tap_y_norm=config.get("tap_y_norm", 0.15),
-                post_tap_sleep_ms=config.get("post_tap_sleep_ms", 250),
-            )
-        )
-        if not isinstance(wake_result, dict):
-            wake_result = {}
-    except Exception as exc:  # noqa: BLE001 - logging only
-        logger.debug("播放控件唤起失败: %s", exc)
-        wake_result = {}
-
+    """调用公共函数执行自动唤起"""
+    wake_result = force_auto_wake_playback_controls(
+        inspector=inspector,
+        device_id=device_id,
+        app_id=config.get("app_id"),
+        poco_instance=poco_instance
+    )
+    
+    # Poco 特定的后处理
     if wake_result.get("tap_performed"):
         try:
             force_refresh_ui_cache(poco_instance)
@@ -667,12 +655,88 @@ def _perform_auto_wake(
                     exists_fn()
             except Exception:
                 pass
+    
+    return wake_result
 
+
+def force_auto_wake_playback_controls(
+    inspector,
+    device_id: Optional[str] = None,
+    app_id: Optional[str] = None,
+    poco_instance: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    公共函数：强制自动唤起播放控件
+    
+    这是一个统一入口，供 device_inspector 和 poco_utils 调用
+    
+    Args:
+        inspector: DeviceInspector 实例
+        device_id: 设备ID
+        app_id: 应用ID
+        poco_instance: Poco实例（可选）
+    
+    Returns:
+        Dict: 包含 tap_performed, controls_visible 等信息的字典
+    """
+    logger.info(f"[FORCE-AUTO-WAKE] 开始执行，device_id={device_id}, app_id={app_id}")
+    wake_result: Dict[str, Any] = {}
+    
+    try:
+        # 获取配置
+        config = _resolve_playback_config(inspector, app_id)
+        if not config.get("app_id"):
+            config["app_id"] = app_id
+        
+        logger.info(f"[FORCE-AUTO-WAKE] 配置获取完成: wake_keywords={config.get('wake_keywords')}, tap_y_norm={config.get('tap_y_norm')}")
+        
+        # 调用 inspector 的 _ensure_controls_visible_once
+        # 注意：这里可能已经在 event loop 中，直接调用 async 函数
+        try:
+            import asyncio
+            # 尝试获取当前事件循环
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果已经运行，使用 asyncio.ensure_future 或直接调用
+                # 但由于是同步函数调用异步函数，使用 _run_async_fn
+                wake_result = _run_async_fn(
+                    lambda: inspector._ensure_controls_visible_once(  # type: ignore[attr-defined]
+                        config.get("wake_keywords", []),
+                        tap_y_norm=config.get("tap_y_norm", 0.15),
+                        post_tap_sleep_ms=config.get("post_tap_sleep_ms", 250),
+                    )
+                )
+            else:
+                # 如果没有运行，直接运行
+                wake_result = loop.run_until_complete(
+                    inspector._ensure_controls_visible_once(  # type: ignore[attr-defined]
+                        config.get("wake_keywords", []),
+                        tap_y_norm=config.get("tap_y_norm", 0.15),
+                        post_tap_sleep_ms=config.get("post_tap_sleep_ms", 250),
+                    )
+                )
+        except Exception as async_exc:
+            logger.warning(f"[FORCE-AUTO-WAKE] async调用失败，尝试直接await: {async_exc}")
+            # 如果 _run_async_fn 失败，说明已经在 async 上下文中，这种情况下不应该被调用
+            wake_result = {}
+        
+        if not isinstance(wake_result, dict):
+            wake_result = {}
+        
+        logger.info(f"[FORCE-AUTO-WAKE] 返回结果: {wake_result}")
+            
+    except Exception as exc:  # noqa: BLE001 - logging only
+        logger.warning(f"[FORCE-AUTO-WAKE] 播放控件唤起失败: {exc}")
+        import traceback
+        logger.debug(traceback.format_exc())
+        wake_result = {}
+    
+    # 更新状态
     entry = _get_state_entry(device_id)
     with entry["lock"]:
         entry["last_wake_ts"] = time.time()
         entry["last_wake_success"] = bool(wake_result.get("controls_visible"))
-
+    
     return wake_result
 
 

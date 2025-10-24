@@ -1177,8 +1177,8 @@ to load more about this prompt.
 
 
 ----
-
-
+不coding 只确认,   确认目前处于播放状态时自动点击屏幕的逻辑是怎么样的 . 是否 play_stat 获取 current 时 自动点击后重新获取最终 LLM 拿到的是更新后的
+帮我增加逻辑, 如果命令行传入 一个参数时 为 1 激活后 调用 get_current_screen_info 查询公共函数获取播放状态, 如果是播放状态则触发 click (已有函数)后获取新的 info 再返回, 
 ---
 
 1.用例生成不传入 element resourceId 为空 and text 为空的, 都为空的一般认为不为有效控件, 直接不考虑传入

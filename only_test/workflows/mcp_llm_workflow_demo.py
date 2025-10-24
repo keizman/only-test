@@ -47,19 +47,28 @@ MCP + LLM Workflow Demo - Unified Logging & Auto-Refresh Strategy
     --target-app com.mobile.brasiltvmobile \
     --max-rounds 10
 
-  # 生成完整 JSON → 转 PY → 直接执行生成的 Python（添加 --execute）:
+  # 仅转换为 Python（不执行）:
   python -m only_test.workflows.mcp_llm_workflow_demo \
     --requirement "播放VOD节目" \
     --target-app com.mobile.brasiltvmobile \
     --max-rounds 10 \
-    --execute  # <-- 生成完成后转换为 Python 并尝试直接执行
+    --json-to-python  # <-- 生成完成后转换为 Python
+
+  # 转换并执行 Python:
+  python -m only_test.workflows.mcp_llm_workflow_demo \
+    --requirement "播放VOD节目" \
+    --target-app com.mobile.brasiltvmobile \
+    --max-rounds 10 \
+    --json-to-python --execute-python  # <-- 生成完成后转换为 Python 并执行
 
 可选参数:
-  --execute               在完成阶段：将最终 JSON 转换为 Python，并尝试直接执行
+  --json-to-python        在完成阶段：将最终 JSON 转换为 Python
+  --execute-python        在 JSON 转 Python 后：执行生成的 Python 脚本
   --max-rounds N          最大轮数 (CLI > plan > 默认10, 绝对上限20)
   --history-window N      context窗口大小 (默认从config读取或10)
   --verbose / -v          DEBUG级别控制台输出
   --auto-close-limit N    广告自动关闭尝试数
+  --auto-click-playing 1  启用播放状态自动点击功能
 
 调整策略(当首轮卡住时):
   关闭自动刷新: 注释或删除 "# Re-prompt once with refreshed screen info" 代码块
@@ -102,10 +111,18 @@ async def main():
     parser.add_argument("--logdir", default="logs/mcp_demo")
     parser.add_argument("--max-rounds", type=int, default=6)
     parser.add_argument("--auto-close-limit", type=int, default=None)
+    parser.add_argument("--auto-click-playing", type=int, default=0, help="Enable auto-click when media playing detected (0=disable, 1=enable)")
     parser.add_argument("--history-window", type=int, default=None, help="How many previous step responses to include (defaults from YAML or 10)")
-    parser.add_argument("--execute", action="store_true", help="After completion: convert final JSON to Python and try to execute")
+    parser.add_argument("--json-to-python", action="store_true", help="After completion: convert final JSON to Python")
+    parser.add_argument("--execute-python", action="store_true", help="After JSON-to-Python conversion: execute the generated Python script")
+    parser.add_argument("--execute", action="store_true", help="DEPRECATED: Use --json-to-python --execute-python instead")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
+    
+    # 兼容性处理：--execute 等同于 --json-to-python --execute-python
+    if args.execute:
+        args.json_to_python = True
+        args.execute_python = True
 
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     console_level = logging.DEBUG if args.verbose else logging.INFO
@@ -262,6 +279,7 @@ async def main():
             return 10
 
     session_auto_close_limit = args.auto_close_limit if args.auto_close_limit is not None else _load_auto_close_limit_from_config()
+    session_auto_click_playing = args.auto_click_playing if args.auto_click_playing is not None else 0
     session_history_window = args.history_window if args.history_window is not None else _load_history_window_from_config()
     try:
         os.environ['ONLY_TEST_AUTO_CLOSE_LIMIT'] = str(session_auto_close_limit)
@@ -447,7 +465,7 @@ async def main():
     # LLM plan
     logger.set_phase("plan")
     # initial screen for planning
-    _params_plan = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+    _params_plan = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit, "auto_click_playing": session_auto_click_playing}
     initial_screen = await server.execute_tool("get_current_screen_info", _params_plan)
     _initial_dict = initial_screen.to_dict() if hasattr(initial_screen, 'to_dict') else initial_screen
     try:
@@ -509,6 +527,7 @@ async def main():
         "}\n"
         "注意：steps 中不要包含 restart/launch/close_ads 等步骤！\n"
         "框架已自动完成的操作（禁止在计划中重复）：启动应用、关闭广告、等待初始化。\n\n"
+        "灵活调整, 比如当 text: Ads 不存在时代表没有广告, 无需处理这一步, 不必要强遵守示例文件, 那只是参考, 你存在的意义就是适配\n\n"
     )
     dump_text("prompt_plan.txt", plan_prompt)
     llm = LLMClient()
@@ -566,7 +585,7 @@ async def main():
     # ============================================================
     for round_idx in range(1, total_rounds + 1):
         logger.set_phase("execution", current_round=round_idx, max_rounds=total_rounds)
-        _params_round = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+        _params_round = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit, "auto_click_playing": session_auto_click_playing}
         screen = await server.execute_tool("get_current_screen_info", _params_round)
         dump_text(f"tool_get_current_screen_info_round_{round_idx}.json", json.dumps((screen.to_dict() if hasattr(screen,'to_dict') else screen), ensure_ascii=False, indent=2))
         try:
@@ -772,9 +791,9 @@ async def main():
                 tr_name = (tr.get('name') or '').strip()
                 tr_params = tr.get('params') if isinstance(tr.get('params'), dict) else {}
                 if tr_name == 'analyze_current_screen':
-                    _params_tr = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit}
+                    _params_tr = {"include_elements": True, "clickable_only": True, "auto_close_limit": session_auto_close_limit, "auto_click_playing": session_auto_click_playing}
                     # allow prompt-provided params to override defaults safely
-                    _params_tr.update({k:v for k,v in tr_params.items() if k in ("include_elements","clickable_only","auto_close_limit")})
+                    _params_tr.update({k:v for k,v in tr_params.items() if k in ("include_elements","clickable_only","auto_close_limit","auto_click_playing")})
                     tr_resp = await server.execute_tool("get_current_screen_info", _params_tr)
                     dump_text(f"tool_get_current_screen_info_round_{round_idx}_refresh.json", json.dumps((tr_resp.to_dict() if hasattr(tr_resp,'to_dict') else tr_resp), ensure_ascii=False, indent=2))
                     # Re-prompt once with refreshed screen info
@@ -981,8 +1000,9 @@ async def main():
     except Exception as e:
         dump_text("error_write_final_case.txt", str(e))
 
-    # 若传入 --execute：将最终 JSON 转为 Python，并尝试执行
-    if args.execute and final_case:
+    # JSON 转 Python 阶段
+    py_out = None
+    if args.json_to_python and final_case:
         try:
             import subprocess as _subp
             py_out_dir = Path('only_test/testcases/python')
@@ -997,16 +1017,27 @@ async def main():
                 logger.error("JSON→Python 转换失败")
             else:
                 logger.info(f"已生成 Python 用例: {py_out}")
-                # 直接尝试用 Python 执行（如需 airtest，请改用 `airtest run`）
-                _run = _subp.run([sys.executable, str(py_out)], capture_output=True, text=True)
-                dump_text("artifact_run_generated_stdout.txt", _run.stdout or "")
-                dump_text("artifact_run_generated_stderr.txt", _run.stderr or "")
-                if _run.returncode != 0:
-                    logger.warning("执行生成的 Python 用例失败，请检查连接/设备/依赖，并考虑使用 airtest run")
-                else:
-                    logger.info("生成的 Python 用例执行完成")
+        except Exception as e:
+            dump_text("error_codegen_generated.txt", str(e))
+            logger.error(f"JSON 转 Python 失败: {e}")
+    
+    # 执行 Python 阶段
+    if args.execute_python and py_out and py_out.exists():
+        try:
+            import subprocess as _subp
+            # 直接尝试用 Python 执行（如需 airtest，请改用 `airtest run`）
+            _run = _subp.run([sys.executable, str(py_out)], capture_output=True, text=True)
+            dump_text("artifact_run_generated_stdout.txt", _run.stdout or "")
+            dump_text("artifact_run_generated_stderr.txt", _run.stderr or "")
+            if _run.returncode != 0:
+                logger.warning("执行生成的 Python 用例失败，请检查连接/设备/依赖，并考虑使用 airtest run")
+            else:
+                logger.info("生成的 Python 用例执行完成")
         except Exception as e:
             dump_text("error_execute_generated.txt", str(e))
+            logger.error(f"执行 Python 失败: {e}")
+    elif args.execute_python and not py_out:
+        logger.warning("--execute-python 需要先使用 --json-to-python 转换")
 
     # ============================================================
     # 会话结束

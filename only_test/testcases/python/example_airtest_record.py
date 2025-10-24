@@ -64,6 +64,7 @@ keyevent('ENTER')
 
 sleep(1)
 ## [page] search_result, [action] click, [comment] 双层约束, text 可能存在相同的, 但是 PosterName 名称约束后基本很少, click_with_bias 点击播放时需要使用固定传值 dy_px=-150
+
 poco(resourceId="com.mobile.brasiltvmobile:id/mPosterName", text=program_name).click_with_bias(dy_px=-150)
 
 ## [page] vod_playing_detail, [action] click, [comment] 点击播放按钮开始播放视频（播放态下会自动唤起控件，无需手动点屏幕）

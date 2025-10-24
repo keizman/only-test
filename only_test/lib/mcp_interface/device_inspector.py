@@ -52,6 +52,15 @@ from .mcp_server import mcp_tool
 from only_test.config.yaml_monitor import YamlMonitor
 from only_test.lib.app_management.app_launcher import start_app as unified_start_app
 
+# === 元素类型白名单（始终包含，无论是否可点击） ===
+# 即使 clickable_only=True，这些类型的元素也会被包含
+ELEMENT_TYPE_WHITELIST = {
+    'android.widget.TextView',  # 文本视图，用于显示标题、描述等
+    # 'android.widget.ImageView',  # 图片视图，可能包含重要内容
+    'android.widget.EditText',  # 输入框，用户可能输入
+}
+
+
 # === 广告检测/关闭关键词（统一常量） ===
 # 全部使用小写做比较，匹配时先对目标字符串 lower()
 PRIORITY_CLOSE_IDS = {
@@ -63,12 +72,12 @@ EXCLUDED_CLOSE_IDS = {
     # 注意：这些ID应该使用小写，因为代码中会转换为小写进行匹配
     'imcouponclose', 'mivclosenotice', "mtvnotice", "skipbtn", "mtextversion", 'mIvBack'
 }
-# GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用“关闭/跳过”语义
+# GENERIC_CLOSE_KEYWORDS 说明：用于在三个字段中匹配通用"关闭/跳过"语义
 # - resource-id（例如: com.xxx:id/ivClose；会在小写化后匹配 'close' 等子串）
-# - text（控件显示文本，例如 “关闭”/“跳过”/"close"）
+# - text（控件显示文本，例如 "关闭"/"跳过"/"close"）
 # - content-desc（无障碍描述，可能标注为 close/关闭 等）
 # 检测逻辑会在 kw['rid']、kw['text']、kw['desc'] 三者上进行包含匹配
-GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'x', 'fechar', 'pular', 'ok'}
+GENERIC_CLOSE_KEYWORDS = {'close', '关闭', '跳过', 'skip', 'fechar', 'pular', 'ok'}
 
 logger = logging.getLogger(__name__)
 
@@ -289,133 +298,43 @@ class DeviceInspector:
             return None
 
     async def _dump_current_xml(self) -> str:
-        """获取当前UI层级XML，确保每次获取最新状态。"""
-        # 首先清理可能存在的旧文件
-        try:
-            subprocess.run(self._adb_prefix() + ["shell", "rm", "-f", "/sdcard/window_dump*.xml"],
-                         capture_output=True, text=True, timeout=5)
-        except Exception:
-            pass
-
-        # 方法1: 直接使用 uiautomator2 库 (最可靠，无缓存)
+        """获取当前UI层级XML，确保每次获取最新状态。
+        
+        采用 pure_ui2_dump_extractor 的可靠方案：
+        直接使用 uiautomator2 的 dump_hierarchy() 方法，强制刷新避免缓存
+        """
         try:
             import uiautomator2 as u2  # type: ignore
+            import time as _time
+            
+            # 连接设备
             ui = u2.connect(self.device_id) if self.device_id else u2.connect()
-
-            if ui:
-                # 强制刷新设备状态，确保获取最新界面
-                try:
-                    ui.app_current()  # 触发状态刷新
-                    import time
-                    time.sleep(0.1)
-                except Exception:
-                    pass
-
-                xml = ui.dump_hierarchy()
-                if xml and "<hierarchy" in xml:
-                    logger.debug(f"uiautomator2获取XML成功，长度: {len(xml)}")
-                    return xml
-                else:
-                    logger.warning("uiautomator2返回空XML或格式错误")
+            
+            if not ui:
+                logger.error("[XML-DUMP] uiautomator2连接失败")
+                return ""
+            
+            # 强制刷新：多次调用 app_current 确保获取最新状态
+            try:
+                for _ in range(2):
+                    ui.app_current()
+                    _time.sleep(0.1)
+            except Exception:
+                pass
+            
+            # 直接调用 dump_hierarchy（参考 pure_ui2_dump_extractor_with_image_tag.py）
+            xml = ui.dump_hierarchy()
+            
+            if xml and "<hierarchy" in xml:
+                logger.info(f"[XML-DUMP] 获取XML成功，长度: {len(xml)}")
+                return xml
             else:
-                logger.warning("uiautomator2连接失败")
+                logger.warning("[XML-DUMP] 返回空XML或格式错误")
+                return ""
+                
         except Exception as e:
-            logger.warning(f"uiautomator2方法失败: {e}")
-
-        # 方法2: 使用带时间戳的唯一文件名避免缓存
-        try:
-            import time
-            timestamp = int(time.time() * 1000000)  # 微秒时间戳确保唯一性
-            unique_filename = f"/sdcard/ui_dump_{timestamp}.xml"
-
-            # dump到唯一文件名
-            dump_result = subprocess.run(
-                self._adb_prefix() + ["shell", "uiautomator", "dump", unique_filename],
-                capture_output=True, text=True, timeout=15
-            )
-
-            if dump_result.returncode == 0:
-                time.sleep(0.3)  # 等待文件写入完成
-
-                # 验证文件存在并读取
-                check_result = subprocess.run(
-                    self._adb_prefix() + ["shell", "test", "-f", unique_filename],
-                    capture_output=True, text=True, timeout=5
-                )
-
-                if check_result.returncode == 0:
-                    out = subprocess.run(
-                        self._adb_prefix() + ["shell", "cat", unique_filename],
-                        capture_output=True, text=True, timeout=15
-                    )
-
-                    # 立即清理临时文件
-                    try:
-                        subprocess.run(self._adb_prefix() + ["shell", "rm", "-f", unique_filename],
-                                     capture_output=True, text=True, timeout=5)
-                    except Exception:
-                        pass
-
-                    if out.returncode == 0 and out.stdout.strip():
-                        content = out.stdout.strip()
-                        if "<hierarchy" in content:
-                            logger.debug("文件dump方法获取XML成功")
-                            return content
-                        else:
-                            logger.warning("文件内容格式错误，未找到hierarchy标签")
-                    else:
-                        logger.warning("文件内容为空或读取失败")
-                else:
-                    logger.warning("dump文件未创建成功")
-            else:
-                logger.warning(f"dump到文件失败: {dump_result.stderr}")
-        except Exception as e:
-            logger.warning(f"文件dump方法异常: {e}")
-
-        # 方法3: exec-out 方法作为最后备选
-        try:
-            for target in ["/dev/fd/1", "/dev/stdout"]:
-                try:
-                    cmd = self._adb_prefix() + ["exec-out", "uiautomator", "dump", target]
-                    proc = await asyncio.create_subprocess_exec(
-                        *cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
-                    )
-                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
-
-                    if stderr:
-                        stderr_text = stderr.decode(errors='ignore')
-                        # 如果是"Killed"错误，尝试下一个目标
-                        if "Killed" in stderr_text:
-                            continue
-
-                    if proc.returncode == 0 and stdout:
-                        txt = stdout.decode(errors='ignore')
-
-                        # 输出中可能包含路径与提示，提取 <hierarchy ..> 起始
-                        idx = txt.find("<hierarchy")
-                        if idx >= 0:
-                            xml_content = txt[idx:]
-
-                            # 查找XML结束标记，清理垃圾内容
-                            end_idx = xml_content.find("</hierarchy>")
-                            if end_idx >= 0:
-                                xml_content = xml_content[:end_idx + len("</hierarchy>")]
-                                logger.debug(f"exec-out方法获取XML成功，长度: {len(xml_content)}")
-                                return xml_content
-                            else:
-                                logger.warning("未找到</hierarchy>结束标签")
-                        else:
-                            logger.warning("未找到<hierarchy标签")
-                except Exception as target_e:
-                    logger.warning(f"exec-out({target})方法失败: {target_e}")
-                    continue
-        except Exception as e:
-            logger.error(f"exec-out方法异常: {e}")
-
-        logger.error("所有XML获取方法均失败，返回空字符串")
-        return ""
+            logger.error(f"[XML-DUMP] 获取XML失败: {e}")
+            return ""
 
     def _parse_bounds(self, s: str) -> tuple[int,int,int,int]:
         try:
@@ -441,9 +360,13 @@ class DeviceInspector:
             logger.debug(f"XML前100字符: {xml_str[:100]}")
             return []
         elements: list[dict] = []
+        elements_with_text = 0  # 统计有文本的元素数量
+        elements_with_resource_id = 0  # 统计有resource_id的元素数量
+        
         def walk(node):
             if node is None:
                 return
+            # 处理所有非 hierarchy 根节点的元素
             if node.tag != 'hierarchy':
                 attrib = node.attrib
                 bounds_str = attrib.get('bounds', '[0,0][0,0]')
@@ -464,6 +387,38 @@ class DeviceInspector:
                     (attrib.get('long-clickable', 'false').lower() == 'true') or
                     (attrib.get('touchable', 'false').lower() == 'true')
                 ) and visible and (attrib.get('enabled', 'true').lower() == 'true')
+                
+                # 统计有文本的元素
+                if text.strip():
+                    nonlocal elements_with_text
+                    elements_with_text += 1
+                
+                # 统计有resource_id的元素
+                if resource_id.strip():
+                    nonlocal elements_with_resource_id
+                    elements_with_resource_id += 1
+                
+                # 计算额外字段（与 pure_ui2_dump_extractor 格式一致）
+                center_x = (x1 + x2) / 2.0 if w > 0 else 0
+                center_y = (y1 + y2) / 2.0 if h > 0 else 0
+                width = abs(x2 - x1) if w > 0 else 0
+                height = abs(y2 - y1) if h > 0 else 0
+                
+                # 归一化位置和尺寸
+                norm_pos = [center_x / w if w > 0 else 0, center_y / h if h > 0 else 0]
+                norm_size = [width / w if w > 0 else 0, height / h if h > 0 else 0]
+                
+                # 获取额外属性
+                focusable = attrib.get('focusable', 'false').lower() == 'true'
+                focused = attrib.get('focused', 'false').lower() == 'true'
+                checked = attrib.get('checked', 'false').lower() == 'true'
+                scrollable = attrib.get('scrollable', 'false').lower() == 'true'
+                selected = attrib.get('selected', 'false').lower() == 'true'
+                editable = 'EditText' in class_name
+                long_clickable = attrib.get('long-clickable', 'false').lower() == 'true'
+                checkable = attrib.get('checkable', 'false').lower() == 'true'
+                touchable = attrib.get('touchable', 'false').lower() == 'true'
+                
                 elements.append({
                     "uuid": f"xml_{len(elements)}",
                     "element_type": "xml",
@@ -475,11 +430,32 @@ class DeviceInspector:
                     "class_name": class_name,
                     "clickable": bool(is_clickable),
                     "bounds": nb,
-                    "source": "xml_extractor"
+                    "source": "xml_extractor",
+                    # 额外字段（与 pure_ui2_dump_extractor 格式一致）
+                    "pos": norm_pos,
+                    "size": norm_size,
+                    "focusable": focusable,
+                    "focused": focused,
+                    "checked": checked,
+                    "scrollable": scrollable,
+                    "selected": selected,
+                    "editable": editable,
+                    "long_clickable": long_clickable,
+                    "checkable": checkable,
+                    "touchable": touchable,
+                    "anchorPoint": [0.5, 0.5],
+                    "scale": [1.0, 1.0],
+                    "boundsInParent": norm_size,
+                    "visible": visible,
+                    "enabled": attrib.get('enabled', 'true').lower() == 'true'
                 })
+            
+            # 递归遍历所有子节点
             for c in list(node):
                 walk(c)
+        
         walk(root)
+        logger.debug(f"XML解析完成：总元素={len(elements)}, 有文本的元素={elements_with_text}, 有resource_id的元素={elements_with_resource_id}")
         return elements
 
     async def _get_elements_xml(self, clickable_only: bool = True) -> list[dict]:
@@ -490,11 +466,15 @@ class DeviceInspector:
             return []
 
         elems = self._xml_to_elements(xml_str)
-        logger.debug(f"解析得到 {len(elems)} 个原始元素")
+        
+        # 统计有resource_id的元素
+        resource_id_count = sum(1 for e in elems if e.get('resource_id', '').strip())
+        logger.debug(f"解析得到 {len(elems)} 个原始元素，其中 {resource_id_count} 个有resource_id")
 
         if clickable_only:
             clickable_elems = [e for e in elems if e.get('clickable')]
-            logger.debug(f"过滤后得到 {len(clickable_elems)} 个可点击元素")
+            clickable_with_resource_id = sum(1 for e in clickable_elems if e.get('resource_id', '').strip())
+            logger.debug(f"过滤后得到 {len(clickable_elems)} 个可点击元素，其中 {clickable_with_resource_id} 个有resource_id")
             return clickable_elems
 
         return elems
@@ -757,10 +737,11 @@ class DeviceInspector:
         parameters={
             "include_elements": {"type": "boolean", "description": "是否包含元素列表", "default": False},
             "clickable_only": {"type": "boolean", "description": "是否只分析可点击元素", "default": True},
-            "auto_close_limit": {"type": "integer", "description": "限制仅在前N次分析时自动关闭广告(默认3)", "default": 3}
+            "auto_close_limit": {"type": "integer", "description": "限制仅在前N次分析时自动关闭广告(默认3)", "default": 3},
+            "auto_click_playing": {"type": "integer", "description": "检测到播放状态时自动点击屏幕唤起控件(0=禁用, 1=启用)", "default": 0}
         }
     )
-    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True, auto_close_ads: bool = True, auto_close_limit: Optional[int] = None) -> Dict[str, Any]:
+    async def get_current_screen_info(self, include_elements: bool = False, clickable_only: bool = True, auto_close_ads: bool = True, auto_close_limit: Optional[int] = None, auto_click_playing: int = 0) -> Dict[str, Any]:
         """获取当前屏幕信息"""
         if not self._initialized:
             await self.initialize()
@@ -847,10 +828,36 @@ class DeviceInspector:
             # 获取元素信息（XML-only）
             # 获取XML和元素（使用XML提取器，根据clickable_only过滤）
             xml_dump = await self._dump_current_xml()
-            elements = self._xml_to_elements(xml_dump)
+            all_elements = self._xml_to_elements(xml_dump)  # 先获取所有元素
+            
+            # 根据clickable_only参数过滤
             if clickable_only:
-                elements = [e for e in elements if e.get('clickable')]
+                # 过滤逻辑：白名单中的类型始终包含，其他类型需要可点击
+                elements = []
+                for e in all_elements:
+                    class_name = e.get('class_name', '')
+                    # 如果在白名单中，直接添加
+                    if class_name in ELEMENT_TYPE_WHITELIST:
+                        elements.append(e)
+                    # 否则需要可点击才添加
+                    elif e.get('clickable'):
+                        elements.append(e)
+            else:
+                elements = all_elements
+            
             screen_info["total_elements"] = len(elements)
+            screen_info["total_all_elements"] = len(all_elements)  # 记录所有元素数量
+            
+            # 统计有resource_id的元素数量
+            elements_with_resource_id = sum(1 for e in elements if e.get('resource_id', '').strip())
+            all_elements_with_resource_id = sum(1 for e in all_elements if e.get('resource_id', '').strip())
+            screen_info["elements_with_resource_id"] = elements_with_resource_id
+            screen_info["all_elements_with_resource_id"] = all_elements_with_resource_id
+            
+            # 统计白名单元素的贡献
+            whitelist_count = sum(1 for e in elements if e.get('class_name', '') in ELEMENT_TYPE_WHITELIST)
+            screen_info["whitelist_elements_count"] = whitelist_count
+            logger.info(f"[ELEMENT-STATS] clickable_only={clickable_only}, 过滤后元素={len(elements)} (其中白名单元素={whitelist_count}), 所有元素={len(all_elements)}, 过滤后有resource_id={elements_with_resource_id}, 所有有resource_id={all_elements_with_resource_id}")
             
             if clickable_only:
                 screen_info["clickable_elements"] = len(elements)
@@ -882,6 +889,43 @@ class DeviceInspector:
             # 播放状态检测（音频/会话）
             playing = await self._is_media_playing()
             screen_info["media_playing"] = playing
+            
+            # 如果启用了播放状态自动点击，调用公共函数
+            if auto_click_playing == 1 and playing:
+                logger.info("[AUTO-CLICK-PLAYING] 检测到播放状态，调用公共自动点击函数")
+                logger.info(f"[AUTO-CLICK-PLAYING] 调试: playing={playing}, auto_click_playing={auto_click_playing}")
+                try:
+                    # 导入配置解析函数
+                    from only_test.lib.poco_utils import _resolve_playback_config
+                    
+                    # 获取配置
+                    config = _resolve_playback_config(self, screen_info.get("current_app"))
+                    logger.info(f"[AUTO-CLICK-PLAYING] 配置: wake_keywords={config.get('wake_keywords')}, tap_y_norm={config.get('tap_y_norm')}")
+                    
+                    # 直接调用 _ensure_controls_visible_once（已经在 async 上下文中）
+                    wake_result = await self._ensure_controls_visible_once(
+                        wake_keywords=config.get("wake_keywords", []),
+                        tap_y_norm=config.get("tap_y_norm", 0.15),
+                        post_tap_sleep_ms=config.get("post_tap_sleep_ms", 250)
+                    )
+                    logger.info(f"[AUTO-CLICK-PLAYING] 返回结果: {wake_result}")
+                    
+                    screen_info["auto_click_performed"] = wake_result.get("tap_performed", False)
+                    screen_info["controls_visible_after_click"] = wake_result.get("controls_visible", False)
+                    
+                    # 如果执行了点击，重新获取 elements
+                    if wake_result.get("tap_performed"):
+                        logger.info("[AUTO-CLICK-PLAYING] 点击完成，重新获取元素信息")
+                        elements = await self._get_elements_xml(clickable_only=clickable_only)
+                        screen_info["total_elements"] = len(elements)
+                        screen_info["elements_refreshed"] = True
+                        
+                        # 重新统计元素信息
+                        elements_with_resource_id = sum(1 for e in elements if e.get('resource_id', '').strip())
+                        screen_info["elements_with_resource_id"] = elements_with_resource_id
+                except Exception as e:
+                    logger.warning(f"[AUTO-CLICK-PLAYING] 自动点击失败: {e}")
+                    screen_info["auto_click_error"] = str(e)
             
             # 如果需要包含元素列表
             if include_elements:
@@ -1181,10 +1225,10 @@ class DeviceInspector:
 
                 # 检测广告相关元素
                 ad_keywords = ['ad', 'ads', '广告', 'sponsor', 'upgrade', 'version', 'update', '升级', '更新']
-                is_ad = any(k in kw['text'] or k in kw['rid'] for k in ad_keywords)
-                if is_ad:
+                matched_keywords = [k for k in ad_keywords if k in kw['text'] or k in kw['rid']]
+                if matched_keywords:
                     ad_elems.append(e)
-                    logger.debug(f"发现广告元素: '{text}' [{resource_id}]")
+                    logger.info(f"发现广告元素: '{text}' [{resource_id}] 匹配关键词: {matched_keywords}")
 
                 # 优先检测强制广告关闭按钮（但要确保不在排除列表中）
                 force_close = False
@@ -1255,11 +1299,23 @@ class DeviceInspector:
 
             final_score = min(1.0, score)
 
-            # 仅在检测到广告时输出关键信息
-            if final_score >= 0.5:
+            # 透明化输出置信度计算过程
+            if final_score >= 0.35:  # 降低阈值，确保能看到所有计算过程
                 logger.info(f"广告检测: 置信度={final_score:.2f}, 广告={len(ad_elems)}, 关闭候选={len(close_elems)}")
+                
+                # 输出详细的分数计算过程
+                if score_details:
+                    logger.info(f"置信度计算详情: {'; '.join(score_details)}")
+                
+                # 输出广告元素详情
+                if ad_elems:
+                    logger.info(f"广告元素详情({len(ad_elems)}个):")
+                    for ad in ad_elems[:3]:
+                        logger.info(f"  - rid='{ad.get('resource_id', '')}' text='{ad.get('text', '')[:50]}'")
+                
+                # 输出关闭候选详情
                 if close_elems:
-                    # 增强日志：输出前三个候选的关键信息，便于排查误判
+                    logger.info(f"关闭候选详情({len(close_elems)}个):")
                     def _fmt(e):
                         rid = e.get('resource_id') or ''
                         tx = (e.get('text') or '')[:30]
@@ -1268,8 +1324,10 @@ class DeviceInspector:
                         clk = e.get('clickable')
                         b = e.get('bounds') or []
                         return f"rid='{rid}' text='{tx}' desc='{desc}' cls='{cls}' clickable={clk} bounds={b}"
-                    preview = ", ".join(_fmt(e) for e in close_elems[:3])
-                    logger.info(f"关闭候选(Top-3): {preview}")
+                    for idx, e in enumerate(close_elems[:5], 1):
+                        logger.info(f"  [{idx}] {_fmt(e)}")
+                else:
+                    logger.info("  (无关闭候选)")
             else:
                 logger.debug(f"广告检测: 置信度={final_score:.2f} (未检测到明显广告)")
 
@@ -1576,13 +1634,15 @@ class DeviceInspector:
         description="执行UI动作（click/input/press/swipe），基于选择器或坐标并返回结果",
         category="interaction",
         parameters={
-            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "press", "swipe"], "description": "动作类型"},
-            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px；press 动作使用 keyevent 字段"},
+            "action": {"type": "string", "enum": ["click", "click_with_bias", "input", "press", "swipe", "wait_for_elements"], "description": "动作类型"},
+            "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px；press 动作使用 keyevent 字段；wait_for_elements 支持 disappearance 字段"},
             "data": {"type": "string", "description": "输入文本（当 action=input 时）", "default": ""},
-            "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.5}
+            "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.5},
+            "dx_px": {"type": "number", "description": "click_with_bias 时的水平偏移（像素）", "default": 0},
+            "dy_px": {"type": "number", "description": "click_with_bias 时的垂直偏移（像素）", "default": 0}
         }
     )
-    async def perform_ui_action(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.5) -> Dict[str, Any]:
+    async def perform_ui_action(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.5, dx_px: int = 0, dy_px: int = 0) -> Dict[str, Any]:
         """执行单步UI动作。
         策略：优先使用选择器（resource_id > content_desc > text）；仅当选择器失败时再使用 bounds_px。
         同时内置"容器→子输入框"启发式：若点击容器失败，尝试点击其子 EditText。
@@ -1596,36 +1656,53 @@ class DeviceInspector:
         exec_log = []
         used_selector = None
         try:
-            # 解出选择器
-            def pick_selector(t: Dict[str, Any]):
+            # 提取所有选择器（复用 json_to_python.py 的逻辑）
+            def extract_selectors_from_target(t: Dict[str, Any]) -> List[Dict[str, Any]]:
+                """从 target 中提取选择器列表"""
                 if not isinstance(t, dict):
-                    return None, None
+                    return []
+                
+                selectors = []
+                
                 # 直接键
                 if t.get('resource_id'):
-                    return 'resource_id', t['resource_id']
-                if t.get('content_desc'):
-                    return 'content_desc', t['content_desc']
+                    selectors.append({'resource_id': t['resource_id']})
                 if t.get('text'):
-                    return 'text', t['text']
-                # 列表
+                    selectors.append({'text': t['text']})
+                if t.get('content_desc'):
+                    selectors.append({'content_desc': t['content_desc']})
+                
+                # priority_selectors 列表
                 sels = t.get('priority_selectors') or t.get('selectors') or []
                 for s in sels:
-                    if s.get('resource_id'):
-                        return 'resource_id', s['resource_id']
-                for s in sels:
-                    if s.get('content_desc'):
-                        return 'content_desc', s['content_desc']
-                for s in sels:
-                    if s.get('text'):
-                        return 'text', s['text']
-                return None, None
-
-            sel_type, sel_value = pick_selector(target)
-            used_selector = {"type": sel_type, "value": sel_value}
-            # 选择器包名限制：若提供 resource_id 但不属于目标包，直接判为无效选择器
-            if sel_type == 'resource_id' and sel_value and self.target_app_package:
-                rid = str(sel_value)
-                # Accept fully-qualified Android resource form "<pkg>:id/<name>" or generic "id/<name>"
+                    if isinstance(s, dict):
+                        if s.get('resource_id') and not any('resource_id' in sel for sel in selectors):
+                            selectors.append({'resource_id': s['resource_id']})
+                        if s.get('text') and not any('text' in sel for sel in selectors):
+                            selectors.append({'text': s['text']})
+                        if s.get('content_desc') and not any('content_desc' in sel for sel in selectors):
+                            selectors.append({'content_desc': s['content_desc']})
+                
+                return selectors
+            
+            selector_list = extract_selectors_from_target(target)
+            used_selector = selector_list.copy()
+            
+            # 构建 poco kwargs（复用 json_to_python.py 的 _build_poco_selector 逻辑）
+            poco_kwargs = {}
+            for sel in selector_list:
+                if sel.get('resource_id'):
+                    poco_kwargs['resourceId'] = sel['resource_id']
+                if sel.get('text'):
+                    poco_kwargs['text'] = sel['text']
+                if sel.get('content_desc'):
+                    poco_kwargs['desc'] = sel['content_desc']
+            
+            logger.info(f"[PERFORM_UI_ACTION] 构建 poco kwargs: {poco_kwargs}")
+            
+            # 选择器包名限制
+            if 'resourceId' in poco_kwargs and poco_kwargs['resourceId'] and self.target_app_package:
+                rid = str(poco_kwargs['resourceId'])
                 if not (rid.startswith(f"{self.target_app_package}:id/") or rid.startswith("id/")):
                     return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
 
@@ -1638,103 +1715,110 @@ class DeviceInspector:
                 # 在 XML-only 场景忽略视觉集成失败
                 self.visual_integration = None
 
-            if action == 'click':
+            if action in ('click', 'click_with_bias'):
                 # 1) 首选按选择器点击（Poco/XML-only）
                 ok = False
                 # 初始化 Poco（后续坐标兜底也复用）
                 from ..poco_utils import get_android_poco
                 poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
-                # 解析偏移（像素）
-                bias = {}
+                # 解析偏移（像素）- 优先级：函数参数 > target.bias > target 顶层
+                bias_dict = {}
                 if isinstance(target, dict):
-                    bias = target.get('bias') or {}
-                try:
-                    dx_px = int(bias.get('dx_px')) if bias.get('dx_px') is not None else 0
-                except Exception:
-                    dx_px = 0
-                try:
-                    dy_px = int(bias.get('dy_px')) if bias.get('dy_px') is not None else 0
-                except Exception:
-                    dy_px = 0
-                # 内容/文本选择器：先验证属于目标包
-                if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
+                    bias_dict = target.get('bias') or {}
+                
+                # 优先使用函数参数（MCP 调用时传入），其次从 target.bias，最后从 target 顶层
+                final_dx_px = dx_px  # 函数参数
+                final_dy_px = dy_px  # 函数参数
+                
+                if final_dx_px == 0 and bias_dict.get('dx_px') is not None:
+                    try:
+                        final_dx_px = int(bias_dict.get('dx_px'))
+                    except Exception:
+                        pass
+                
+                if final_dy_px == 0 and bias_dict.get('dy_px') is not None:
+                    try:
+                        final_dy_px = int(bias_dict.get('dy_px'))
+                    except Exception:
+                        pass
+                
+                if final_dx_px == 0 and isinstance(target, dict) and target.get('dx_px') is not None:
+                    try:
+                        final_dx_px = int(target.get('dx_px'))
+                    except Exception:
+                        pass
+                
+                if final_dy_px == 0 and isinstance(target, dict) and target.get('dy_px') is not None:
+                    try:
+                        final_dy_px = int(target.get('dy_px'))
+                    except Exception:
+                        pass
+                
+                logger.info(f"[PERFORM_UI_ACTION] {action} 使用 bias: dx_px={final_dx_px}, dy_px={final_dy_px} (函数参数: dx={dx_px}, dy={dy_px}; bias={bias_dict}; target.dx_px={target.get('dx_px') if isinstance(target, dict) else None})")
+                
+                # 验证 text/desc 选择器属于目标包
+                if ('text' in poco_kwargs or 'desc' in poco_kwargs) and self.target_app_package:
                     try:
                         elems = await self._get_elements_xml(clickable_only=False)
                         found_in_target = False
                         for e in elems:
-                            if sel_type == 'content_desc' and (e.get('content_desc') == sel_value):
+                            if 'text' in poco_kwargs and (e.get('text') == poco_kwargs['text']):
                                 if self._belongs_to_scope(e):
                                     found_in_target = True; break
-                            if sel_type == 'text' and (e.get('text') == sel_value):
+                            if 'desc' in poco_kwargs and (e.get('content_desc') == poco_kwargs['desc']):
                                 if self._belongs_to_scope(e):
                                     found_in_target = True; break
                         if not found_in_target:
                             return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
                     except Exception:
                         pass
-                if sel_type in ('resource_id', 'content_desc', 'text') and sel_value:
+                
+                # 使用 poco kwargs 直接构建并执行（与 json_to_python.py 逻辑一致）
+                if poco_kwargs:
                     try:
-                        obj = None
-                        if sel_type == 'resource_id':
-                            obj = poco(resourceId=sel_value)
-                            if not obj.exists() and '/' in str(sel_value):
-                                # 后缀匹配（兼容包名前缀差异）
-                                rid_suffix = str(sel_value).split('/')[-1]
-                                try:
-                                    exec_log.append(f"poco(resourceIdMatches=.*:id/{rid_suffix}$).click()")
-                                    obj = poco(resourceIdMatches=f".*:id/{rid_suffix}$")
-                                except Exception:
-                                    obj = poco(name=rid_suffix)
-                        elif sel_type == 'text':
-                            obj = poco(text=sel_value)
-                        elif sel_type == 'content_desc':
-                            # 多种别名尝试
-                            for key in ('desc', 'description', 'contentDescription', 'name'):
-                                try:
-                                    obj = poco(**{key: sel_value})
-                                    if obj.exists():
-                                        break
-                                except Exception:
-                                    obj = None
-                        # 记录 exists 检查路径
-                        def _exists_log(o, label):
+                        # 直接构建 poco 对象（支持双重定位）
+                        obj = poco(**poco_kwargs)
+                        
+                        # 检查元素是否存在
+                        if obj.exists():
                             try:
-                                ex = bool(o and o.exists())
-                                exec_log.append(f"exists({label})={ex}")
-                                return ex
-                            except Exception as _e:
-                                exec_log.append(f"exists({label})=error:{_e}")
-                                return False
-                        if obj is None and sel_type == 'resource_id' and '/' in str(sel_value):
-                            exec_log.append(f"try resourceIdMatches .*:id/{str(sel_value).split('/')[-1]}$")
-                        if _exists_log(obj, f"{sel_type}={sel_value}"):
-                            try:
+                                # 等待元素出现
                                 try:
                                     obj.wait_for_appearance(timeout=2.0)
                                 except Exception:
                                     pass
-                                if action == 'click_with_bias' or (dx_px or dy_px):
-                                    exec_log.append(f"poco.click_with_bias({sel_type}={sel_value}, dx_px={dx_px}, dy_px={dy_px})")
-                                    self._log_poco_call("click_with_bias", selector_type=sel_type, selector_value=sel_value, dx_px=dx_px, dy_px=dy_px)
-                                    obj.click_with_bias(dx_px=dx_px, dy_px=dy_px)
+                                
+                                # 执行点击（带或不带 bias）
+                                if action == 'click_with_bias' or (final_dx_px or final_dy_px):
+                                    logger.info(f"[PERFORM_UI_ACTION] 执行: poco(**{poco_kwargs}).click_with_bias(dx_px={final_dx_px}, dy_px={final_dy_px})")
+                                    exec_log.append(f"poco(**{poco_kwargs}).click_with_bias(dx_px={final_dx_px}, dy_px={final_dy_px})")
+                                    self._log_poco_call("click_with_bias", poco_kwargs=poco_kwargs, dx_px=final_dx_px, dy_px=final_dy_px)
+                                    obj.click_with_bias(dx_px=final_dx_px, dy_px=final_dy_px)
                                 else:
-                                    exec_log.append(f"poco.click({sel_type}={sel_value})")
-                                    self._log_poco_call("click", selector_type=sel_type, selector_value=sel_value)
+                                    logger.info(f"[PERFORM_UI_ACTION] 执行: poco(**{poco_kwargs}).click()")
+                                    exec_log.append(f"poco(**{poco_kwargs}).click()")
+                                    self._log_poco_call("click", poco_kwargs=poco_kwargs)
                                     obj.click()
                                 ok = True
                             except Exception as click_e:
                                 exec_log.append(f"click_error:{click_e}")
+                                logger.error(f"[PERFORM_UI_ACTION] 点击失败: {click_e}")
                                 ok = False
+                        else:
+                            logger.warning(f"[PERFORM_UI_ACTION] 元素不存在: poco(**{poco_kwargs})")
+                            ok = False
                     except Exception as poco_e:
                         exec_log.append(f"poco_error:{poco_e}")
+                        logger.error(f"[PERFORM_UI_ACTION] poco 错误: {poco_e}")
                         ok = False
-                # 2) 若失败，尝试“容器→子输入框”启发式
-                if not ok and sel_type == 'resource_id' and sel_value:
+                # 2) 若失败，尝试"容器→子输入框"启发式
+                if not ok and 'resourceId' in poco_kwargs and poco_kwargs['resourceId']:
                     try:
                         elems = await self._get_elements_xml(clickable_only=False)
                         container = None
+                        resource_id = poco_kwargs['resourceId']
                         for e in elems:
-                            if e.get('resource_id') == sel_value:
+                            if e.get('resource_id') == resource_id:
                                 container = e; break
                         if container and isinstance(container.get('bounds'), (list, tuple)) and len(container['bounds']) == 4:
                             cb = container['bounds']
@@ -1845,56 +1929,35 @@ class DeviceInspector:
                             ok = True
                         except Exception as e:
                             exec_log.append(f"poco.click_px_error:{e}")
+                            logger.error(f"[PERFORM_UI_ACTION] click_px 失败: {e}")
                 _time.sleep(max(0.0, float(wait_after)))
+                
+                # 记录最终结果
+                if ok:
+                    logger.info(f"[PERFORM_UI_ACTION] {action} 成功，使用的选择器: {used_selector}")
+                else:
+                    logger.warning(f"[PERFORM_UI_ACTION] {action} 失败，尝试的选择器: {used_selector}, exec_log: {exec_log}")
+                
                 return {"success": bool(ok), "used": used_selector if ok else ({"type": "bounds_px", "value": target.get('bounds_px')} if target.get('bounds_px') else used_selector), "exec_log": exec_log}
 
             elif action == 'input':
-                # 选择器范围限制
-                if sel_type == 'resource_id' and sel_value and self.target_app_package:
-                    rid = str(sel_value)
-                    if not (rid.startswith(f"{self.target_app_package}:id/") or rid.startswith("id/")):
-                        return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
-                if sel_type in ('content_desc', 'text') and sel_value and self.target_app_package:
-                    try:
-                        elems = await self._get_elements_xml(clickable_only=False)
-                        found_in_target = False
-                        for e in elems:
-                            if sel_type == 'content_desc' and (e.get('content_desc') == sel_value) and self._belongs_to_scope(e):
-                                found_in_target = True; break
-                            if sel_type == 'text' and (e.get('text') == sel_value) and self._belongs_to_scope(e):
-                                found_in_target = True; break
-                        if not found_in_target:
-                            return {"success": False, "error": "selector_not_in_target_app", "used": used_selector}
-                    except Exception:
-                        pass
-                # 聚焦输入框并 set_text（严格使用 Poco，与 example_airtest_record.py 保持一致）
+                # 使用 poco_kwargs（已在前面构建好）
                 ok = False
                 error_msg = None
                 try:
                     from ..poco_utils import get_android_poco
                     poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
-                    obj = None
-                    if sel_type == 'resource_id':
-                        obj = poco(resourceId=sel_value)
-                        exec_log.append(f"poco(resourceId={sel_value})")
-                    elif sel_type == 'text':
-                        obj = poco(text=sel_value)
-                        exec_log.append(f"poco(text={sel_value})")
-                    elif sel_type == 'content_desc':
-                        for key in ('desc', 'description', 'contentDescription', 'name'):
-                            try:
-                                obj = poco(**{key: sel_value})
-                                if obj.exists():
-                                    exec_log.append(f"poco({key}={sel_value})")
-                                    break
-                            except Exception:
-                                obj = None
+                    
+                    logger.info(f"[PERFORM_UI_ACTION] input 使用 poco kwargs: {poco_kwargs}")
+                    
+                    obj = poco(**poco_kwargs) if poco_kwargs else None
+                    exec_log.append(f"poco(**{poco_kwargs})")
                     
                     if obj is None:
                         error_msg = "无法构造 poco 对象"
                         exec_log.append(f"ERROR: {error_msg}")
                     elif not obj.exists():
-                        error_msg = f"元素不存在: {sel_type}={sel_value}"
+                        error_msg = f"元素不存在: poco(**{poco_kwargs})"
                         exec_log.append(f"ERROR: {error_msg}")
                     else:
                         try:
@@ -1905,14 +1968,14 @@ class DeviceInspector:
                         
                         # 先点击获取焦点（与 example 一致）
                         try:
-                            self._log_poco_call("click", selector_type=sel_type, selector_value=sel_value, reason="focus_for_input")
+                            self._log_poco_call("click", poco_kwargs=poco_kwargs, reason="focus_for_input")
                             obj.click()
                             exec_log.append("poco.click()")
                         except Exception as ce:
                             exec_log.append(f"click_warning:{ce}")
                         
                         # 使用 set_text（与 example 一致：poco(resourceId=...).set_text(program_name)）
-                        self._log_poco_call("set_text", selector_type=sel_type, selector_value=sel_value, text=str(data or ""))
+                        self._log_poco_call("set_text", poco_kwargs=poco_kwargs, text=str(data or ""))
                         res = obj.set_text(str(data or ""))
                         exec_log.append(f"poco.set_text('{data}') -> {res if isinstance(res, str) else 'ok'}")
                         ok = True
@@ -2006,9 +2069,64 @@ class DeviceInspector:
                     except Exception as se:
                         exec_log.append(f"poco.swipe_error:{se}")
                 return {"success": False, "error": "invalid swipe parameters", "exec_log": exec_log}
+            
+            elif action == 'wait_for_elements':
+                # 使用 poco 的 wait_for_appearance 或 wait_for_disappearance（与 example_airtest_record.py 保持一致）
+                # poco(text="Ads").wait_for_disappearance(timeout=10)
+                from ..poco_utils import get_android_poco
+                poco = get_android_poco(device_id=self.device_id, app_id=self.target_app_package)
+                
+                # 检查是否等待消失
+                disappearance = False
+                if isinstance(target, dict):
+                    disappearance = bool(target.get('disappearance', False))
+                
+                # 使用 poco_kwargs（已在前面构建好）
+                timeout = 10
+                if isinstance(target, dict) and 'timeout' in target:
+                    timeout = float(target.get('timeout', 10))
+                
+                logger.info(f"[PERFORM_UI_ACTION] wait_for_elements 使用 poco kwargs: {poco_kwargs}, disappearance={disappearance}, timeout={timeout}")
+                
+                ok = False
+                error_msg = None
+                try:
+                    if poco_kwargs:
+                        obj = poco(**poco_kwargs)
+                        
+                        if disappearance:
+                            # 等待元素消失
+                            logger.info(f"[PERFORM_UI_ACTION] 执行: poco(**{poco_kwargs}).wait_for_disappearance(timeout={timeout})")
+                            exec_log.append(f"poco(**{poco_kwargs}).wait_for_disappearance(timeout={timeout})")
+                            obj.wait_for_disappearance(timeout=timeout)
+                        else:
+                            # 等待元素出现
+                            logger.info(f"[PERFORM_UI_ACTION] 执行: poco(**{poco_kwargs}).wait_for_appearance(timeout={timeout})")
+                            exec_log.append(f"poco(**{poco_kwargs}).wait_for_appearance(timeout={timeout})")
+                            obj.wait_for_appearance(timeout=timeout)
+                        
+                        ok = True
+                    else:
+                        error_msg = "没有有效的选择器"
+                        exec_log.append(f"ERROR: {error_msg}")
+                except Exception as e:
+                    error_msg = str(e)
+                    exec_log.append(f"wait_error:{e}")
+                    logger.error(f"[PERFORM_UI_ACTION] wait 失败: {e}")
+                    ok = False
+                
+                _time.sleep(max(0.0, float(wait_after)))
+                
+                if ok:
+                    return {"success": True, "used": used_selector, "exec_log": exec_log}
+                else:
+                    return {"success": False, "error": error_msg or "wait_failed", "used": used_selector, "exec_log": exec_log}
+            
             else:
+                logger.error(f"[PERFORM_UI_ACTION] 不支持的动作类型: {action}, 支持的动作: click, click_with_bias, input, press, swipe, wait_for_elements")
                 return {"success": False, "error": f"unsupported action: {action}", "exec_log": exec_log}
         except Exception as e:
+            logger.error(f"[PERFORM_UI_ACTION] 执行异常: action={action}, error={e}", exc_info=True)
             return {"success": False, "error": str(e), "used": used_selector, "exec_log": exec_log}
 
     @mcp_tool(
@@ -2028,11 +2146,28 @@ class DeviceInspector:
             target = step.get("target") or {}
             data = step.get("data") or ""
             wait_after = float(step.get("wait_after", 0.8))
+            
+            # 提取 bias 参数（dx_px, dy_px）
+            step_dx_px = 0
+            step_dy_px = 0
+            if 'dx_px' in step or 'dy_px' in step:
+                step_dx_px = int(step.get('dx_px', 0))
+                step_dy_px = int(step.get('dy_px', 0))
+                logger.info(f"[EXECUTE_STEP] 提取 bias 参数: dx_px={step_dx_px}, dy_px={step_dy_px}")
+                # 同时也合并到 target 中（保持兼容性）
+                if not isinstance(target, dict):
+                    target = {}
+                if 'bias' not in target:
+                    target['bias'] = {}
+                target['bias']['dx_px'] = step_dx_px
+                target['bias']['dy_px'] = step_dy_px
+            
             if verify:
-                return await self.perform_and_verify(action=action, target=target, data=data, wait_after=wait_after)
+                return await self.perform_and_verify(action=action, target=target, data=data, wait_after=wait_after, dx_px=step_dx_px, dy_px=step_dy_px)
             else:
-                return await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after)
+                return await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after, dx_px=step_dx_px, dy_px=step_dy_px)
         except Exception as e:
+            logger.error(f"[EXECUTE_STEP] 执行失败: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     @mcp_tool(
@@ -2044,10 +2179,12 @@ class DeviceInspector:
             "target": {"type": "object", "description": "目标选择器，支持 priority_selectors/resource_id/text/content_desc/bounds_px 或 swipe.start_px/end_px；press 动作使用 keyevent 字段"},
             "data": {"type": "string", "description": "输入文本（可选）", "default": ""},
             "wait_after": {"type": "number", "description": "动作后等待秒数", "default": 0.8},
-            "wait_for": {"type": "object", "description": "等待条件 {type: appearance|disappearance, selectors: [...], timeout: 10}", "default": {}}
+            "wait_for": {"type": "object", "description": "等待条件 {type: appearance|disappearance, selectors: [...], timeout: 10}", "default": {}},
+            "dx_px": {"type": "number", "description": "click_with_bias 时的水平偏移（像素）", "default": 0},
+            "dy_px": {"type": "number", "description": "click_with_bias 时的垂直偏移（像素）", "default": 0}
         }
     )
-    async def perform_and_verify(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.8, wait_for: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def perform_and_verify(self, action: str, target: Dict[str, Any], data: str = "", wait_after: float = 0.8, wait_for: Dict[str, Any] = None, dx_px: int = 0, dy_px: int = 0) -> Dict[str, Any]:
         """执行动作并通过前后两次 get_current_screen_info 和截图相似度对比验证是否变化。
         规则：仅当 XML 未变化 且 屏幕相似度>=98% 时，判定为无效操作。
         """
@@ -2065,7 +2202,7 @@ class DeviceInspector:
         except Exception:
             pre_shot = None
         # 执行动作
-        r = await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after)
+        r = await self.perform_ui_action(action=action, target=target, data=data, wait_after=wait_after, dx_px=dx_px, dy_px=dy_px)
         # 后置：获取 UI 与截图
         post = await self.get_current_screen_info(include_elements=True, clickable_only=True)
         post_shot = None

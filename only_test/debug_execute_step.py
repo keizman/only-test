@@ -119,11 +119,15 @@ async def test_execute_step(device_id: str, step_json_str: str):
     target = step.get("target", {})
     data = step.get("data", "")
     wait_after = step.get("wait_after", 0.5)
+    dx_px = step.get("dx_px", 0)
+    dy_px = step.get("dy_px", 0)
     
     print(f"\n动作类型: {action}")
     print(f"目标参数: {json.dumps(target, ensure_ascii=False)}")
     if data:
         print(f"输入数据: {data}")
+    if dx_px or dy_px:
+        print(f"偏移参数: dx_px={dx_px}, dy_px={dy_px}")
     print(f"等待时间: {wait_after}s")
     
     try:
@@ -131,7 +135,9 @@ async def test_execute_step(device_id: str, step_json_str: str):
             action=action,
             target=target,
             data=data,
-            wait_after=wait_after
+            wait_after=wait_after,
+            dx_px=dx_px,
+            dy_px=dy_px
         )
         
         print("\n" + "=" * 80)
